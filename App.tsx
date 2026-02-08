@@ -19,11 +19,12 @@ import {
   HelpCircle,
   AlertTriangle,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.0.0';
+const VERSION = '8.1.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -32,7 +33,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [serverLastPing, setServerLastPing] = useState<string>('--:--:--');
-  const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking' | 'error'>('checking');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
@@ -79,12 +80,15 @@ export default function App() {
 
   const getBattery = async () => {
     try {
-      if ('getBattery' in navigator) {
+      if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
         const batt: any = await (navigator as any).getBattery();
-        setBatteryLevel(Math.round(batt.level * 100));
-        return Math.round(batt.level * 100);
+        const level = Math.round(batt.level * 100);
+        setBatteryLevel(level);
+        return level;
       }
-    } catch (e) { return null; }
+    } catch (e) { 
+      console.warn("Batterij status niet ondersteund op dit toestel.");
+    }
     return null;
   };
 
@@ -95,22 +99,39 @@ export default function App() {
     return url.replace(/\/$/, '');
   }, [serverUrl]);
 
+  // Robustere fetch met handmatige timeout voor oudere browsers
+  const robustFetch = async (url: string, options: RequestInit, timeoutMs: number = 8000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return response;
+    } catch (err) {
+      clearTimeout(id);
+      throw err;
+    }
+  };
+
   const checkPiStatus = useCallback(async (silent = false) => {
     const url = getCleanUrl();
     if (!url) { setPiStatus('offline'); return; }
     if (!silent) setPiStatus('checking');
     try {
-      const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
+      const res = await robustFetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
         method: 'GET',
-        signal: AbortSignal.timeout(4000),
         mode: 'cors'
-      });
+      }, 5000);
       if (res.ok) {
         const data = await res.json();
         setPiStatus('online');
         if (data.your_last_ping) setServerLastPing(data.your_last_ping);
-      } else { setPiStatus('offline'); }
-    } catch (err) { setPiStatus('offline'); }
+      } else { 
+        setPiStatus('error'); 
+      }
+    } catch (err) { 
+      setPiStatus('offline'); 
+    }
   }, [getCleanUrl, settings.email]);
 
   const triggerCheckin = useCallback(async (force = false) => {
@@ -126,7 +147,7 @@ export default function App() {
     const batt = await getBattery();
 
     try {
-      const response = await fetch(`${url}/ping`, {
+      const response = await robustFetch(`${url}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,9 +159,8 @@ export default function App() {
           battery: batt,
           contacts: settings.contacts
         }),
-        mode: 'cors',
-        signal: AbortSignal.timeout(10000)
-      });
+        mode: 'cors'
+      }, 12000);
       
       if (response.ok) {
         setPiStatus('online');
@@ -150,7 +170,11 @@ export default function App() {
         setShowPulse(true);
         setTimeout(() => setShowPulse(false), 2000);
       }
-    } catch (err: any) { setPiStatus('offline'); } finally { setIsProcessing(false); }
+    } catch (err: any) { 
+      setPiStatus('offline'); 
+    } finally { 
+      setIsProcessing(false); 
+    }
   }, [settings, isSyncActive, getCleanUrl, history]);
 
   useEffect(() => {
@@ -199,9 +223,15 @@ export default function App() {
           <div>
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-900">SafeGuard</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                piStatus === 'online' ? 'bg-emerald-500' : 
+                piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 
+                piStatus === 'error' ? 'bg-orange-400' : 'bg-rose-500'}`} 
+              />
               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
-                {piStatus === 'online' ? 'Status: Online' : piStatus === 'checking' ? 'Verbinden...' : 'Geen verbinding'}
+                {piStatus === 'online' ? 'Status: Online' : 
+                 piStatus === 'checking' ? 'Verbinden...' : 
+                 piStatus === 'error' ? 'Tunnel Fout' : 'Geen verbinding'}
               </span>
             </div>
           </div>
@@ -232,6 +262,19 @@ export default function App() {
               <p className="text-[9px] font-bold text-slate-400 uppercase">Toestel</p>
            </div>
         </div>
+
+        {/* Status Alarm melding bij offline */}
+        {piStatus !== 'online' && isSyncActive && (
+          <div className="bg-rose-50 border border-rose-100 p-4 rounded-3xl flex items-center gap-3 animate-pulse">
+            <AlertTriangle className="text-rose-500 flex-shrink-0" size={18} />
+            <p className="text-[10px] font-bold text-rose-700 leading-tight">
+              Let op: Er is momenteel geen verbinding met de Raspberry Pi. Checks komen mogelijk niet aan!
+            </p>
+            <button onClick={() => checkPiStatus()} className="p-2 bg-rose-100 rounded-xl text-rose-600 active:rotate-180 transition-transform">
+              <RefreshCw size={14} />
+            </button>
+          </div>
+        )}
 
         {/* Schema Status */}
         <div className="bg-orange-500 rounded-3xl p-6 text-white">
@@ -300,7 +343,7 @@ export default function App() {
                       <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(log.timestamp).toLocaleDateString('nl-NL', {weekday: 'short', day: 'numeric'})}</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400">{log.battery}%</span>
+                  <span className="text-[10px] font-bold text-slate-400">{log.battery ? `${log.battery}%` : '--'}</span>
                 </div>
               ))
             )}
@@ -316,7 +359,7 @@ export default function App() {
           >
             <Smartphone className={`w-8 h-8 mb-2 ${isSyncActive ? 'text-orange-500' : 'text-slate-300'} ${isProcessing ? 'animate-bounce' : ''}`} />
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-              {isProcessing ? 'Systeem Bezig' : 'Check-in'}
+              {isProcessing ? 'Systeem Bezig' : 'Handmatige Check'}
             </span>
           </button>
 
@@ -351,6 +394,15 @@ export default function App() {
           </div>
           
           <div className="space-y-6 pb-20">
+            {/* Problemen op iPhone? */}
+            <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl flex gap-3">
+              <Info className="text-orange-500 shrink-0" size={16} />
+              <p className="text-[10px] text-orange-900 leading-tight">
+                <span className="font-bold">Problemen op mobiel?</span><br/>
+                Zet de app op je thuisscherm via "Zet op beginscherm" in Safari/Chrome voor een stabielere verbinding.
+              </p>
+            </div>
+
             <section className="space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1">Actieve Dagen</label>
               <div className="flex justify-between gap-1">
@@ -379,6 +431,9 @@ export default function App() {
                 <Globe size={14}/> Cloudflare URL
               </label>
               <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
+              <button onClick={() => checkPiStatus()} className="w-full py-2 bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                <RefreshCw size={12} /> Test Verbinding
+              </button>
             </section>
 
             <section className="space-y-3">
