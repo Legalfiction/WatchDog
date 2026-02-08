@@ -9,7 +9,7 @@ from flask_cors import CORS
 
 # --- CONFIGURATIE ---
 app = Flask(__name__)
-CORS(app) # Cruciaal om verbinding vanaf telefoons van vrienden toe te staan
+CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
 
@@ -28,18 +28,25 @@ def save_db(db):
 
 # --- ENDPOINTS ---
 
+@app.route('/status', methods=['GET'])
+def get_status():
+    """Route voor de frontend om te checken of de Pi online is."""
+    return jsonify({
+        "status": "online",
+        "server_time": datetime.now().strftime("%H:%M:%S"),
+        "active_users": len(load_db())
+    })
+
 @app.route('/ping', methods=['POST'])
 def handle_ping():
-    """Ontvangt de hartslag van een telefoon en registreert nieuwe vrienden automatisch."""
+    """Ontvangt de hartslag van een telefoon."""
     data = request.json
-    user_name = data.get('user') # De naam die de vriend heeft ingevuld
+    user_name = data.get('user')
     
     if not user_name:
         return jsonify({"status": "error", "message": "Geen naam opgegeven"}), 400
 
     db = load_db()
-    
-    # Update of maak nieuwe gebruiker aan in de lijst van 50+
     db[user_name] = {
         "last_ping": time.time(),
         "startTime": data.get('startTime', '07:00'),
@@ -50,26 +57,34 @@ def handle_ping():
     }
     
     save_db(db)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Hartslag ontvangen van: {user_name}")
-    return jsonify({"status": "ok", "message": "Geregistreerd op Pi"})
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] PING van {user_name}")
+    return jsonify({"status": "ok"})
+
+@app.route('/test_wa', methods=['POST'])
+def test_whatsapp():
+    """Handmatige test om te zien of CallMeBot werkt."""
+    data = request.json
+    name = data.get('user', 'Test Gebruiker')
+    info = {
+        "wa_phone": data.get('wa_phone'),
+        "wa_key": data.get('wa_key')
+    }
+    success = send_whatsapp_alert(name, info, is_test=True)
+    return jsonify({"status": "sent" if success else "failed"})
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
-    """Controleert alle vrienden en stuurt het zorgzame WhatsApp bericht indien nodig."""
+    """De motor die door Cron wordt aangeroepen."""
     db = load_db()
     now = datetime.now()
     now_str = now.strftime("%H:%M")
     today_str = now.strftime("%Y-%m-%d")
     alerts_triggered = 0
 
-    print(f"--- Controle-ronde gestart op {now_str} ---")
-
     for name, info in db.items():
         alarm_time = info.get("endTime", "08:30")
         
-        # Check alleen op de ingestelde eindtijd van de gebruiker
         if now_str == alarm_time and info.get("last_check_date") != today_str:
-            
             start_time_str = info.get("startTime", "07:00")
             start_dt = now.replace(
                 hour=int(start_time_str.split(':')[0]), 
@@ -77,46 +92,34 @@ def run_security_check():
                 second=0, microsecond=0
             )
             
-            last_ping = info.get("last_ping", 0)
-            
-            # Controle: is de telefoon NIET geopend tussen starttijd en nu?
-            if last_ping < start_dt.timestamp():
+            if info.get("last_ping", 0) < start_dt.timestamp():
                 send_whatsapp_alert(name, info)
                 alerts_triggered += 1
             
-            # Zorg dat we niet vaker dan 1x per dag checken op dit tijdstip
             info["last_check_date"] = today_str
 
     save_db(db)
-    return jsonify({"status": "complete", "alerts_sent": alerts_triggered})
+    return jsonify({"status": "complete", "alerts": alerts_triggered})
 
-def send_whatsapp_alert(name, info):
-    """Verstuurt de specifieke tekst naar de opgegeven contactpersoon."""
+def send_whatsapp_alert(name, info, is_test=False):
     phone = info.get("wa_phone")
     apikey = info.get("wa_key")
     
-    if not phone or not apikey:
-        print(f"Systeemfout: Geen WhatsApp data voor {name}")
-        return
+    if not phone or not apikey: return False
 
-    # JOUW SPECIFIEKE TEKST
     bericht = (
+        f"TEST BERICHT: CallMeBot werkt!" if is_test else
         f"Het blijkt dat {name} zijn toestel vanochtend niet heeft geopend. "
         f"Vermoedelijk is er niets aan de hand. Wellicht is het verstandig om "
-        f"toch even contact met {name} op te nemen om te controleren of alles in orde is."
+        f"toch even contact op te nemen."
     )
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(bericht)}&apikey={apikey}"
-    
     try:
-        r = requests.get(url, timeout=15)
-        if r.ok:
-            print(f"ALARM VERSTUURD VOOR {name} NAAR {phone}")
-        else:
-            print(f"CallMeBot Fout: {r.text}")
-    except Exception as e:
-        print(f"Netwerkfout bij versturen alarm: {e}")
+        r = requests.get(url, timeout=10)
+        return r.ok
+    except:
+        return False
 
 if __name__ == '__main__':
-    # Luister op poort 5000 voor alle inkomende pings van je vrienden
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000)

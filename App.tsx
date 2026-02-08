@@ -9,37 +9,60 @@ import {
   Wifi,
   UserPlus,
   CheckCircle2,
-  Clock
+  Clock,
+  Server,
+  X,
+  Send,
+  MessageSquare
 } from 'lucide-react';
 import { UserSettings, ActivityLog, AppStatus } from './types';
 
 export default function App() {
-  const [isSyncActive, setIsSyncActive] = useState(false);
+  const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
   const [status, setStatus] = useState<AppStatus>(AppStatus.INACTIVE);
   const [showSettings, setShowSettings] = useState(false);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+  const [lastPingTime, setLastPingTime] = useState<string>('--:--');
 
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
     const params = new URLSearchParams(window.location.search);
     const defaultSettings = {
-      email: '', // Wordt gebruikt als Naam van de vriend
+      email: '', 
       emergencyEmail: '',
       startTime: params.get('start') || '07:00',
-      endTime: params.get('end') || '09:00',
+      endTime: params.get('end') || '08:30',
       whatsappPhone: '',
       whatsappApiKey: '',
-      webhookUrl: params.get('pi') || '' // Jouw Pi adres wordt automatisch ingevuld voor vrienden
+      webhookUrl: params.get('pi') || '' 
     };
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
   useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
+    checkServerStatus();
   }, [settings]);
 
+  useEffect(() => {
+    localStorage.setItem('safeguard_active', isSyncActive.toString());
+  }, [isSyncActive]);
+
+  const checkServerStatus = async () => {
+    if (!settings.webhookUrl) return;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${settings.webhookUrl}/status`, { signal: controller.signal });
+      setServerOnline(res.ok);
+    } catch (e) {
+      setServerOnline(false);
+    }
+  };
+
   const sendPing = useCallback(async (type: ActivityLog['type']) => {
-    if (!settings.webhookUrl || !settings.email) return;
+    if (!settings.webhookUrl || !settings.email || !isSyncActive) return;
     const timestamp = Date.now();
     try {
       const response = await fetch(`${settings.webhookUrl}/ping`, {
@@ -56,210 +79,178 @@ export default function App() {
         })
       });
       if (response.ok) {
-        setLogs(prev => [{ timestamp, type, status: 'sent' }, ...prev].slice(0, 10));
+        setLogs(prev => [{ timestamp, type, status: 'sent' }, ...prev].slice(0, 5));
         setStatus(AppStatus.WATCHING);
+        setServerOnline(true);
+        setLastPingTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       }
     } catch (err) {
-      setLogs(prev => [{ timestamp, type, status: 'failed' }, ...prev].slice(0, 10));
+      setServerOnline(false);
     }
-  }, [settings]);
+  }, [settings, isSyncActive]);
 
-  const activateAlwaysOn = async () => {
-    if (!settings.email || !settings.whatsappPhone) {
-      alert("Vul eerst je naam en het WhatsApp nummer van je contactpersoon in bij de instellingen (tandwiel rechtsboven).");
-      setShowSettings(true);
+  const testWhatsApp = async () => {
+    if (!settings.webhookUrl || !settings.whatsappPhone || !settings.whatsappApiKey) {
+      alert("Vul eerst alle gegevens in.");
       return;
     }
-
     try {
-      const registration = await navigator.serviceWorker.ready;
-      if ('periodicSync' in registration) {
-        await (registration as any).periodicSync.register('safeguard-ping', {
-          minInterval: 15 * 60 * 1000, 
-        });
-      }
-      const permission = await Notification.requestPermission();
-      
-      setIsSyncActive(true);
-      sendPing('manual');
-      alert("Systeem Geactiveerd! Je telefoon waakt nu. Je kunt dit scherm nu sluiten.");
-    } catch (err) {
-      // Zelfs als registratie faalt (iOS), sturen we een ping voor handmatige activatie
-      sendPing('manual');
-      setIsSyncActive(true);
-      alert("Activatie geslaagd.");
+      const res = await fetch(`${settings.webhookUrl}/test_wa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: settings.email,
+          wa_phone: settings.whatsappPhone,
+          wa_key: settings.whatsappApiKey
+        })
+      });
+      if (res.ok) alert("Test verstuurd! Controleer je WhatsApp.");
+      else alert("Fout bij versturen test.");
+    } catch (e) {
+      alert("Kan de Pi niet bereiken.");
     }
   };
 
+  const activateAlwaysOn = () => {
+    if (!settings.email || !settings.whatsappPhone || !settings.whatsappApiKey) {
+      alert("Vul eerst je Naam, WhatsApp nummer en API Key in bij instellingen.");
+      setShowSettings(true);
+      return;
+    }
+    setIsSyncActive(true);
+    sendPing('manual');
+  };
+
   useEffect(() => {
-    const handleActivity = () => {
-      if (document.visibilityState === 'visible') sendPing('focus');
-    };
+    const handleActivity = () => { if (document.visibilityState === 'visible') sendPing('focus'); };
     window.addEventListener('visibilitychange', handleActivity);
     if (document.visibilityState === 'visible') sendPing('focus');
-    return () => window.removeEventListener('visibilitychange', handleActivity);
+    const interval = setInterval(() => sendPing('focus'), 5 * 60 * 1000);
+    const statusInterval = setInterval(checkServerStatus, 30000);
+    return () => {
+      window.removeEventListener('visibilitychange', handleActivity);
+      clearInterval(interval);
+      clearInterval(statusInterval);
+    };
   }, [sendPing]);
 
   const handleShare = () => {
-    // Deze link bevat automatisch jouw Pi adres zodat de vriend niets hoeft in te stellen
     const shareUrl = `${window.location.origin}${window.location.pathname}?pi=${encodeURIComponent(settings.webhookUrl)}`;
     if (navigator.share) {
-      navigator.share({ 
-        title: 'SafeGuard Netwerk', 
-        text: `Hoi! Ik gebruik SafeGuard om op me te laten letten. Klik op deze link om ook mee te doen aan mijn netwerk.`, 
-        url: shareUrl 
-      });
+      navigator.share({ title: 'Veiligheidssysteem', text: 'Doe je mee?', url: shareUrl });
     } else {
       navigator.clipboard.writeText(shareUrl);
-      alert("De uitnodigingslink is gekopieerd! Stuur deze naar je vrienden.");
+      alert("Link gekopieerd!");
     }
   };
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans">
-      <header className="flex items-center justify-between p-6">
+      <header className="flex items-center justify-between p-6 bg-slate-900/50 backdrop-blur-md sticky top-0 z-30">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-            <ShieldCheck className="text-white w-7 h-7" />
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+            <ShieldCheck className="text-white w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-black uppercase tracking-tighter italic">SafeGuard</h1>
-            <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${status === AppStatus.WATCHING ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></span>
-              <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest">Live Monitor</span>
+            <h1 className="text-lg font-black uppercase italic leading-none">SafeGuard</h1>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${serverOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+              <span className="text-[7px] text-slate-500 font-black uppercase tracking-widest">
+                {serverOnline ? 'PI VERBONDEN' : 'PI OFFLINE'}
+              </span>
             </div>
           </div>
         </div>
-        <button onClick={() => setShowSettings(true)} className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+        <button onClick={() => setShowSettings(true)} className="p-3 rounded-xl bg-slate-800 border border-slate-700">
           <SettingsIcon className="w-5 h-5 text-slate-400" />
         </button>
       </header>
 
-      <main className="flex-1 px-6 space-y-6">
-        {/* DE ACTIVATIE KNOP */}
+      <main className="flex-1 px-6 pt-4 pb-32 space-y-6">
         {!isSyncActive ? (
-          <div className="p-1 bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-[2.5rem] shadow-xl shadow-indigo-500/20">
-            <button 
-              onClick={activateAlwaysOn}
-              className="w-full p-6 bg-slate-950 rounded-[2.4rem] flex flex-col items-center gap-3 active:scale-95 transition-transform"
-            >
-              <Zap className="w-8 h-8 text-white fill-indigo-500 animate-pulse" />
-              <div className="text-center">
-                <p className="text-sm font-black uppercase tracking-widest text-white">Activeer Permanente Waak</p>
-                <p className="text-[9px] text-slate-500 uppercase mt-1">Klik hier om het waken te starten</p>
+          <div className="p-1 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-[2.5rem] shadow-2xl">
+            <button onClick={activateAlwaysOn} className="w-full p-8 bg-slate-950 rounded-[2.4rem] flex flex-col items-center gap-4">
+              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center">
+                <Zap className="w-8 h-8 text-white fill-indigo-500 animate-pulse" />
               </div>
+              <p className="text-sm font-black uppercase tracking-widest">Activeer Waak-Modus</p>
             </button>
           </div>
         ) : (
-          <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-[2.5rem] flex items-center gap-4">
-             <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+          <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-[2.5rem] flex items-center gap-5">
+             <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+             </div>
              <div>
                 <p className="text-xs font-black uppercase tracking-widest text-emerald-500">Bescherming Actief</p>
-                <p className="text-[9px] text-slate-400 uppercase">Je telefoon meldt zich automatisch</p>
+                <p className="text-[9px] text-slate-400 uppercase font-bold">Laatste hartslag: {lastPingTime}</p>
              </div>
           </div>
         )}
 
-        {/* STATUS DASHBOARD */}
-        <div className="p-10 rounded-[3rem] bg-slate-900 border border-white/5 flex flex-col items-center gap-6 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-4 right-8 opacity-10">
-            <Activity className="w-20 h-20 text-indigo-500" />
+        <div className="p-10 rounded-[3rem] bg-slate-900 border border-white/5 flex flex-col items-center gap-6 text-center shadow-2xl">
+          <div className={`w-20 h-20 rounded-3xl flex items-center justify-center transition-all ${status === AppStatus.WATCHING ? 'bg-indigo-500 rotate-3' : 'bg-slate-800 text-slate-600'}`}>
+              <Smartphone className="w-10 h-10 text-white" />
           </div>
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center ${status === AppStatus.WATCHING ? 'bg-indigo-500/10 text-indigo-400' : 'bg-slate-800 text-slate-600'}`}>
-              <Smartphone className={`w-10 h-10 ${status === AppStatus.WATCHING ? 'animate-bounce' : ''}`} />
-          </div>
-          <div className="z-10">
-              <h2 className="text-2xl font-black uppercase tracking-tighter italic">
-                {status === AppStatus.WATCHING ? 'Systeem Is Live' : 'Setup Nodig'}
-              </h2>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <Wifi className="w-3 h-3 text-emerald-500" />
-                <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
-                  Verbonden met centrale server
-                </p>
-              </div>
-          </div>
+          <h2 className="text-2xl font-black uppercase italic">
+            {isSyncActive ? 'JE WORDT BEWAAKT' : 'SYSTEEM STANDBY'}
+          </h2>
+          <p className="text-xs text-slate-400 font-medium leading-relaxed px-4">
+            De Raspberry Pi controleert dagelijks tussen <span className="text-indigo-400 font-bold">{settings.startTime}</span> en <span className="text-rose-400 font-bold">{settings.endTime}</span> of je jouw telefoon hebt gebruikt.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-           <button onClick={() => sendPing('manual')} className="p-6 rounded-[2rem] bg-indigo-600 font-black uppercase text-[10px] tracking-widest border-b-4 border-indigo-900 active:translate-y-1 active:border-b-0 transition-all">
-             Handmatige Ping
-           </button>
-           <button onClick={handleShare} className="p-6 rounded-[2rem] bg-slate-800 border border-slate-700 font-black uppercase text-[10px] tracking-widest text-slate-400 flex flex-col items-center gap-2">
-             <UserPlus className="w-5 h-5" />
-             Vriend Toevoegen
-           </button>
-        </div>
-
-        {/* LOGS */}
-        <div className="space-y-4 pb-32">
-           <div className="flex items-center gap-2 px-2">
-              <Clock className="w-3 h-3 text-slate-600" />
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-600 italic">Activiteit Log</h3>
-           </div>
-           <div className="space-y-2">
-            {logs.length === 0 ? (
-              <div className="text-center py-10 border-2 border-dashed border-slate-800 rounded-[2.5rem] text-slate-700 text-[10px] font-black uppercase italic">
-                Wachten op eerste hartslag...
-              </div>
-            ) : logs.map((log, i) => (
-              <div key={i} className="flex items-center justify-between p-5 rounded-2xl bg-slate-900/50 border border-white/5 backdrop-blur-sm">
-                <div className="flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${log.status === 'sent' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                    <Activity className="w-4 h-4" />
-                  </div>
-                  <p className="text-[10px] font-black text-slate-300 uppercase">
-                    {log.type === 'focus' ? 'Automatisering' : 'Handmatige Check'}
-                  </p>
-                </div>
-                <span className="text-[10px] font-mono text-slate-500">
-                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            ))}
-           </div>
+          <button onClick={() => sendPing('manual')} className="p-6 bg-indigo-600 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-transform">
+            <Activity className="w-6 h-6 text-white" />
+            <span className="text-[10px] font-black uppercase">Handmatige Ping</span>
+          </button>
+          <button onClick={handleShare} className="p-6 bg-slate-800 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-transform">
+            <UserPlus className="w-6 h-6 text-indigo-400" />
+            <span className="text-[10px] font-black uppercase">Vriend Toevoegen</span>
+          </button>
         </div>
       </main>
 
-      {/* SETTINGS */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-slate-950/95 backdrop-blur-md">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-[3rem] p-8 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-xl font-black uppercase italic">Jouw Gegevens</h3>
-              <button onClick={() => setShowSettings(false)} className="w-10 h-10 rounded-full bg-slate-800 text-slate-400">&times;</button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/90 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 rounded-[3rem] p-8 space-y-6 border border-white/10 shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black uppercase italic">Instellingen</h3>
+              <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-800 rounded-full"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); setShowSettings(false); }} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Hoe heet je?</label>
-                <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} placeholder="Je voornaam" className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 font-bold text-sm" required />
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Jouw Naam</label>
+                <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} placeholder="Bijv. Jan" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 outline-none focus:border-indigo-500 transition-colors" />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black text-slate-600 uppercase ml-1">Waken vanaf</label>
-                  <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3 py-4 font-bold text-xs" />
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Start Waak</label>
+                  <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black text-rose-500 uppercase ml-1">Alarm tijd</label>
-                  <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-3 py-4 font-bold text-xs" />
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Eind Waak (Check)</label>
+                  <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-rose-500 uppercase tracking-widest ml-1">Contactpersoon WhatsApp (+316...)</label>
-                <input type="tel" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} placeholder="+31612345678" className="w-full bg-slate-950 border border-rose-900/30 rounded-2xl px-5 py-4 font-bold text-sm" required />
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WA Nummer Contactpersoon</label>
+                <input type="text" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} placeholder="+316..." className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">CallMeBot API Key</label>
-                <input type="password" value={settings.whatsappApiKey} onChange={e => setSettings({...settings, whatsappApiKey: e.target.value})} placeholder="Krijg je via WhatsApp" className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 text-xs font-mono" required />
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WhatsApp API Key</label>
+                <input type="password" value={settings.whatsappApiKey} onChange={e => setSettings({...settings, whatsappApiKey: e.target.value})} placeholder="CallMeBot Key" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
               </div>
-
-              <button type="submit" className="w-full py-5 bg-indigo-600 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl">
-                Gegevens Opslaan
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Pi Adres (Tailscale/Lokaal)</label>
+                <input type="text" value={settings.webhookUrl} onChange={e => setSettings({...settings, webhookUrl: e.target.value})} placeholder="http://192.168...:5000" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
+              </div>
+              <button onClick={testWhatsApp} className="w-full p-4 bg-emerald-600 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                <MessageSquare className="w-5 h-5" /> Test WhatsApp
               </button>
-            </form>
+            </div>
           </div>
         </div>
       )}
