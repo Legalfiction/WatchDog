@@ -23,7 +23,8 @@ import {
   RefreshCw,
   AlertCircle,
   ExternalLink,
-  Zap
+  Zap,
+  FlaskConical
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -102,7 +103,8 @@ export default function App() {
 
   const triggerCheckin = useCallback(async (force = false, isManual = false) => {
     const now = Date.now();
-    if (!force && now - lastTriggerRef.current < 30000) return; 
+    // In testmodus laten we pings vaker toe
+    if (!force && now - lastTriggerRef.current < 15000) return; 
     
     const url = getCleanUrl();
     if (!url || !settings.email || !isSyncActive) return;
@@ -131,11 +133,8 @@ export default function App() {
         lastTriggerRef.current = Date.now();
         localStorage.setItem('safeguard_last_ping', timeStr);
         
-        // Visuele feedback
         setShowPulse(true);
         setTimeout(() => setShowPulse(false), 2000);
-        
-        // Update server status na korte vertraging
         setTimeout(checkPiStatus, 1000);
       }
     } catch (err: any) {
@@ -171,11 +170,11 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans select-none">
       <header className="flex items-center justify-between p-6 bg-slate-900/40 border-b border-white/5 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-800'}`}>
-            <ShieldCheck className={`${isSyncActive ? 'text-indigo-400' : 'text-slate-500'} w-5 h-5`} />
+          <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-slate-800'}`}>
+            <FlaskConical className={`${isSyncActive ? 'text-amber-400' : 'text-slate-500'} w-5 h-5`} />
           </div>
           <div>
-            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">SafeGuard Watchdog</h1>
+            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">SafeGuard <span className="text-amber-500">TestMode</span></h1>
             <div className="flex items-center gap-1.5 mt-0.5" onClick={() => checkPiStatus()}>
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'}`} />
               <span className="text-[9px] text-slate-500 font-black uppercase tracking-tighter italic">
@@ -190,27 +189,35 @@ export default function App() {
       </header>
 
       <main className="flex-1 px-8 flex flex-col items-center justify-center space-y-12 py-10">
+        
+        {/* Test Mode Banner */}
+        <div className="w-full bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-center gap-3">
+          <FlaskConical className="text-amber-500 shrink-0" size={20} />
+          <p className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter leading-tight">
+            Test-Modus Actief: Je ontvangt een WhatsApp bij ELKE ping.
+          </p>
+        </div>
+
         <div className="relative">
-          {/* Pulse Effect bij succesvolle ping */}
           {showPulse && (
             <div className="absolute inset-0 bg-emerald-500/20 blur-[80px] rounded-full animate-ping" />
           )}
           {isSyncActive && piStatus === 'online' && (
-            <div className="absolute inset-0 bg-indigo-500/10 blur-[60px] rounded-full animate-pulse" />
+            <div className="absolute inset-0 bg-amber-500/10 blur-[60px] rounded-full animate-pulse" />
           )}
           
           <button 
             onClick={() => isSyncActive && triggerCheckin(true)}
             disabled={isProcessing}
-            className={`group w-64 h-64 rounded-[4.5rem] flex flex-col items-center justify-center relative border transition-all duration-700 ${isSyncActive && piStatus === 'online' ? 'bg-slate-900/40 border-indigo-500/30 shadow-2xl active:scale-95' : 'bg-slate-900/10 border-white/5 opacity-40 grayscale'}`}
+            className={`group w-64 h-64 rounded-[4.5rem] flex flex-col items-center justify-center relative border transition-all duration-700 ${isSyncActive && piStatus === 'online' ? 'bg-slate-900/40 border-amber-500/30 shadow-2xl active:scale-95' : 'bg-slate-900/10 border-white/5 opacity-40 grayscale'}`}
           >
             <div className="relative">
-              <Smartphone className={`w-14 h-14 mb-4 transition-colors ${isSyncActive ? 'text-indigo-400' : 'text-slate-700'} ${isProcessing ? 'animate-bounce' : ''}`} />
+              <Smartphone className={`w-14 h-14 mb-4 transition-colors ${isSyncActive ? 'text-amber-400' : 'text-slate-700'} ${isProcessing ? 'animate-bounce' : ''}`} />
               {showPulse && <Zap size={20} className="absolute -top-2 -right-4 text-emerald-500 animate-bounce" />}
             </div>
             
             <h2 className="text-base font-black uppercase tracking-[0.2em] text-slate-200">
-              {isSyncActive ? (isProcessing ? 'Syncen...' : 'Bewaakt') : 'Inactief'}
+              {isSyncActive ? (isProcessing ? 'Syncen...' : 'Testen') : 'Inactief'}
             </h2>
             
             {isSyncActive && (
@@ -221,31 +228,12 @@ export default function App() {
                     Pi Gezien: {serverLastPing}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 opacity-60">
-                  <Clock size={10} className="text-indigo-500" />
-                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter italic">Deadline: {settings.endTime}</span>
-                </div>
               </div>
             )}
           </button>
         </div>
 
         <div className="w-full space-y-4">
-          {isSyncActive && piStatus === 'online' && (
-            <button 
-              onClick={() => triggerCheckin(true, true)}
-              disabled={isManualProcessing}
-              className="w-full py-5 bg-emerald-600/10 border border-emerald-500/20 rounded-[2rem] flex items-center justify-center gap-3 active:scale-[0.98] transition-all"
-            >
-              {isManualProcessing ? <Loader2 className="animate-spin text-emerald-500" size={18} /> : <CheckCircle2 className="text-emerald-500" size={18} />}
-              <div className="text-left">
-                <span className="block text-[11px] font-black uppercase text-emerald-500 leading-none">Handmatig OK</span>
-                <span className="block text-[8px] text-emerald-500/60 uppercase font-bold mt-1 tracking-widest">Stuur WhatsApp Bevestiging</span>
-              </div>
-              <ChevronRight size={14} className="ml-auto mr-4 text-emerald-500/40" />
-            </button>
-          )}
-
           <button 
             onClick={() => {
               if (!serverUrl || !settings.email || settings.contacts.length === 0) return setShowSettings(true);
@@ -257,15 +245,14 @@ export default function App() {
                 setTimeout(() => triggerCheckin(true), 1000);
               }
             }} 
-            className={`w-full py-6 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4 ${isSyncActive ? 'bg-slate-900 text-rose-500 border-rose-900' : 'bg-indigo-600 text-white border-indigo-800 shadow-2xl shadow-indigo-500/30'}`}
+            className={`w-full py-6 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4 ${isSyncActive ? 'bg-slate-900 text-rose-500 border-rose-900' : 'bg-amber-600 text-white border-amber-800 shadow-2xl shadow-amber-500/30'}`}
           >
             <Power size={18} />
-            {isSyncActive ? 'Stop Bewaking' : 'Start Bewaking'}
+            {isSyncActive ? 'Stop Test' : 'Start Test'}
           </button>
         </div>
       </main>
 
-      {/* Settings Modal (ongewijzigd qua velden, alleen UI tweaks voor snelheid) */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom duration-500">
           <div className="flex items-center justify-between mb-10">
@@ -300,28 +287,11 @@ export default function App() {
                   <RefreshCw size={20} className={connectionTesting ? 'animate-spin' : ''} />
                 </button>
               </div>
-              <div className="flex items-center gap-2 p-3 bg-slate-950 rounded-xl border border-white/5">
-                {piStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-rose-500" />}
-                <span className={`text-[10px] font-bold uppercase ${piStatus === 'online' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {piStatus === 'online' ? 'Gekoppeld met Pi' : 'Niet verbonden'}
-                </span>
-              </div>
             </section>
 
             <section className="space-y-4 px-1">
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Jouw Naam</label>
               <input type="text" placeholder="Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none text-base focus:border-indigo-500" />
-            </section>
-
-            <section className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-900 p-6 rounded-[2rem] border border-white/5">
-                <label className="text-[9px] font-black text-slate-600 uppercase block mb-3">Vanaf (Start)</label>
-                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="bg-transparent w-full font-black text-2xl outline-none text-white" />
-              </div>
-              <div className="bg-slate-900 p-6 rounded-[2rem] border border-white/5">
-                <label className="text-[9px] font-black text-indigo-500 uppercase block mb-3 italic tracking-widest">Deadline</label>
-                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="bg-transparent w-full font-black text-2xl outline-none text-indigo-400" />
-              </div>
             </section>
 
             <section className="space-y-6">

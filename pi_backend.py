@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "3.9.0"
+VERSION = "3.9.5-TESTMODE"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -38,7 +38,6 @@ def send_wa(name, phone, apikey, text):
 
 @app.before_request
 def log_request_info():
-    # Toon elke binnenkomende aanroep in de terminal
     print(f"[REQ] {datetime.now().strftime('%H:%M:%S')} - {request.method} {request.path} van {request.remote_addr}")
 
 @app.route('/', methods=['GET'])
@@ -59,7 +58,8 @@ def get_status():
         "version": VERSION, 
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "your_last_ping": last_ping_str,
-        "is_monitored": user in db
+        "is_monitored": user in db,
+        "test_mode": True
     })
 
 @app.route('/test_contact', methods=['POST'])
@@ -78,6 +78,7 @@ def handle_ping():
     data = request.json
     user_name = data.get('user', 'Onbekend')
     now_ts = time.time()
+    now_str = datetime.now().strftime("%H:%M:%S")
     
     db = load_db()
     db[user_name] = {
@@ -88,8 +89,16 @@ def handle_ping():
         "last_check_date": db.get(user_name, {}).get("last_check_date", "")
     }
     save_db(db)
-    print(f"[PING] {user_name} succesvol geregistreerd.")
-    return jsonify({"status": "success", "server_received": True, "time": datetime.now().strftime("%H:%M:%S")})
+    
+    # --- TIJDELIJKE TEST LOGICA ---
+    print(f"[PING] {user_name} gezien. TEST-MODUS: WhatsApp versturen...")
+    contacts = data.get('contacts', [])
+    for c in contacts:
+        msg = f"🧪 SafeGuard TEST-LOG: Ping ontvangen van {user_name} om {now_str}. Verbinding werkt!"
+        send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), msg)
+    # ------------------------------
+    
+    return jsonify({"status": "success", "server_received": True, "time": now_str})
 
 @app.route('/manual_checkin', methods=['POST'])
 def handle_manual():
@@ -132,27 +141,19 @@ def run_security_check():
         except:
             deadline_today = now.replace(hour=8, minute=30, second=0)
 
-        # TRIGGER: Alleen als de huidige tijd NA de deadline is EN we vandaag nog niet gecheckt hebben
         if now > deadline_today and info.get("last_check_date") != today_str:
-            print(f"[WATCHDOG] Deadline verstreken ({deadline_str}) voor {name}. Controleren...")
-            
             try:
                 sh, sm = map(int, info.get("startTime", "07:00").split(':'))
                 start_of_day = now.replace(hour=sh, minute=sm, second=0).timestamp()
             except:
                 start_of_day = now.replace(hour=7, minute=0, second=0).timestamp()
 
-            # Is er een ping geweest SINDS de starttijd van vandaag?
             if info.get("last_ping", 0) < start_of_day:
-                print(f"[ALERT] {name} heeft deadline gemist! Geen ping gezien sinds {datetime.fromtimestamp(start_of_day).strftime('%H:%M')}")
                 for c in info.get("contacts", []):
                     alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline_str}!"
                     send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), alert_msg)
                     alerts += 1
-            else:
-                print(f"[OK] {name} heeft zich op tijd gemeld.")
             
-            # Markeer als gecheckt voor vandaag
             info["last_check_date"] = today_str
 
     save_db(db)
