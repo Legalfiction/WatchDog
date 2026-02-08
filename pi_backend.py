@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "3.6.0"
+VERSION = "3.7.0"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -29,18 +29,27 @@ def send_wa(name, phone, apikey, text):
     url = "https://api.callmebot.com/whatsapp.php"
     try:
         r = requests.get(url, params={"phone": phone, "apikey": apikey, "text": text}, timeout=15)
-        print(f"[WA] Bericht verzonden naar {name} ({phone})")
+        print(f"[WA] Bericht naar {name}: {text[:30]}...")
         return r.status_code == 200
     except Exception as e:
-        print(f"[WA ERROR] voor {name}: {e}")
+        print(f"[WA ERROR] {e}")
         return False
 
 @app.route('/status', methods=['GET'])
 def get_status():
+    user = request.args.get('user')
+    db = load_db()
+    user_info = db.get(user, {}) if user else {}
+    
+    last_ping_raw = user_info.get('last_ping', 0)
+    last_ping_str = datetime.fromtimestamp(last_ping_raw).strftime("%H:%M:%S") if last_ping_raw else "--:--:--"
+
     return jsonify({
         "status": "online", 
         "version": VERSION, 
-        "server_time": datetime.now().strftime("%H:%M:%S")
+        "server_time": datetime.now().strftime("%H:%M:%S"),
+        "your_last_ping": last_ping_str,
+        "is_monitored": user in db
     })
 
 @app.route('/test_contact', methods=['POST'])
@@ -49,7 +58,7 @@ def test_contact():
     name = data.get('name', 'Test')
     phone = data.get('phone')
     apikey = data.get('apiKey')
-    msg = f"🔔 SafeGuard Test: Hallo {name}, dit is een testbericht van je Raspberry Pi."
+    msg = f"🔔 SafeGuard Test: Hallo {name}, je Pi is verbonden!"
     if send_wa(name, phone, apikey, msg):
         return jsonify({"status": "ok"})
     return jsonify({"status": "error"}), 400
@@ -58,18 +67,19 @@ def test_contact():
 def handle_ping():
     data = request.json
     user_name = data.get('user', 'Onbekend')
-    print(f"[PING] Ontvangen van {user_name} om {datetime.now().strftime('%H:%M:%S')}")
+    now_ts = time.time()
     
     db = load_db()
     db[user_name] = {
-        "last_ping": time.time(),
+        "last_ping": now_ts,
         "startTime": data.get('startTime', '07:00'),
         "endTime": data.get('endTime', '08:30'),
         "contacts": data.get('contacts', []),
         "last_check_date": db.get(user_name, {}).get("last_check_date", "")
     }
     save_db(db)
-    return jsonify({"status": "success", "mode": "silent"})
+    print(f"[PING] {user_name} meldt zich om {datetime.fromtimestamp(now_ts).strftime('%H:%M:%S')}")
+    return jsonify({"status": "success", "server_received": True})
 
 @app.route('/manual_checkin', methods=['POST'])
 def handle_manual():
@@ -77,7 +87,6 @@ def handle_manual():
     user_name = data.get('user', 'Onbekend')
     contacts = data.get('contacts', [])
     now_str = datetime.now().strftime("%H:%M")
-    print(f"[MANUAL] Handmatige check-in door {user_name}")
     
     db = load_db()
     db[user_name] = {
@@ -89,13 +98,13 @@ def handle_manual():
     }
     save_db(db)
     
-    msg = f"✅ SafeGuard: {user_name} heeft handmatig ingecheckt om {now_str}. Alles is in orde!"
+    msg = f"✅ SafeGuard: {user_name} is OK ({now_str})."
     success = 0
     for c in contacts:
         if send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), msg):
             success += 1
             
-    return jsonify({"status": "ok", "sent_messages": success})
+    return jsonify({"status": "ok", "sent": success})
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
@@ -105,34 +114,29 @@ def run_security_check():
     today_str = now.strftime("%Y-%m-%d")
     alerts = 0
 
-    if not db:
-        return jsonify({"status": "idle", "message": "Geen actieve gebruikers in database"})
-
     for name, info in db.items():
         deadline = info.get("endTime", "08:30")
         
+        # Check alleen op de exacte minuut van de deadline
         if now_hm == deadline and info.get("last_check_date") != today_str:
-            print(f"[SECURITY] Deadline bereikt voor {name} ({deadline}). Controleren...")
+            print(f"[WATCHDOG] Deadline bereikt voor {name}")
             try:
                 h, m = map(int, info.get("startTime", "07:00").split(':'))
                 start_of_day = now.replace(hour=h, minute=m, second=0).timestamp()
             except:
                 start_of_day = now.replace(hour=7, minute=0, second=0).timestamp()
 
-            last_ping = info.get("last_ping", 0)
-            if last_ping < start_of_day:
-                print(f"[ALARM] {name} heeft deadline gemist! Laatste ping was voor de starttijd.")
+            if info.get("last_ping", 0) < start_of_day:
+                print(f"[ALERT] {name} heeft deadline gemist!")
                 for c in info.get("contacts", []):
-                    alert_msg = f"⚠️ ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline}! Controleer of alles goed gaat."
+                    alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline}!"
                     send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), alert_msg)
                     alerts += 1
-            else:
-                print(f"[OK] {name} is veilig ingecheckt vandaag.")
             
             info["last_check_date"] = today_str
 
     save_db(db)
-    return jsonify({"checked": True, "alerts_sent": alerts, "time": now_hm})
+    return jsonify({"time": now_hm, "alerts": alerts})
 
 if __name__ == '__main__':
     print(f"--- SafeGuard Backend v{VERSION} Gestart ---")
