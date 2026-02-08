@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.5.0';
+const VERSION = '8.5.2';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -182,12 +182,12 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
   useEffect(() => {
     getBattery();
     checkPiStatus();
-    triggerCheckin(); // Directe check bij opstarten app
+    triggerCheckin(); 
 
     const interval = setInterval(() => {
       checkPiStatus(true);
       triggerCheckin();
-    }, 120000); // Check elke 2 minuten
+    }, 120000); 
     
     return () => clearInterval(interval);
   }, [checkPiStatus, triggerCheckin]);
@@ -278,9 +278,9 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
         </div>
 
         {/* Schema Status */}
-        <div className="bg-orange-500 rounded-3xl p-6 text-white">
+        <div className="bg-orange-500 rounded-3xl p-6 text-white shadow-none">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100">Actief Venster</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 italic">Actief Venster</p>
             <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${isTodayActive() ? 'bg-white text-orange-600' : 'bg-orange-600 border border-orange-400'}`}>
               {isTodayActive() ? 'Vandaag Actief' : 'Rustdag'}
             </div>
@@ -308,8 +308,22 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
           </div>
         </button>
 
+        {/* Belangrijke Disclaimer Hersteld */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 flex gap-4">
+          <div className="text-amber-500 mt-1">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="flex-1">
+            <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1">Let op voor contactpersonen</p>
+            <p className="text-[11px] text-slate-500 leading-relaxed italic">
+              Het kan zijn dat de monitor niet werkt bij een defect of lege telefoon van de hoofdpersoon. 
+              Breng je contacten hiervan goed op de hoogte.
+            </p>
+          </div>
+        </div>
+
         {/* Historie Log */}
-        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-none">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
             <History size={14} className="text-slate-400" />
             <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recente Meldingen</h3>
@@ -350,6 +364,30 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
           </div>
           
           <div className="space-y-6 pb-20">
+            {/* Weekdagen Selectie Behouden */}
+            <section className="space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Bewakingsdagen</label>
+              <div className="flex justify-between gap-1">
+                {DAYS.map((day, idx) => {
+                  const isActive = settings.activeDays.includes(idx);
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        const newDays = isActive 
+                          ? settings.activeDays.filter(d => d !== idx)
+                          : [...settings.activeDays, idx];
+                        setSettings({...settings, activeDays: newDays.sort((a,b) => a-b)});
+                      }}
+                      className={`flex-1 h-12 rounded-xl flex items-center justify-center text-[10px] font-black transition-all active:scale-90 ${isActive ? 'bg-orange-500 text-white shadow-md shadow-orange-100' : 'bg-slate-100 text-slate-400'}`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
             <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
                 <Globe size={14}/> Raspberry Pi URL
@@ -384,7 +422,17 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                       <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
                       <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-400 p-2"><Trash2 size={18} /></button>
                     </div>
-                    <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
+                    <div className="flex gap-2">
+                      <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
+                      {/* WhatsApp Snelknop Hersteld */}
+                      <button 
+                        onClick={() => shareActivation(c)}
+                        disabled={!c.phone}
+                        className="p-3 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl active:scale-90 disabled:opacity-30"
+                      >
+                        <MessageCircle size={20} />
+                      </button>
+                    </div>
                     <input type="password" placeholder="Bot API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
                     {c.phone && (
                       <button 

@@ -1,9 +1,9 @@
 {
-  "name": "SafeGuard Watchdog",
-  "description": "Geautomatiseerde welzijnsmonitor met Screen Wake Lock integratie.",
+  "name": "Watchdog",
+  "description": "Geautomatiseerde welzijnsmonitor die waakt over je veiligheid.",
   "requestFramePermissions": [],
-  "short_name": "SafeGuard",
-  "theme_color": "#0f172a",
-  "background_color": "#0f172a",
+  "short_name": "Watchdog",
+  "theme_color": "#f97316",
+  "background_color": "#f8fafc",
   "display": "standalone"
 }
