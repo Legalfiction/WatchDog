@@ -1,30 +1,40 @@
 
-# SafeGuard Watchdog v5.2
+# SafeGuard Watchdog v5.3.3
 
 Een welzijnsmonitor die draait op je Raspberry Pi en communiceert via WhatsApp.
 
-## 1. Raspberry Pi Setup
+## 🚀 Setup Stappen
+
+### 1. Raspberry Pi Backend
+Zorg dat Python is geïnstalleerd op je Pi.
 ```bash
 pip install flask flask-cors requests --break-system-packages
 python pi_backend.py
 ```
 
-## 2. Cloudflare Tunnel (Permanent maken)
-Een 'snelle' tunnel stopt zodra je de terminal sluit. Voor een permanente tunnel:
-1. Maak een gratis Cloudflare account.
-2. Ga naar 'Zero Trust' > 'Networks' > 'Tunnels'.
-3. Maak een nieuwe tunnel en volg de instructies om de `connector` op je Pi te installeren.
-4. Koppel een (sub)domein (bijv. `check.jouwdomein.nl`) aan `http://localhost:5000`.
+### 2. De Publieke Tunnel (Cloudflare)
+Als `cloudflared` is geïnstalleerd, start de tunnel:
 
-*Geen domein? Gebruik de tijdelijke tunnel voor tests:*
+**Tijdelijk (om te testen):**
 `cloudflared tunnel --url http://localhost:5000`
 
-## 3. WhatsApp Koppeling
-Vrienden hoeven geen app te downloaden. Jij vult hun gegevens in.
-Elke ontvanger moet éénmalig naar `+34 623 78 95 80` sturen:
+**Permanent (op de achtergrond):**
+`nohup cloudflared tunnel --url http://localhost:5000 > tunnel.log 2>&1 &`
+
+**BELANGRIJK:** Kopieer de `https://...trycloudflare.com` link uit de terminal (of uit `tunnel.log`) naar de **Instellingen** van de SafeGuard App op je telefoon.
+
+### 3. WhatsApp Koppeling
+Je contacten hoeven GEEN app te installeren.
+Elke ontvanger moet éénmalig naar `+34 623 78 95 80` sturen op WhatsApp:
 `I allow callmebot to send me messages`
 
-## 4. Automatisch Controleren (Cruciaal)
-Zonder deze stap stuurt de Pi geen alarmen!
+### 4. Cronjob (De Automatische Check)
+Zorg dat de Pi elke minuut controleert of je deadline is verstreken:
 `crontab -e`
-Voeg toe: `* * * * * curl -X POST http://localhost:5000/check_all`
+Voeg onderaan toe:
+`* * * * * curl -X POST http://localhost:5000/check_all`
+
+## 📁 GitHub Replicatie
+1. Maak een nieuwe repository op GitHub.
+2. Kopieer alle frontend bestanden (`App.tsx`, `index.tsx`, etc.).
+3. De `pi_backend.py` en `safeguard_users.json` blijven **alleen** op je Raspberry Pi staan.
