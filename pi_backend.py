@@ -12,7 +12,10 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "3.9.5-TESTMODE"
+VERSION = "3.9.7-TESTMODE"
+
+# Teller voor test-berichten
+ping_counter = {}
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -62,17 +65,6 @@ def get_status():
         "test_mode": True
     })
 
-@app.route('/test_contact', methods=['POST'])
-def test_contact():
-    data = request.json
-    name = data.get('name', 'Test')
-    phone = data.get('phone')
-    apikey = data.get('apiKey')
-    msg = f"🔔 SafeGuard Test: Hallo {name}, je Pi is verbonden!"
-    if send_wa(name, phone, apikey, msg):
-        return jsonify({"status": "ok"})
-    return jsonify({"status": "error"}), 400
-
 @app.route('/ping', methods=['POST'])
 def handle_ping():
     data = request.json
@@ -90,15 +82,21 @@ def handle_ping():
     }
     save_db(db)
     
-    # --- TIJDELIJKE TEST LOGICA ---
-    print(f"[PING] {user_name} gezien. TEST-MODUS: WhatsApp versturen...")
+    # --- TEST LOGICA MET TELLER ---
+    count = ping_counter.get(user_name, 0) + 1
+    ping_counter[user_name] = count
+    
+    print(f"[PING #{count}] {user_name} gezien. TEST-MODUS: WhatsApp versturen...")
     contacts = data.get('contacts', [])
     for c in contacts:
-        msg = f"🧪 SafeGuard TEST-LOG: Ping ontvangen van {user_name} om {now_str}. Verbinding werkt!"
+        msg = f"🧪 SafeGuard TEST #{count}: Ping ontvangen om {now_str}. Verbinding is 100% OK!"
         send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), msg)
-    # ------------------------------
     
-    return jsonify({"status": "success", "server_received": True, "time": now_str})
+    return jsonify({
+        "status": "success", 
+        "count": count,
+        "time": now_str
+    })
 
 @app.route('/manual_checkin', methods=['POST'])
 def handle_manual():
@@ -129,7 +127,6 @@ def handle_manual():
 def run_security_check():
     db = load_db()
     now = datetime.now()
-    now_hm = now.strftime("%H:%M")
     today_str = now.strftime("%Y-%m-%d")
     alerts = 0
 
@@ -153,11 +150,10 @@ def run_security_check():
                     alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline_str}!"
                     send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), alert_msg)
                     alerts += 1
-            
             info["last_check_date"] = today_str
 
     save_db(db)
-    return jsonify({"time": now_hm, "alerts_sent": alerts, "status": "checks_completed"})
+    return jsonify({"alerts_sent": alerts, "status": "checks_completed"})
 
 if __name__ == '__main__':
     print(f"--- SafeGuard Backend v{VERSION} Gestart op poort 5000 ---")
