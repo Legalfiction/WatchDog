@@ -21,11 +21,12 @@ import {
   MessageCircle,
   Dog,
   BookOpen,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.5.3';
+const VERSION = '8.7.5';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -46,7 +47,6 @@ export default function App() {
   
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
-    // Standaard alle 7 dagen actief om verwarring over rustdagen te voorkomen
     return saved ? JSON.parse(saved) : { 
       email: '', 
       startTime: '07:00', 
@@ -100,13 +100,20 @@ export default function App() {
 
   const triggerCheckin = useCallback(async (force = false) => {
     const now = Date.now();
-    if (!force && now - lastTriggerRef.current < 60000) return; 
+    // Throttle pings: minstens 15 seconden tussen automatische pings, tenzij geforceerd
+    if (!force && now - lastTriggerRef.current < 15000) return; 
 
     const url = getCleanUrl();
-    if (!url || !settings.email || settings.vacationMode) return;
+    if (!url || !settings.email) return;
 
     setIsProcessing(true);
     const batt = await getBattery();
+
+    const validContacts = settings.contacts.filter(c => 
+      c.name.trim() !== '' && 
+      c.phone.trim() !== '' && 
+      c.apiKey.trim() !== ''
+    );
 
     try {
       const controller = new AbortController();
@@ -116,13 +123,13 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user: settings.email,
+          user: settings.email.trim(),
           startTime: settings.startTime,
           endTime: settings.endTime,
           vacationMode: settings.vacationMode,
           activeDays: settings.activeDays,
           battery: batt,
-          contacts: settings.contacts
+          contacts: validContacts
         }),
         mode: 'cors',
         signal: controller.signal
@@ -150,7 +157,7 @@ export default function App() {
     if (!url) { setPiStatus('offline'); return; }
     if (!silent) setPiStatus('checking');
     try {
-      const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
+      const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email.trim())}`, { 
         method: 'GET',
         mode: 'cors'
       });
@@ -183,12 +190,13 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
   useEffect(() => {
     getBattery();
     checkPiStatus();
-    triggerCheckin(); 
+    triggerCheckin(true); // Onmiddellijke sync bij start
 
+    // Verhoogde frequentie: elke 30 seconden checken zolang de app open is
     const interval = setInterval(() => {
       checkPiStatus(true);
       triggerCheckin();
-    }, 120000); 
+    }, 30000); 
     
     return () => clearInterval(interval);
   }, [checkPiStatus, triggerCheckin]);
@@ -198,11 +206,17 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
     localStorage.setItem('safeguard_server_url', serverUrl);
   }, [settings, serverUrl]);
 
+  const handleSettingsUpdate = (newSettings: UserSettings) => {
+    setSettings(newSettings);
+    // Forceer sync bij elke wijziging in instellingen
+    setTimeout(() => triggerCheckin(true), 100);
+  };
+
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
       <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-500 text-white rounded-xl">
+          <div className="p-2 bg-orange-500 text-white rounded-xl shadow-lg shadow-orange-100">
             <Dog size={20} strokeWidth={2.5} />
           </div>
           <div>
@@ -213,13 +227,13 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                 piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} 
               />
               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">
-                {piStatus === 'online' ? 'Systeem Actief' : 'Verbinding Zoeken'}
+                {piStatus === 'online' ? 'Verbonden' : 'Geen Verbinding'}
               </span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowManual(true)} className="p-3 bg-orange-50 rounded-2xl active:scale-90 transition-all">
+          <button onClick={() => setShowManual(true)} className="p-3 bg-orange-50 rounded-2xl active:scale-90 transition-all border border-orange-100">
             <Info className="w-5 h-5 text-orange-600" />
           </button>
           <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-100 rounded-2xl active:scale-90 transition-all">
@@ -229,8 +243,6 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
       </header>
 
       <main className="flex-1 px-6 flex flex-col space-y-5 py-6 pb-12">
-        
-        {/* Status Dashboard Card */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200 flex flex-col gap-6 shadow-none">
            <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
@@ -248,26 +260,28 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
               </div>
            </div>
            
-           <div className="bg-slate-50 rounded-2xl p-5 flex items-center justify-between border border-slate-100">
+           <div className={`rounded-2xl p-6 flex items-center justify-between border transition-colors ${lastSuccessTime ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'}`}>
               <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase text-slate-400 italic">Laatste Check-in</p>
-                <div className="flex items-center gap-2">
-                  <p className={`text-2xl font-black ${lastSuccessTime ? 'text-slate-900' : 'text-slate-200'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck size={14} className={lastSuccessTime ? 'text-emerald-500' : 'text-slate-300'} />
+                  <p className={`text-[10px] font-black uppercase italic tracking-tight ${lastSuccessTime ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    Systeem Status: {lastSuccessTime ? 'VEILIG' : 'INACTIEF'}
+                  </p>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <p className={`text-3xl font-black ${lastSuccessTime ? 'text-emerald-900' : 'text-slate-200'}`}>
                     {lastSuccessTime || '--:--'}
                   </p>
-                  {lastSuccessTime && <CheckCircle2 size={18} className="text-emerald-500" />}
+                  <span className={`text-[10px] font-bold uppercase ${lastSuccessTime ? 'text-emerald-600' : 'text-slate-300'}`}>Activiteit</span>
                 </div>
               </div>
-              <button 
-                onClick={() => triggerCheckin(true)} 
-                disabled={isProcessing}
-                className="flex flex-col items-center gap-1 group active:scale-95 transition-transform"
-              >
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isProcessing ? 'bg-slate-100 text-slate-400' : 'bg-orange-500 text-white shadow-lg shadow-orange-100'}`}>
-                  <Zap size={20} className={isProcessing ? 'animate-pulse' : ''} />
-                </div>
-                <span className="text-[9px] font-black uppercase text-slate-400">Meld Nu</span>
-              </button>
+              <div className="flex flex-col items-center gap-1">
+                 {isProcessing ? (
+                   <RefreshCw size={24} className="text-orange-500 animate-spin" />
+                 ) : (
+                   <CheckCircle2 size={32} className={lastSuccessTime ? 'text-emerald-500' : 'text-slate-200'} />
+                 )}
+              </div>
            </div>
 
            <div className="flex items-center gap-3 px-1">
@@ -278,21 +292,19 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
            </div>
         </div>
 
-        {/* Schema Status */}
-        <div className="bg-orange-500 rounded-3xl p-6 text-white shadow-none">
+        <div className="bg-orange-500 rounded-3xl p-6 text-white shadow-lg shadow-orange-100">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 italic">Actief Venster</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 italic">Bewakingsvenster</p>
             <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${isTodayActive() ? 'bg-white text-orange-600' : 'bg-orange-600 border border-orange-400'}`}>
               {isTodayActive() ? 'Vandaag Actief' : 'Rustdag'}
             </div>
           </div>
           <h2 className="text-xl font-bold mb-1">{getDaySummary()}</h2>
-          <p className="text-xs text-orange-50 italic opacity-90">De monitor checkt of je tussen {settings.startTime} en {settings.endTime} de app opent.</p>
+          <p className="text-xs text-orange-50 italic opacity-90 leading-relaxed">De monitor stuurt automatisch een WhatsApp naar je contacten als je de app niet opent tussen {settings.startTime} en {settings.endTime}.</p>
         </div>
 
-        {/* Vakantie Modus */}
         <button 
-          onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
+          onClick={() => handleSettingsUpdate({...settings, vacationMode: !settings.vacationMode})}
           className={`w-full p-5 rounded-3xl border transition-all flex items-center justify-between ${settings.vacationMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-none'}`}
         >
           <div className="flex items-center gap-4">
@@ -301,7 +313,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
             </div>
             <div className="text-left">
               <p className="text-sm font-bold text-slate-900">Vakantie Modus</p>
-              <p className="text-[10px] text-slate-500 font-medium italic">Tijdelijk geen alarmen</p>
+              <p className="text-[10px] text-slate-500 font-medium italic">Alle alarmen staan uit</p>
             </div>
           </div>
           <div className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.vacationMode ? 'bg-amber-500' : 'bg-slate-200'}`}>
@@ -309,25 +321,10 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
           </div>
         </button>
 
-        {/* Belangrijke Disclaimer (MAG NIET VERWIJDERD WORDEN) */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 flex gap-4 shadow-none">
-          <div className="text-amber-500 mt-1">
-            <AlertTriangle size={20} />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1 italic">Let op voor contactpersonen</p>
-            <p className="text-[11px] text-slate-500 leading-relaxed italic">
-              Het kan zijn dat de monitor niet werkt bij een defect of lege telefoon van de hoofdpersoon. 
-              Breng je contacten hiervan goed op de hoogte.
-            </p>
-          </div>
-        </div>
-
-        {/* Historie Log */}
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-none">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
             <History size={14} className="text-slate-400" />
-            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recente Meldingen</h3>
+            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recente Checks</h3>
           </div>
           <div className="divide-y divide-slate-50">
             {history.length === 0 ? (
@@ -353,7 +350,6 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
         </div>
       </main>
 
-      {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto animate-in fade-in duration-200">
           <div className="flex items-center justify-between mb-8">
@@ -361,7 +357,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                <h3 className="text-xl font-black uppercase text-slate-900 italic">Instellingen</h3>
                <p className="text-[10px] font-bold text-orange-600 uppercase mt-1">Systeem Configuratie</p>
              </div>
-             <button onClick={() => setShowSettings(false)} className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center active:scale-90"><X size={24}/></button>
+             <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center active:scale-90"><X size={24}/></button>
           </div>
           
           <div className="space-y-6 pb-20">
@@ -377,7 +373,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                         const newDays = isActive 
                           ? settings.activeDays.filter(d => d !== idx)
                           : [...settings.activeDays, idx];
-                        setSettings({...settings, activeDays: newDays.sort((a,b) => a-b)});
+                        handleSettingsUpdate({...settings, activeDays: newDays.sort((a,b) => a-b)});
                       }}
                       className={`flex-1 h-12 rounded-xl flex items-center justify-center text-[10px] font-black transition-all active:scale-90 ${isActive ? 'bg-orange-500 text-white shadow-md shadow-orange-100' : 'bg-slate-100 text-slate-400'}`}
                     >
@@ -392,22 +388,22 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
               <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic">
                 <Globe size={14}/> Raspberry Pi URL
               </label>
-              <input type="text" placeholder="https://..." value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
+              <input type="text" placeholder="https://..." value={serverUrl} onChange={e => setServerUrl(e.target.value)} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
             </section>
 
             <section className="space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Jouw Naam</label>
-              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors shadow-none" />
+              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors shadow-none" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Window Start</label>
-                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold shadow-none" />
+                <input type="time" value={settings.startTime} onChange={e => handleSettingsUpdate({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold shadow-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-rose-500 px-1 italic">Window Deadline</label>
-                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold text-rose-600 shadow-none" />
+                <input type="time" value={settings.endTime} onChange={e => handleSettingsUpdate({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold text-rose-600 shadow-none" />
               </div>
             </section>
 
@@ -419,30 +415,14 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                {settings.contacts.map((c) => (
                   <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 shadow-none">
                     <div className="flex justify-between items-center">
-                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full shadow-none" />
-                      <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-400 p-2"><Trash2 size={18} /></button>
+                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} onBlur={() => triggerCheckin(true)} className="bg-transparent font-bold text-slate-900 outline-none w-full shadow-none" />
+                      <button onClick={() => { setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) })); triggerCheckin(true); }} className="text-rose-400 p-2"><Trash2 size={18} /></button>
                     </div>
                     <div className="flex gap-2">
-                      <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none shadow-none" />
-                      {/* WhatsApp Snelknop Hersteld (MessageCircle) */}
-                      <button 
-                        onClick={() => shareActivation(c)}
-                        disabled={!c.phone}
-                        title="Verstuur WhatsApp link"
-                        className="p-3 bg-emerald-500 text-white border border-emerald-600 rounded-xl active:scale-90 disabled:opacity-30 shadow-sm shadow-emerald-100"
-                      >
-                        <MessageCircle size={20} />
-                      </button>
+                      <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} onBlur={() => triggerCheckin(true)} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none shadow-none" />
+                      <button onClick={() => shareActivation(c)} disabled={!c.phone} className="p-3 bg-emerald-500 text-white border border-emerald-600 rounded-xl active:scale-90 disabled:opacity-30 shadow-sm shadow-emerald-100"><MessageCircle size={20} /></button>
                     </div>
-                    <input type="password" placeholder="Bot API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none shadow-none" />
-                    {c.phone && (
-                      <button 
-                        onClick={() => shareActivation(c)}
-                        className="w-full py-4 bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-emerald-100"
-                      >
-                        <Share2 size={14} /> Deel activatie link via WhatsApp
-                      </button>
-                    )}
+                    <input type="password" placeholder="Bot API Key" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} onBlur={() => triggerCheckin(true)} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none shadow-none" />
                   </div>
                 ))}
             </section>
@@ -450,30 +430,27 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
         </div>
       )}
 
-      {/* Manual Modal */}
       {showManual && (
         <div className="fixed inset-0 z-[120] bg-white p-8 overflow-y-auto animate-in slide-in-from-bottom-4 duration-300">
            <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-3 text-orange-600">
                 <BookOpen size={24} />
-                <h3 className="text-xl font-black uppercase italic text-slate-900">Handleiding</h3>
+                <h3 className="text-xl font-black uppercase italic text-slate-900">Hoe het werkt</h3>
               </div>
               <button onClick={() => setShowManual(false)} className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center active:scale-90"><X size={24}/></button>
            </div>
            <div className="space-y-6">
               <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
-                 <p className="text-[10px] font-black uppercase text-orange-600 mb-2 italic underline underline-offset-4 decoration-2 tracking-tighter">Het Doel van de Watchdog</p>
+                 <p className="text-[10px] font-black uppercase text-orange-600 mb-2 italic underline underline-offset-4 decoration-2 tracking-tighter">Geen knoppen nodig</p>
                  <p className="text-sm text-orange-950 leading-relaxed italic">
-                   "De Watchdog is een digitale waakvriend die je familie waarschuwt bij nood. Je hoeft alleen maar de app 1x per dag te openen voor de deadline. Doe je dit niet? Dan krijgt je familie direct een WhatsApp-bericht."
+                   "Watchdog is een passieve bewaker. Je hoeft alleen maar de app 1x per dag even te openen binnen je venster. De rest gaat vanzelf."
                  </p>
               </section>
               <section className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Hoe werkt het?</p>
                 {[
-                  { n: 1, t: "Altijd Aan", d: "De monitor draait 24/7 op je Raspberry Pi. Je hoeft in deze app niets te starten." },
-                  { n: 2, t: "De Check-in", d: "Zodra je deze app opent of op 'Meld Nu' drukt, wordt er automatisch een seintje gestuurd naar de server." },
-                  { n: 3, t: "De Deadline", d: "Geef je geen seintje voor je gekozen deadline? Dan start het alarm op de server." },
-                  { n: 4, t: "Contacten", d: "Gebruik 'Deel activatie link' om familieleden toe te voegen aan het WhatsApp-systeem." }
+                  { n: 1, t: "Automatische Check", d: "Zodra je de app opent, wordt je veiligheid bevestigd op de server." },
+                  { n: 2, t: "Stille Bewaking", d: "De Raspberry Pi houdt bij of je je hebt gemeld." },
+                  { n: 3, t: "Noodgeval", d: "Geen activiteit voor de deadline? Dan krijgen je vrienden direct een bericht." }
                 ].map(s => (
                   <div key={s.n} className="flex gap-4 items-start p-4 bg-white border border-slate-100 rounded-2xl shadow-none">
                      <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold">{s.n}</span>
@@ -484,7 +461,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                   </div>
                 ))}
               </section>
-              <button onClick={() => setShowManual(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-slate-100 active:scale-95 transition-transform">Ik heb het gelezen</button>
+              <button onClick={() => setShowManual(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-transform">Gelezen</button>
            </div>
         </div>
       )}
