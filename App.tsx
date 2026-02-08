@@ -12,13 +12,14 @@ import {
   Info,
   RefreshCcw,
   Copy,
+  Trash2,
   Github
 } from 'lucide-react';
 import { UserSettings, ActivityLog, AppStatus } from './types';
 
 // DE DEFINITIEVE HARDE LINK NAAR JOUW RASPBERRY PI
 const PI_URL = "http://192.168.1.38:5000";
-const APP_VERSION = "2.6.3";
+const APP_VERSION = "2.6.4";
 
 export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
@@ -85,7 +86,9 @@ export default function App() {
         })
       });
       if (response.ok) {
-        setLogs(prev => [{ timestamp, type, status: 'sent' }, ...prev].slice(0, 5));
+        // Fix: Explicitly type the new log entry to prevent property 'status' from being widened to string
+        const newLog: ActivityLog = { timestamp, type, status: 'sent' };
+        setLogs(prev => [newLog, ...prev].slice(0, 5));
         setStatus(AppStatus.WATCHING);
         setServerOnline(true);
         setLastPingTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -94,6 +97,13 @@ export default function App() {
       setServerOnline(false);
     }
   }, [settings, isSyncActive]);
+
+  const resetApp = () => {
+    if (confirm("Weet je zeker dat je alle gegevens wilt wissen? Dit kan niet ongedaan worden gemaakt.")) {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
 
   const testWhatsApp = async () => {
     if (!settings.whatsappPhone || !settings.whatsappApiKey) {
@@ -110,7 +120,7 @@ export default function App() {
           wa_key: settings.whatsappApiKey
         })
       });
-      if (res.ok) alert("Koppeling bevestigd! Check je WhatsApp.");
+      if (res.ok) alert("Koppeling v2.6.4 bevestigd! Check je WhatsApp.");
       else alert("WhatsApp test mislukt op de Pi.");
     } catch (e) {
       alert("Geen verbinding met Pi op " + PI_URL);
@@ -145,7 +155,7 @@ export default function App() {
   const copyCodeForManualSync = () => {
     const code = document.documentElement.innerHTML;
     navigator.clipboard.writeText(code);
-    alert("Code gekopieerd! Plak dit handmatig in GitHub als de sync-knop niet werkt.");
+    alert("Code gekopieerd!");
   };
 
   return (
@@ -156,11 +166,11 @@ export default function App() {
             <ShieldCheck className="text-white w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-black uppercase italic leading-none tracking-tighter">SafeGuard</h1>
+            <h1 className="text-lg font-black uppercase italic leading-none tracking-tighter text-indigo-500">SafeGuard</h1>
             <div className="flex items-center gap-1.5 mt-1">
               <span className={`w-1.5 h-1.5 rounded-full ${serverOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
               <span className="text-[7px] text-slate-500 font-black uppercase tracking-widest">
-                {serverOnline ? 'V2.6.3 ONLINE' : 'V2.6.3 OFFLINE'}
+                {serverOnline ? 'BUILD v2.6.4 LIVE' : 'SYNC ERROR'}
               </span>
             </div>
           </div>
@@ -182,7 +192,7 @@ export default function App() {
               <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/5">
                 <Zap className="w-10 h-10 text-white fill-indigo-500 animate-pulse" />
               </div>
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-indigo-400">Herstart Systeem</p>
+              <p className="text-sm font-black uppercase tracking-[0.2em] text-indigo-400">Activeer Watchdog</p>
             </button>
           </div>
         ) : (
@@ -191,7 +201,7 @@ export default function App() {
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
              </div>
              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-emerald-500">Monitoring v2.6.3</p>
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-500">Monitoring Actief</p>
                 <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tight">Active: {settings.startTime} - {settings.endTime}</p>
              </div>
           </div>
@@ -202,10 +212,10 @@ export default function App() {
               <Smartphone className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-black uppercase italic leading-tight">
-            {isSyncActive ? 'READY FOR SYNC' : 'CHECKING GITHUB...'}
+            {isSyncActive ? 'VERBONDEN MET PI' : 'STATION STANDBY'}
           </h2>
           <div className="space-y-2">
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Server-Pi Time</p>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Laatste Activiteit</p>
             <p className="text-4xl font-black text-white font-mono">{lastPingTime}</p>
           </div>
         </div>
@@ -213,11 +223,11 @@ export default function App() {
         <div className="grid grid-cols-2 gap-4">
           <button onClick={() => sendPing('manual')} className="p-6 bg-slate-800/50 border border-white/5 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-all hover:bg-slate-800">
             <Activity className="w-6 h-6 text-indigo-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Manual Ping</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Verstuur Ping</span>
           </button>
-          <button onClick={() => alert("Tailscale IP: 192.168.1.38")} className="p-6 bg-slate-800/50 border border-white/5 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-all hover:bg-slate-800">
+          <button onClick={() => alert("Server IP: 192.168.1.38 (Tailscale)")} className="p-6 bg-slate-800/50 border border-white/5 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-all hover:bg-slate-800">
             <UserPlus className="w-6 h-6 text-purple-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Pi Info</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Pi Status</span>
           </button>
         </div>
       </main>
@@ -227,8 +237,8 @@ export default function App() {
           <div className="w-full max-w-md bg-slate-900 rounded-[3rem] p-8 space-y-6 border border-white/10 shadow-2xl animate-in slide-in-from-bottom duration-300 overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-black uppercase italic tracking-tighter">Instellingen</h3>
-                <p className="text-[8px] text-indigo-500 font-bold uppercase tracking-[0.2em]">Koppeling v{APP_VERSION}</p>
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Instellingen</h3>
+                <p className="text-[8px] text-indigo-500 font-bold uppercase tracking-[0.2em]">Build v{APP_VERSION}</p>
               </div>
               <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-800 rounded-full hover:bg-slate-700"><X className="w-5 h-5" /></button>
             </div>
@@ -236,35 +246,44 @@ export default function App() {
             <div className="space-y-4">
               <div>
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Jouw Naam</label>
-                <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm" />
+                <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Start</label>
-                  <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm" />
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Check Vanaf</label>
+                  <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
                 </div>
                 <div>
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Deadline</label>
-                  <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm" />
+                  <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
                 </div>
-              </div>
-              
-              <div className="p-5 bg-rose-500/5 rounded-2xl border border-rose-500/10 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Github className="w-4 h-4 text-rose-500" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-rose-500">Troubleshoot GitHub Sync</span>
-                </div>
-                <p className="text-[9px] text-slate-400 leading-relaxed font-bold">
-                  Blijft GitHub op "10 uur geleden" staan? De koppeling tussen de editor en jouw repo is dan tijdelijk geblokkeerd.
-                </p>
-                <button onClick={copyCodeForManualSync} className="w-full p-3 bg-slate-800 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors">
-                  <Copy className="w-3 h-3" /> Kopieer App.tsx Code
-                </button>
               </div>
 
-              <button onClick={testWhatsApp} className="w-full p-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
-                <MessageSquare className="w-5 h-5" /> Test WhatsApp
-              </button>
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WhatsApp (+316...)</label>
+                <input type="text" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
+              </div>
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">CallMeBot API Key</label>
+                <input type="password" value={settings.whatsappApiKey} onChange={e => setSettings({...settings, whatsappApiKey: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
+              </div>
+              
+              <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 space-y-3">
+                 <div className="flex items-center gap-2">
+                    <Info className="w-4 h-4 text-indigo-400" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Systeem Info</span>
+                 </div>
+                 <p className="text-[9px] text-slate-400 font-bold uppercase">Target IP: 192.168.1.38</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <button onClick={testWhatsApp} className="w-full p-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all text-sm">
+                  <MessageSquare className="w-5 h-5" /> Test Verbinding
+                </button>
+                <button onClick={resetApp} className="w-full p-4 bg-rose-600/10 hover:bg-rose-600/20 border border-rose-600/30 text-rose-500 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all text-[10px]">
+                  <Trash2 className="w-4 h-4" /> App Verwijderen / Reset
+                </button>
+              </div>
             </div>
           </div>
         </div>

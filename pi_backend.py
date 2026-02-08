@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.6.3"
+VERSION = "2.6.4"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -26,8 +26,6 @@ def save_db(db):
     with open(DATA_FILE, 'w') as f:
         json.dump(db, f, indent=4)
 
-# --- ENDPOINTS ---
-
 @app.route('/status', methods=['GET'])
 def get_status():
     """Geeft de huidige server status door aan de app."""
@@ -37,7 +35,7 @@ def get_status():
         "version": VERSION,
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "active_users": list(db.keys()),
-        "sync_status": "github_relink_attempt"
+        "build": "stable_vercel_sync"
     })
 
 @app.route('/ping', methods=['POST'])
@@ -60,7 +58,7 @@ def handle_ping():
     }
     
     save_db(db)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] v{VERSION} PING ONTVANGEN: {user_name}")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] v{VERSION} PING: {user_name}")
     return jsonify({"status": "ok", "version": VERSION})
 
 @app.route('/test_wa', methods=['POST'])
@@ -115,11 +113,11 @@ def send_whatsapp_alert(name, info, is_test=False):
     if not phone or not apikey: return False
 
     if is_test:
-        bericht = f"SafeGuard v{VERSION}: Connectie met de Pi (192.168.1.38) is live!"
+        bericht = f"SafeGuard v{VERSION}: Koppeling met Vercel succesvol!"
     else:
         bericht = (
-            f"ALARM: {name} heeft zijn/haar telefoon vanochtend NIET geopend voor de deadline ({info.get('endTime')}). "
-            f"Neem direct contact op."
+            f"ALARM: {name} heeft zijn/haar telefoon NIET geopend voor de deadline ({info.get('endTime')}). "
+            f"Onderneem actie."
         )
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(bericht)}&apikey={apikey}"
@@ -131,5 +129,5 @@ def send_whatsapp_alert(name, info, is_test=False):
         return False
 
 if __name__ == '__main__':
-    print(f"SafeGuard v{VERSION} op Pi is gestart.")
+    print(f"SafeGuard v{VERSION} gestart.")
     app.run(host='0.0.0.0', port=5000, debug=False)

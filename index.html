@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="nl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SafeGuard Watchdog</title>
+    <title>SafeGuard Watchdog v2.6.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22SafeGuard%22,%22short_name%22:%22SafeGuard%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22#0f172a%22,%22theme_color%22:%22#0f172a%22}">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,15 +12,17 @@
 {
   "imports": {
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
     "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+    "react": "https://esm.sh/react@^19.2.4"
   }
 }
 </script>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans antialiased overflow-x-hidden">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased overflow-x-hidden">
     <div id="root"></div>
+    <!-- Expliciete module referentie voor Vite/Vercel build -->
+    <script type="module" src="./index.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
