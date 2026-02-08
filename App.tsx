@@ -8,7 +8,9 @@ import {
   Trash2,
   Plus,
   Power,
-  Loader2
+  Loader2,
+  Send,
+  CheckCircle2
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -20,6 +22,7 @@ export default function App() {
   const [lastPingTime, setLastPingTime] = useState<string>(localStorage.getItem('safeguard_last_ping') || '--:--');
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
   
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
@@ -60,7 +63,7 @@ export default function App() {
 
     setIsProcessing(true);
     try {
-      const res = await fetch(`${PI_URL}/ping`, {
+      await fetch(`${PI_URL}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -71,18 +74,34 @@ export default function App() {
         })
       });
       
-      if (res.ok) {
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setLastPingTime(timeStr);
-        localStorage.setItem('safeguard_last_ping', timeStr);
-      }
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastPingTime(timeStr);
+      localStorage.setItem('safeguard_last_ping', timeStr);
     } catch (err) {
       setPiStatus('offline');
     } finally {
-      // Korte pauze om dubbele pings bij jitter te voorkomen
       setTimeout(() => setIsProcessing(false), 2000);
     }
   }, [settings, isSyncActive, isProcessing]);
+
+  const testSingleContact = async (contact: EmergencyContact) => {
+    setTestStatus(contact.id);
+    try {
+      const res = await fetch(`${PI_URL}/ping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: settings.email || "Test-Gebruiker",
+          contacts: [contact]
+        })
+      });
+      if (!res.ok) throw new Error();
+    } catch (err) {
+      alert("Test mislukt. Is de Pi online?");
+    } finally {
+      setTimeout(() => setTestStatus(null), 2000);
+    }
+  };
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -113,7 +132,7 @@ export default function App() {
             <ShieldCheck className={`${isSyncActive ? 'text-indigo-400' : 'text-slate-500'} w-5 h-5`} />
           </div>
           <div>
-            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">SafeGuard V4.2</h1>
+            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">SafeGuard V4.2.1</h1>
             <div className="flex items-center gap-1.5">
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-rose-500'}`} />
               <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Pi {piStatus}</span>
@@ -136,7 +155,7 @@ export default function App() {
           
           {isSyncActive && (
             <div className="absolute -bottom-4 bg-slate-900 border border-indigo-500/30 px-5 py-2 rounded-full shadow-2xl">
-               <span className="text-[10px] text-indigo-400 font-mono font-bold tracking-tight uppercase">Check-in: {lastPingTime}</span>
+               <span className="text-[10px] text-indigo-400 font-mono font-bold tracking-tight uppercase">Laatste Appje: {lastPingTime}</span>
             </div>
           )}
         </div>
@@ -149,7 +168,6 @@ export default function App() {
                 if (!settings.email || settings.contacts.length === 0) return setShowSettings(true);
                 setIsSyncActive(true);
                 localStorage.setItem('safeguard_active', 'true');
-                // Directe checkin bij activatie
                 setTimeout(triggerCheckin, 500);
               }} 
               className={`w-full py-6 rounded-3xl text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-2xl ${piStatus === 'online' ? 'bg-indigo-600 shadow-indigo-900/50 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'}`}
@@ -181,7 +199,7 @@ export default function App() {
           <div className="space-y-8 pb-12">
             <section className="space-y-4">
               <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] ml-1">Jouw Naam</label>
-              <input type="text" placeholder="Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500/50 transition-all text-sm" />
+              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500/50 transition-all text-sm" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
@@ -203,12 +221,26 @@ export default function App() {
 
               {settings.contacts.map((contact) => (
                 <div key={contact.id} className="p-6 bg-slate-900 rounded-[2.5rem] border border-white/5 space-y-4 relative">
-                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) }))} className="absolute top-6 right-6 text-rose-500/30 hover:text-rose-500 transition-colors"><Trash2 size={16} /></button>
-                  <input type="text" placeholder="Naam Contact" value={contact.name} onChange={e => updateContact(contact.id, 'name', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none" />
-                  <input type="text" placeholder="WhatsApp (bijv 316...)" value={contact.phone} onChange={e => updateContact(contact.id, 'phone', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none" />
-                  <input type="password" placeholder="CallMeBot Key" value={contact.apiKey} onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-[10px] font-mono outline-none" />
+                  <div className="absolute top-6 right-6 flex items-center gap-3">
+                    <button 
+                      onClick={() => testSingleContact(contact)}
+                      className={`p-2 rounded-lg transition-colors ${testStatus === contact.id ? 'bg-emerald-500/20 text-emerald-500' : 'bg-slate-800 text-slate-400'}`}
+                    >
+                      {testStatus === contact.id ? <CheckCircle2 size={16} /> : <Send size={16} />}
+                    </button>
+                    <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) }))} className="p-2 bg-rose-500/10 text-rose-500/30 rounded-lg"><Trash2 size={16} /></button>
+                  </div>
+                  <input type="text" placeholder="Naam (bijv. Aldo of Vriend)" value={contact.name} onChange={e => updateContact(contact.id, 'name', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none" />
+                  <input type="text" placeholder="Nummer (bijv. 31612345678)" value={contact.phone} onChange={e => updateContact(contact.id, 'phone', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none" />
+                  <input type="password" placeholder="CallMeBot API Key" value={contact.apiKey} onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-[10px] font-mono outline-none" />
                 </div>
               ))}
+              
+              <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10">
+                <p className="text-[10px] text-slate-400 leading-relaxed italic text-center">
+                  Tip: Voeg jezelf ook toe als ontvanger als je een bevestigings-appje wilt krijgen.
+                </p>
+              </div>
             </section>
           </div>
         </div>
