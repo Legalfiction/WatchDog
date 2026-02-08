@@ -1,11 +1,16 @@
 
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  phone: string;
+  apiKey: string;
+}
+
 export interface UserSettings {
   email: string;
-  emergencyEmail: string;
   startTime: string; // Bijv. "07:00"
   endTime: string;   // Bijv. "09:00"
-  whatsappPhone: string; // Voor CallMeBot WhatsApp
-  whatsappApiKey: string; // Voor CallMeBot API
+  contacts: EmergencyContact[];
 }
 
 export interface ActivityLog {
