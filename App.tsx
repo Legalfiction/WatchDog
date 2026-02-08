@@ -20,7 +20,8 @@ import {
   MessageSquare,
   ChevronRight,
   ShieldAlert,
-  Terminal
+  Terminal,
+  Activity
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -124,7 +125,6 @@ export default function App() {
     }
   }, [settings, isSyncActive, getCleanUrl]);
 
-  // Wake-up detectie
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
@@ -180,10 +180,14 @@ export default function App() {
             </h2>
             
             {isSyncActive && (
-              <div className="mt-4 flex flex-col items-center">
+              <div className="mt-4 flex flex-col items-center gap-2">
                 <div className="bg-slate-950/80 px-4 py-2 rounded-full border border-white/5 flex items-center gap-2 shadow-inner">
-                  <Clock size={12} className="text-indigo-500" />
-                  <span className="text-xs font-black text-indigo-400 tracking-widest">{lastPingTime}</span>
+                  <Activity size={10} className="text-emerald-500" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Laatst: {lastPingTime}</span>
+                </div>
+                <div className="flex items-center gap-2 opacity-60">
+                  <Clock size={10} className="text-indigo-500" />
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter">Deadline: {settings.endTime}</span>
                 </div>
               </div>
             )}
@@ -324,12 +328,6 @@ export default function App() {
                     </div>
                   </div>
                 ))}
-                {settings.contacts.length === 0 && (
-                  <div className="p-10 border-2 border-dashed border-white/5 rounded-[2.5rem] flex flex-col items-center justify-center opacity-40">
-                    <Users size={40} className="mb-4 text-slate-700"/>
-                    <p className="text-[10px] font-black uppercase tracking-widest">Geen ontvangers ingesteld</p>
-                  </div>
-                )}
               </div>
             </section>
           </div>
