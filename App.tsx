@@ -8,148 +8,179 @@ import {
   Trash2,
   Plus,
   Power,
-  Loader2,
-  Send,
-  Users,
-  CheckCircle2,
-  Globe,
-  Clock,
-  ChevronRight,
-  ShieldAlert,
-  Terminal,
-  Activity,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-  AlertCircle,
-  ExternalLink,
+  User,
+  Battery,
+  Plane,
+  CalendarDays,
+  History,
   Zap,
-  FlaskConical,
-  History
+  Clock,
+  Globe,
+  HelpCircle,
+  AlertTriangle,
+  Info,
+  CheckCircle2
 } from 'lucide-react';
-import { UserSettings, EmergencyContact } from './types';
+import { UserSettings, EmergencyContact, ActivityLog } from './types';
+
+const VERSION = '8.0.0';
+const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
+const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
   const [showSettings, setShowSettings] = useState(false);
-  const [lastPingTime, setLastPingTime] = useState<string>(localStorage.getItem('safeguard_last_ping') || '--:--');
+  const [showHelp, setShowHelp] = useState(false);
   const [serverLastPing, setServerLastPing] = useState<string>('--:--:--');
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
-  const [pingCount, setPingCount] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isManualProcessing, setIsManualProcessing] = useState(false);
   const [showPulse, setShowPulse] = useState(false);
-  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('safeguard_server_url') || '');
+  const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+  const [history, setHistory] = useState<ActivityLog[]>(() => {
+    const saved = localStorage.getItem('safeguard_history');
+    return saved ? JSON.parse(saved) : [];
+  });
   
+  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('safeguard_server_url') || DEFAULT_URL);
   const lastTriggerRef = useRef<number>(0);
+  const lastEventRef = useRef<number>(0);
+  
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
-    return saved ? JSON.parse(saved) : { email: '', startTime: '07:00', endTime: '08:30', contacts: [] };
+    return saved ? JSON.parse(saved) : { 
+      email: '', 
+      startTime: '07:00', 
+      endTime: '08:30', 
+      contacts: [],
+      vacationMode: false,
+      activeDays: [0, 1, 2, 3, 4] 
+    };
   });
 
+  const getDaySummary = () => {
+    if (settings.activeDays.length === 7) return "Elke dag";
+    if (settings.activeDays.length === 5 && !settings.activeDays.includes(5) && !settings.activeDays.includes(6)) return "Maandag t/m Vrijdag";
+    if (settings.activeDays.length === 0) return "Geen actieve dagen";
+    return settings.activeDays.sort((a,b) => a-b).map(d => DAYS[d]).join(', ');
+  };
+
+  const isTodayActive = () => {
+    const jsDay = new Date().getDay(); 
+    const pyDay = (jsDay + 6) % 7; 
+    return settings.activeDays.includes(pyDay);
+  };
+
+  const updateHistory = (timeStr: string, batt: number | null) => {
+    const newLog = { timestamp: Date.now(), timeStr, battery: batt || undefined };
+    const updated = [newLog, ...history].slice(0, 7);
+    setHistory(updated);
+    localStorage.setItem('safeguard_history', JSON.stringify(updated));
+  };
+
+  const getBattery = async () => {
+    try {
+      if ('getBattery' in navigator) {
+        const batt: any = await (navigator as any).getBattery();
+        setBatteryLevel(Math.round(batt.level * 100));
+        return Math.round(batt.level * 100);
+      }
+    } catch (e) { return null; }
+    return null;
+  };
+
   const getCleanUrl = useCallback((urlInput?: string) => {
-    let url = (urlInput || serverUrl).trim();
+    let url = (urlInput || serverUrl).trim().replace(/\s/g, '');
     if (!url) return '';
-    url = url.replace(/\s/g, '');
     if (!url.startsWith('http')) url = `https://${url}`;
     return url.replace(/\/$/, '');
   }, [serverUrl]);
 
-  const cleanPhone = (num: string) => num.replace(/^\+|00/, '').replace(/\s+/g, '');
-
-  const checkPiStatus = useCallback(async () => {
+  const checkPiStatus = useCallback(async (silent = false) => {
     const url = getCleanUrl();
-    if (!url) {
-      setPiStatus('offline');
-      return;
-    }
+    if (!url) { setPiStatus('offline'); return; }
+    if (!silent) setPiStatus('checking');
     try {
       const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
         method: 'GET',
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(4000),
         mode: 'cors'
       });
       if (res.ok) {
         const data = await res.json();
         setPiStatus('online');
         if (data.your_last_ping) setServerLastPing(data.your_last_ping);
-      } else {
-        setPiStatus('offline');
-      }
-    } catch (err) {
-      setPiStatus('offline');
-    }
+      } else { setPiStatus('offline'); }
+    } catch (err) { setPiStatus('offline'); }
   }, [getCleanUrl, settings.email]);
 
-  const triggerCheckin = useCallback(async (force = false, isManual = false) => {
+  const triggerCheckin = useCallback(async (force = false) => {
     const now = Date.now();
-    // In testmodus laten we pings vaker toe, maar niet vaker dan elke 10 seconden
     if (!force && now - lastTriggerRef.current < 10000) return; 
-    
+    if (settings.vacationMode && !force) return;
+    if (!isTodayActive() && !force) return;
+
     const url = getCleanUrl();
     if (!url || !settings.email || !isSyncActive) return;
 
-    if (isManual) setIsManualProcessing(true);
-    else setIsProcessing(true);
+    setIsProcessing(true);
+    const batt = await getBattery();
 
     try {
-      const endpoint = isManual ? '/manual_checkin' : '/ping';
-      const response = await fetch(`${url}${endpoint}`, {
+      const response = await fetch(`${url}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user: settings.email,
           startTime: settings.startTime,
           endTime: settings.endTime,
-          contacts: settings.contacts.map(c => ({ ...c, phone: cleanPhone(c.phone) }))
+          vacationMode: settings.vacationMode,
+          activeDays: settings.activeDays,
+          battery: batt,
+          contacts: settings.contacts
         }),
         mode: 'cors',
         signal: AbortSignal.timeout(10000)
       });
       
       if (response.ok) {
+        setPiStatus('online');
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        setLastPingTime(timeStr);
+        updateHistory(timeStr, batt);
         lastTriggerRef.current = Date.now();
-        localStorage.setItem('safeguard_last_ping', timeStr);
-        
-        setPingCount(prev => prev + 1);
         setShowPulse(true);
         setTimeout(() => setShowPulse(false), 2000);
-        setTimeout(checkPiStatus, 1000);
       }
-    } catch (err: any) {
-      console.error("Ping error:", err);
-    } finally {
-      setIsProcessing(false);
-      setIsManualProcessing(false);
-    }
-  }, [settings, isSyncActive, getCleanUrl, checkPiStatus]);
+    } catch (err: any) { setPiStatus('offline'); } finally { setIsProcessing(false); }
+  }, [settings, isSyncActive, getCleanUrl, history]);
 
   useEffect(() => {
+    getBattery();
     const interval = setInterval(() => {
-      checkPiStatus();
-      if (isSyncActive) triggerCheckin();
-    }, 45000);
+      if (isSyncActive) {
+        checkPiStatus(true);
+        triggerCheckin();
+      }
+    }, 60000);
     return () => clearInterval(interval);
   }, [checkPiStatus, isSyncActive, triggerCheckin]);
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleSyncTrigger = () => {
+      const now = Date.now();
+      if (now - lastEventRef.current < 5000) return;
+      lastEventRef.current = now;
       if (document.visibilityState === 'visible' && isSyncActive) {
-        // BELANGRIJK: Geef de telefoon 1.5 seconde de tijd om WiFi te herstellen
-        // voordat we de Ping versturen.
         setTimeout(() => {
-          checkPiStatus();
           triggerCheckin(true);
-        }, 1500);
+          checkPiStatus(true);
+        }, 1200);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleSyncTrigger);
+    window.addEventListener('focus', handleSyncTrigger);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleSyncTrigger);
+      window.removeEventListener('focus', handleSyncTrigger);
     };
   }, [isSyncActive, triggerCheckin, checkPiStatus]);
 
@@ -159,80 +190,135 @@ export default function App() {
   }, [settings, serverUrl]);
 
   return (
-    <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans select-none overflow-hidden">
-      <header className="flex items-center justify-between p-6 bg-slate-900/40 border-b border-white/5 backdrop-blur-md sticky top-0 z-50">
+    <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
+      <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-slate-800'}`}>
-            <FlaskConical className={`${isSyncActive ? 'text-amber-400' : 'text-slate-500'} w-5 h-5`} />
+          <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-orange-500' : 'bg-slate-200'}`}>
+            <ShieldCheck className={`${isSyncActive ? 'text-white' : 'text-slate-500'} w-5 h-5`} />
           </div>
           <div>
-            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">SafeGuard <span className="text-amber-500 font-black">TEST</span></h1>
-            <div className="flex items-center gap-1.5 mt-0.5" onClick={() => checkPiStatus()}>
+            <h1 className="text-xs font-black uppercase tracking-widest text-slate-900">SafeGuard</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} />
-              <span className="text-[9px] text-slate-500 font-black uppercase tracking-tighter">
-                {piStatus === 'online' ? 'Online' : 'Geen Verbinding'}
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
+                {piStatus === 'online' ? 'Status: Online' : piStatus === 'checking' ? 'Verbinden...' : 'Geen verbinding'}
               </span>
             </div>
           </div>
         </div>
-        <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-900 rounded-2xl border border-white/10 active:scale-90 transition-all">
-          <SettingsIcon className="w-5 h-5 text-slate-400" />
+        <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-100 rounded-2xl active:scale-95 transition-all">
+          <SettingsIcon className="w-5 h-5 text-slate-600" />
         </button>
       </header>
 
-      <main className="flex-1 px-8 flex flex-col items-center justify-center space-y-10 py-10 relative">
+      <main className="flex-1 px-6 flex flex-col space-y-4 py-6 pb-20">
         
-        {/* Test Mode Banner */}
-        <div className="w-full bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-center gap-3 relative overflow-hidden group">
-          <div className="absolute top-0 left-0 w-1 h-full bg-amber-500 animate-pulse" />
-          <FlaskConical className="text-amber-400 shrink-0" size={18} />
-          <div className="flex-1">
-            <p className="text-[10px] font-black text-amber-500 uppercase tracking-tighter">Test-Modus Actief</p>
-            <p className="text-[8px] text-amber-500/60 uppercase font-bold tracking-widest mt-0.5">Bericht bij elke Ping</p>
-          </div>
-          <div className="bg-amber-500/20 px-3 py-1.5 rounded-lg border border-amber-500/30">
-            <span className="text-[12px] font-black text-amber-400">{pingCount}</span>
-          </div>
-        </div>
-
-        <div className="relative">
-          {showPulse && <div className="absolute inset-0 bg-emerald-500/40 blur-[100px] rounded-full animate-pulse" />}
-          
-          <button 
-            onClick={() => isSyncActive && triggerCheckin(true)}
-            disabled={isProcessing}
-            className={`group w-60 h-60 rounded-[4rem] flex flex-col items-center justify-center relative border transition-all duration-700 ${isSyncActive ? 'bg-slate-900/60 border-amber-500/30 shadow-2xl active:scale-95' : 'bg-slate-900/20 border-white/5 opacity-50 grayscale'}`}
-          >
-            <div className="relative">
-              <Smartphone className={`w-14 h-14 mb-4 transition-colors ${isSyncActive ? 'text-amber-400' : 'text-slate-700'} ${isProcessing ? 'animate-bounce' : ''}`} />
-              {showPulse && <Zap size={24} className="absolute -top-4 -right-6 text-emerald-400 animate-bounce" />}
-            </div>
-            
-            <h2 className="text-base font-black uppercase tracking-[0.2em] text-slate-200">
-              {isSyncActive ? (isProcessing ? 'Systeem Check' : 'In de gaten') : 'Inactief'}
-            </h2>
-            
-            {isSyncActive && (
-              <div className="mt-4 flex flex-col items-center gap-2">
-                <div className="bg-slate-950/80 px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
-                  <Activity size={10} className={showPulse ? "text-emerald-500" : "text-slate-500"} />
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${showPulse ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    Laatst: {serverLastPing}
-                  </span>
-                </div>
+        {/* Profile Card */}
+        <div className="bg-white rounded-3xl p-5 border border-slate-200 flex items-center justify-between">
+           <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600">
+                <User size={24} />
               </div>
-            )}
-          </button>
-        </div>
-
-        <div className="w-full space-y-4">
-           {/* Connection Log Helper */}
-           <div className="flex items-center justify-center gap-4 text-[9px] font-black uppercase tracking-widest text-slate-600 mb-2">
-              <div className="flex items-center gap-1.5">
-                <History size={10} />
-                <span>Pings Vandaag: {pingCount}</span>
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Monitoren van</p>
+                <p className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{settings.email || 'Gebruiker'}</p>
               </div>
            </div>
+           <div className="flex flex-col items-end text-emerald-600">
+              <div className="flex items-center gap-1.5">
+                <Battery size={16} className={batteryLevel !== null && batteryLevel < 20 ? 'text-rose-500' : ''} />
+                <span className="text-xs font-black">{batteryLevel !== null ? `${batteryLevel}%` : '--'}</span>
+              </div>
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Toestel</p>
+           </div>
+        </div>
+
+        {/* Schema Status */}
+        <div className="bg-orange-500 rounded-3xl p-6 text-white">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 italic">Huidig Schema</p>
+            <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${isTodayActive() ? 'bg-white text-orange-600' : 'bg-orange-600 border border-orange-400 text-orange-100'}`}>
+              {isTodayActive() ? 'Vandaag Actief' : 'Vandaag Rust'}
+            </div>
+          </div>
+          <h2 className="text-xl font-bold mb-1">{getDaySummary()}</h2>
+          <div className="flex items-center gap-2 text-orange-50">
+            <Clock size={14} />
+            <span className="text-xs font-medium italic">{settings.startTime} tot {settings.endTime} uur</span>
+          </div>
+        </div>
+
+        {/* Vakantie Schakelaar */}
+        <button 
+          onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
+          className={`w-full p-5 rounded-3xl border transition-all flex items-center justify-between ${settings.vacationMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${settings.vacationMode ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              <Plane size={20} />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-slate-900">Vakantie Modus</p>
+              <p className="text-[10px] text-slate-500 font-medium">Alle meldingen tijdelijk uit</p>
+            </div>
+          </div>
+          <div className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 ${settings.vacationMode ? 'bg-amber-500' : 'bg-slate-200'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${settings.vacationMode ? 'translate-x-5' : 'translate-x-0'}`} />
+          </div>
+        </button>
+
+        {/* Belangrijke Disclaimer */}
+        <div className="bg-slate-100 border border-slate-200 rounded-3xl p-5 flex gap-4">
+          <div className="text-amber-600 mt-1">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="flex-1">
+            <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1">Let op voor contactpersonen</p>
+            <p className="text-[11px] text-slate-600 leading-relaxed italic">
+              Het kan zijn dat de monitor niet werkt bij een defect of lege telefoon van de hoofdpersoon. 
+              Breng je contacten hiervan op de hoogte zodat zij bij een alarm ook technische storingen overwegen.
+            </p>
+          </div>
+        </div>
+
+        {/* Historie */}
+        <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
+          <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+            <History size={14} className="text-slate-400" />
+            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Activiteiten Log</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {history.length === 0 ? (
+              <p className="p-6 text-center text-slate-400 text-xs italic">Nog geen pings vastgelegd</p>
+            ) : (
+              history.map((log, idx) => (
+                <div key={idx} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Zap size={14} className="text-emerald-500" />
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">{log.timeStr}</p>
+                      <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(log.timestamp).toLocaleDateString('nl-NL', {weekday: 'short', day: 'numeric'})}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">{log.battery}%</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Main Action */}
+        <div className="pt-2 flex flex-col items-center">
+          <button 
+            onClick={() => triggerCheckin(true)}
+            disabled={isProcessing}
+            className={`w-32 h-32 rounded-full flex flex-col items-center justify-center mb-6 border transition-all duration-500 bg-white active:scale-95 ${isSyncActive && !settings.vacationMode ? 'border-orange-500' : 'border-slate-200 grayscale opacity-50'}`}
+          >
+            <Smartphone className={`w-8 h-8 mb-2 ${isSyncActive ? 'text-orange-500' : 'text-slate-300'} ${isProcessing ? 'animate-bounce' : ''}`} />
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+              {isProcessing ? 'Systeem Bezig' : 'Check-in'}
+            </span>
+          </button>
 
           <button 
             onClick={() => {
@@ -242,68 +328,129 @@ export default function App() {
               localStorage.setItem('safeguard_active', newState.toString());
               if (newState) {
                 checkPiStatus();
-                setTimeout(() => triggerCheckin(true), 1500);
+                setTimeout(() => triggerCheckin(true), 1200);
               }
             }} 
-            className={`w-full py-6 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4 ${isSyncActive ? 'bg-slate-900 text-rose-500 border-rose-900 shadow-none' : 'bg-amber-600 text-white border-amber-800 shadow-2xl shadow-amber-500/20'}`}
+            className={`w-full py-5 rounded-3xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 ${isSyncActive ? 'bg-slate-900 text-white' : 'bg-orange-500 text-white'}`}
           >
             <Power size={18} />
-            {isSyncActive ? 'Stop Test' : 'Start Bewaking'}
+            {isSyncActive ? 'Bewaking Stopzetten' : 'Bewaking Starten'}
           </button>
         </div>
       </main>
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom duration-500">
-          <div className="flex items-center justify-between mb-10">
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto">
+          <div className="flex items-center justify-between mb-8">
              <div>
-               <h3 className="text-xl font-black uppercase text-white italic tracking-tighter">Configuratie</h3>
-               <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Systeem instellingen</p>
+               <h3 className="text-xl font-black uppercase text-slate-900 italic">Instellingen</h3>
+               <p className="text-[10px] font-bold text-orange-600 uppercase mt-1">Configuratie</p>
              </div>
-             <button onClick={() => setShowSettings(false)} className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center border border-white/10 active:scale-90 shadow-2xl"><X size={24}/></button>
+             <button onClick={() => setShowSettings(false)} className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center active:scale-90"><X size={24}/></button>
           </div>
           
-          <div className="space-y-10 pb-20">
-            <section className="bg-slate-900/50 p-6 rounded-[2.5rem] border border-white/5 space-y-5">
-              <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] flex items-center gap-2 px-1">
+          <div className="space-y-6 pb-20">
+            <section className="space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Actieve Dagen</label>
+              <div className="flex justify-between gap-1">
+                {DAYS.map((day, idx) => {
+                  const isActive = settings.activeDays.includes(idx);
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        const newDays = isActive 
+                          ? settings.activeDays.filter(d => d !== idx)
+                          : [...settings.activeDays, idx];
+                        setSettings({...settings, activeDays: newDays});
+                      }}
+                      className={`flex-1 h-12 rounded-xl flex items-center justify-center text-[10px] font-black transition-all ${isActive ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-400'}`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
                 <Globe size={14}/> Cloudflare URL
               </label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="https://xxx.trycloudflare.com" 
-                  value={serverUrl} 
-                  onChange={e => setServerUrl(e.target.value)} 
-                  className="flex-1 p-5 bg-slate-950 border border-white/5 rounded-2xl font-mono text-[13px] text-indigo-400 outline-none" 
-                />
+              <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
+            </section>
+
+            <section className="space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Naam Gebruiker</label>
+              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
+            </section>
+
+            <section className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 px-1">Start Tijd</label>
+                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-rose-500 px-1 italic">Deadline</label>
+                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold text-rose-600" />
               </div>
             </section>
 
-            <section className="space-y-4 px-1">
-              <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Jouw Naam</label>
-              <input type="text" placeholder="Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none text-base" />
-            </section>
-
-            <section className="space-y-6">
-              <div className="flex items-center justify-between px-2">
-                <h4 className="text-[12px] font-black uppercase text-indigo-400 tracking-widest flex items-center gap-2 italic">
-                  <Users size={16}/> Ontvangers
-                </h4>
-                <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center active:scale-90"><Plus size={20} /></button>
+            <section className="space-y-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black uppercase text-slate-900 tracking-widest">Emergency Contacten</h4>
+                  <button onClick={() => setShowHelp(!showHelp)} className="text-orange-500 hover:scale-110 transition-transform">
+                    <HelpCircle size={18} />
+                  </button>
+                </div>
+                <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-500 rounded-xl text-white flex items-center justify-center active:scale-95"><Plus size={20} /></button>
               </div>
+
+              {showHelp && (
+                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6 text-[11px] text-orange-900 space-y-4 animate-in fade-in zoom-in duration-300">
+                  <div className="flex items-center gap-2 font-black uppercase text-[10px] text-orange-600 border-b border-orange-200 pb-2">
+                    <Info size={16} /> Hoe activeer ik een contact?
+                  </div>
+                  <ol className="space-y-3">
+                    <li className="flex gap-3">
+                      <span className="w-5 h-5 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold">1</span>
+                      <span>Contact stuurt WhatsApp naar <span className="font-bold">+34 623 78 95 80</span></span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="w-5 h-5 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold">2</span>
+                      <span>Berichtinhoud: <span className="font-mono bg-white px-1 border border-orange-100 rounded">I allow callmebot to send me messages</span></span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="w-5 h-5 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold">3</span>
+                      <span>De bot stuurt een <span className="font-bold">API Key (pincode)</span> terug.</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="w-5 h-5 bg-orange-500 text-white rounded-full flex-shrink-0 flex items-center justify-center font-bold italic">4</span>
+                      <span className="font-bold text-orange-950 underline decoration-orange-300">Het contact stuurt deze pincode naar jou (de hoofdgebruiker).</span>
+                    </li>
+                  </ol>
+                  <button onClick={() => setShowHelp(false)} className="w-full py-2 bg-orange-500 text-white rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2">
+                    <CheckCircle2 size={12} /> Ik begrijp het
+                  </button>
+                </div>
+              )}
 
               <div className="space-y-4">
                 {settings.contacts.map((c) => (
-                  <div key={c.id} className="p-6 bg-slate-900 rounded-[2.5rem] border border-white/5 space-y-4">
-                    <div className="flex justify-between">
-                      <input type="text" placeholder="Naam" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-white outline-none w-1/2" />
-                      <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="p-2 text-rose-500"><Trash2 size={18} /></button>
+                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 relative">
+                    <div className="flex justify-between items-center">
+                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-2/3" />
+                      <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-500 p-2"><Trash2 size={18} /></button>
                     </div>
-                    <input type="text" placeholder="WhatsApp (316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-slate-950 border border-white/5 rounded-xl p-3 text-sm outline-none" />
-                    <input type="password" placeholder="API Key" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-slate-950 border border-white/5 rounded-xl p-3 text-sm outline-none" />
+                    <input type="text" placeholder="Telefoon (316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
+                    <input type="password" placeholder="API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
                   </div>
                 ))}
+                {settings.contacts.length === 0 && (
+                  <p className="text-center py-6 text-slate-400 text-[10px] italic">Voeg een contact toe om alarmen te kunnen versturen.</p>
+                )}
               </div>
             </section>
           </div>

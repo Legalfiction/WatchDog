@@ -3,19 +3,15 @@ import json
 import os
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-# Zeer permissieve CORS voor mobiele PWA's
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "3.9.7-TESTMODE"
-
-# Teller voor test-berichten
-ping_counter = {}
+VERSION = "5.0.0"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -33,26 +29,16 @@ def send_wa(name, phone, apikey, text):
     url = "https://api.callmebot.com/whatsapp.php"
     try:
         r = requests.get(url, params={"phone": phone, "apikey": apikey, "text": text}, timeout=15)
-        print(f"[WA] {datetime.now().strftime('%H:%M:%S')} - Bericht naar {name}: {text[:30]}...")
         return r.status_code == 200
     except Exception as e:
         print(f"[WA ERROR] {e}")
         return False
-
-@app.before_request
-def log_request_info():
-    print(f"[REQ] {datetime.now().strftime('%H:%M:%S')} - {request.method} {request.path} van {request.remote_addr}")
-
-@app.route('/', methods=['GET'])
-def health_check():
-    return f"SafeGuard Backend v{VERSION} is ONLINE. Server tijd: {datetime.now().strftime('%H:%M:%S')}"
 
 @app.route('/status', methods=['GET'])
 def get_status():
     user = request.args.get('user')
     db = load_db()
     user_info = db.get(user, {}) if user else {}
-    
     last_ping_raw = user_info.get('last_ping', 0)
     last_ping_str = datetime.fromtimestamp(last_ping_raw).strftime("%H:%M:%S") if last_ping_raw else "--:--:--"
 
@@ -62,75 +48,48 @@ def get_status():
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "your_last_ping": last_ping_str,
         "is_monitored": user in db,
-        "test_mode": True
+        "vacation_mode": user_info.get("vacationMode", False),
+        "battery": user_info.get("last_battery", "Onbekend"),
+        "active_days": user_info.get("activeDays", [0,1,2,3,4])
     })
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():
     data = request.json
-    user_name = data.get('user', 'Onbekend')
-    now_ts = time.time()
-    now_str = datetime.now().strftime("%H:%M:%S")
-    
-    db = load_db()
-    db[user_name] = {
-        "last_ping": now_ts,
-        "startTime": data.get('startTime', '07:00'),
-        "endTime": data.get('endTime', '08:30'),
-        "contacts": data.get('contacts', []),
-        "last_check_date": db.get(user_name, {}).get("last_check_date", "")
-    }
-    save_db(db)
-    
-    # --- TEST LOGICA MET TELLER ---
-    count = ping_counter.get(user_name, 0) + 1
-    ping_counter[user_name] = count
-    
-    print(f"[PING #{count}] {user_name} gezien. TEST-MODUS: WhatsApp versturen...")
-    contacts = data.get('contacts', [])
-    for c in contacts:
-        msg = f"🧪 SafeGuard TEST #{count}: Ping ontvangen om {now_str}. Verbinding is 100% OK!"
-        send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), msg)
-    
-    return jsonify({
-        "status": "success", 
-        "count": count,
-        "time": now_str
-    })
-
-@app.route('/manual_checkin', methods=['POST'])
-def handle_manual():
-    data = request.json
-    user_name = data.get('user', 'Onbekend')
-    contacts = data.get('contacts', [])
-    now_str = datetime.now().strftime("%H:%M")
+    user_name = data.get('user', 'Onbekend').strip()
+    if not user_name: return jsonify({"status": "error"}), 400
     
     db = load_db()
     db[user_name] = {
         "last_ping": time.time(),
+        "last_battery": data.get('battery', '??'),
         "startTime": data.get('startTime', '07:00'),
         "endTime": data.get('endTime', '08:30'),
-        "contacts": contacts,
+        "contacts": data.get('contacts', []),
+        "vacationMode": data.get('vacationMode', False),
+        "activeDays": data.get('activeDays', [0,1,2,3,4]),
         "last_check_date": db.get(user_name, {}).get("last_check_date", "")
     }
     save_db(db)
-    
-    msg = f"✅ SafeGuard: {user_name} is OK ({now_str})."
-    success = 0
-    for c in contacts:
-        if send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), msg):
-            success += 1
-            
-    return jsonify({"status": "ok", "sent": success})
+    print(f"[PING] {user_name} ({data.get('battery', '??')}%)")
+    return jsonify({"status": "success"})
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
     db = load_db()
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
+    current_day_idx = now.weekday() 
     alerts = 0
 
     for name, info in db.items():
+        if info.get("vacationMode", False):
+            continue
+            
+        active_days = info.get("activeDays", [0,1,2,3,4])
+        if current_day_idx not in active_days:
+            continue
+
         deadline_str = info.get("endTime", "08:30")
         try:
             h, m = map(int, deadline_str.split(':'))
@@ -146,15 +105,16 @@ def run_security_check():
                 start_of_day = now.replace(hour=7, minute=0, second=0).timestamp()
 
             if info.get("last_ping", 0) < start_of_day:
+                batt = info.get("last_battery", "??")
                 for c in info.get("contacts", []):
-                    alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline_str}!"
+                    alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich vandaag ({now.strftime('%a')}) niet gemeld voor {deadline_str}! (Laatste batt: {batt}%)"
                     send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), alert_msg)
                     alerts += 1
+            
             info["last_check_date"] = today_str
 
     save_db(db)
-    return jsonify({"alerts_sent": alerts, "status": "checks_completed"})
+    return jsonify({"alerts_sent": alerts})
 
 if __name__ == '__main__':
-    print(f"--- SafeGuard Backend v{VERSION} Gestart op poort 5000 ---")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000)

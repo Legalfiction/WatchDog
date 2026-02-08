@@ -7,20 +7,16 @@ export interface EmergencyContact {
 }
 
 export interface UserSettings {
-  email: string;      // Jouw Naam (bijv. Aldo)
+  email: string;
   startTime: string; 
   endTime: string;   
   contacts: EmergencyContact[];
+  vacationMode: boolean;
+  activeDays: number[]; // 0=Ma, 1=Di, ..., 6=Zo
 }
 
 export interface ActivityLog {
   timestamp: number;
-  type: 'focus' | 'manual' | 'background';
-  status: 'sent' | 'failed' | 'local';
-}
-
-export enum AppStatus {
-  WATCHING = 'WATCHING',
-  WARNING = 'WARNING',
-  INACTIVE = 'INACTIVE'
+  timeStr: string;
+  battery?: number;
 }
