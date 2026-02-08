@@ -1,18 +1,26 @@
 
 {
-  "name": "SafeGuard Guardian",
+  "name": "SafeGuard",
   "short_name": "SafeGuard",
-  "description": "Volledig geautomatiseerde welzijnsmonitor.",
+  "description": "Welzijnsmonitor",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
+  "orientation": "portrait",
+  "background_color": "#020617",
   "theme_color": "#4f46e5",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/1099/1099680.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1099/1099680.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
