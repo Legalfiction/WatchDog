@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.5.2';
+const VERSION = '8.5.3';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -46,13 +46,14 @@ export default function App() {
   
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
+    // Standaard alle 7 dagen actief om verwarring over rustdagen te voorkomen
     return saved ? JSON.parse(saved) : { 
       email: '', 
       startTime: '07:00', 
       endTime: '08:30', 
       contacts: [],
       vacationMode: false,
-      activeDays: [0, 1, 2, 3, 4] 
+      activeDays: [0, 1, 2, 3, 4, 5, 6] 
     };
   });
 
@@ -230,7 +231,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
       <main className="flex-1 px-6 flex flex-col space-y-5 py-6 pb-12">
         
         {/* Status Dashboard Card */}
-        <div className="bg-white rounded-3xl p-6 border border-slate-200 flex flex-col gap-6">
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 flex flex-col gap-6 shadow-none">
            <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 border border-orange-100">
@@ -292,13 +293,13 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
         {/* Vakantie Modus */}
         <button 
           onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
-          className={`w-full p-5 rounded-3xl border transition-all flex items-center justify-between ${settings.vacationMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
+          className={`w-full p-5 rounded-3xl border transition-all flex items-center justify-between ${settings.vacationMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200 shadow-none'}`}
         >
           <div className="flex items-center gap-4">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${settings.vacationMode ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
               <Plane size={20} />
             </div>
-            <div>
+            <div className="text-left">
               <p className="text-sm font-bold text-slate-900">Vakantie Modus</p>
               <p className="text-[10px] text-slate-500 font-medium italic">Tijdelijk geen alarmen</p>
             </div>
@@ -308,13 +309,13 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
           </div>
         </button>
 
-        {/* Belangrijke Disclaimer Hersteld */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 flex gap-4">
+        {/* Belangrijke Disclaimer (MAG NIET VERWIJDERD WORDEN) */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 flex gap-4 shadow-none">
           <div className="text-amber-500 mt-1">
             <AlertTriangle size={20} />
           </div>
-          <div className="flex-1">
-            <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1">Let op voor contactpersonen</p>
+          <div className="flex-1 text-left">
+            <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1 italic">Let op voor contactpersonen</p>
             <p className="text-[11px] text-slate-500 leading-relaxed italic">
               Het kan zijn dat de monitor niet werkt bij een defect of lege telefoon van de hoofdpersoon. 
               Breng je contacten hiervan goed op de hoogte.
@@ -364,9 +365,8 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
           </div>
           
           <div className="space-y-6 pb-20">
-            {/* Weekdagen Selectie Behouden */}
             <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Bewakingsdagen</label>
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Bewakingsdagen</label>
               <div className="flex justify-between gap-1">
                 {DAYS.map((day, idx) => {
                   const isActive = settings.activeDays.includes(idx);
@@ -388,26 +388,26 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
               </div>
             </section>
 
-            <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
+            <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3 shadow-none">
+              <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic">
                 <Globe size={14}/> Raspberry Pi URL
               </label>
               <input type="text" placeholder="https://..." value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
             </section>
 
             <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Jouw Naam</label>
-              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors" />
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Jouw Naam</label>
+              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors shadow-none" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 px-1">Window Start</label>
-                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
+                <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Window Start</label>
+                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold shadow-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-rose-500 px-1 italic">Window Deadline</label>
-                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold text-rose-600" />
+                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold text-rose-600 shadow-none" />
               </div>
             </section>
 
@@ -417,29 +417,30 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                   <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-500 rounded-xl text-white flex items-center justify-center active:scale-95 shadow-md shadow-orange-100"><Plus size={20} /></button>
                </div>
                {settings.contacts.map((c) => (
-                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
+                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 shadow-none">
                     <div className="flex justify-between items-center">
-                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
+                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full shadow-none" />
                       <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-400 p-2"><Trash2 size={18} /></button>
                     </div>
                     <div className="flex gap-2">
-                      <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
-                      {/* WhatsApp Snelknop Hersteld */}
+                      <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none shadow-none" />
+                      {/* WhatsApp Snelknop Hersteld (MessageCircle) */}
                       <button 
                         onClick={() => shareActivation(c)}
                         disabled={!c.phone}
-                        className="p-3 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl active:scale-90 disabled:opacity-30"
+                        title="Verstuur WhatsApp link"
+                        className="p-3 bg-emerald-500 text-white border border-emerald-600 rounded-xl active:scale-90 disabled:opacity-30 shadow-sm shadow-emerald-100"
                       >
                         <MessageCircle size={20} />
                       </button>
                     </div>
-                    <input type="password" placeholder="Bot API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
+                    <input type="password" placeholder="Bot API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none shadow-none" />
                     {c.phone && (
                       <button 
                         onClick={() => shareActivation(c)}
-                        className="w-full py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm shadow-emerald-50"
+                        className="w-full py-4 bg-emerald-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-md shadow-emerald-100"
                       >
-                        <Share2 size={12} /> Deel activatie link
+                        <Share2 size={14} /> Deel activatie link via WhatsApp
                       </button>
                     )}
                   </div>
@@ -461,24 +462,24 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
            </div>
            <div className="space-y-6">
               <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
-                 <p className="text-[10px] font-black uppercase text-orange-600 mb-2 italic underline underline-offset-4 decoration-2">Het Doel van de Watchdog</p>
+                 <p className="text-[10px] font-black uppercase text-orange-600 mb-2 italic underline underline-offset-4 decoration-2 tracking-tighter">Het Doel van de Watchdog</p>
                  <p className="text-sm text-orange-950 leading-relaxed italic">
                    "De Watchdog is een digitale waakvriend die je familie waarschuwt bij nood. Je hoeft alleen maar de app 1x per dag te openen voor de deadline. Doe je dit niet? Dan krijgt je familie direct een WhatsApp-bericht."
                  </p>
               </section>
               <section className="space-y-4">
-                <p className="text-[10px] font-black uppercase text-slate-400 px-1">Hoe werkt het?</p>
+                <p className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Hoe werkt het?</p>
                 {[
                   { n: 1, t: "Altijd Aan", d: "De monitor draait 24/7 op je Raspberry Pi. Je hoeft in deze app niets te starten." },
-                  { n: 2, t: "De Check-in", d: "Zodra je deze app opent, wordt er automatisch een seintje gestuurd naar de server." },
-                  { n: 3, t: "De Deadline", d: "Geef je geen seintje voor je gekozen deadline? Dan start het alarm." },
-                  { n: 4, t: "Contacten", d: "Gebruik 'Deel activatie link' om familieleden toe te voegen aan het alarmsysteem." }
+                  { n: 2, t: "De Check-in", d: "Zodra je deze app opent of op 'Meld Nu' drukt, wordt er automatisch een seintje gestuurd naar de server." },
+                  { n: 3, t: "De Deadline", d: "Geef je geen seintje voor je gekozen deadline? Dan start het alarm op de server." },
+                  { n: 4, t: "Contacten", d: "Gebruik 'Deel activatie link' om familieleden toe te voegen aan het WhatsApp-systeem." }
                 ].map(s => (
-                  <div key={s.n} className="flex gap-4 items-start p-4 bg-white border border-slate-100 rounded-2xl">
+                  <div key={s.n} className="flex gap-4 items-start p-4 bg-white border border-slate-100 rounded-2xl shadow-none">
                      <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold">{s.n}</span>
-                     <div>
+                     <div className="text-left">
                        <p className="text-xs font-bold text-slate-900">{s.t}</p>
-                       <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{s.d}</p>
+                       <p className="text-[10px] text-slate-500 leading-tight mt-0.5 italic">{s.d}</p>
                      </div>
                   </div>
                 ))}
