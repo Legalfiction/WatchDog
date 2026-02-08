@@ -12,8 +12,7 @@ import {
   CheckCircle2,
   Info,
   Send,
-  Wifi,
-  WifiOff
+  Loader2
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -28,7 +27,6 @@ export default function App() {
   const [isSending, setIsSending] = useState(false);
   
   const lastCheckinRef = useRef<number>(0);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
@@ -41,31 +39,28 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
-  useEffect(() => {
-    const checkPi = async () => {
-      try {
-        // Fix: Use AbortSignal.timeout instead of AbortController.timeout as it is the correct static method for AbortSignal
-        const res = await fetch(`${PI_URL}/status`, { signal: AbortSignal.timeout(3000) });
-        setPiStatus(res.ok ? 'online' : 'offline');
-      } catch {
-        setPiStatus('offline');
-      }
-    };
-    checkPi();
-    const interval = setInterval(checkPi, 30000);
-    return () => clearInterval(interval);
+  const checkPiStatus = useCallback(async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    try {
+      const res = await fetch(`${PI_URL}/status`, { signal: controller.signal });
+      setPiStatus(res.ok ? 'online' : 'offline');
+    } catch (err) {
+      setPiStatus('offline');
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }, []);
+
+  useEffect(() => {
+    checkPiStatus();
+    const interval = setInterval(checkPiStatus, 20000);
+    return () => clearInterval(interval);
+  }, [checkPiStatus]);
 
   useEffect(() => {
     const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(checkStandalone);
-
-    const handleBeforeInstall = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
 
   useEffect(() => {
@@ -75,7 +70,6 @@ export default function App() {
   const sendPingToPi = useCallback(async (isAuto = true) => {
     if (!settings.email || !isSyncActive) return;
     const now = Date.now();
-    // Auto-pings maximaal elke 2 minuten
     if (isAuto && (now - lastCheckinRef.current < 2 * 60 * 1000)) return;
 
     try {
@@ -103,10 +97,13 @@ export default function App() {
   }, [settings, isSyncActive]);
 
   const triggerImmediateCheckin = async () => {
-    if (!settings.email || settings.contacts.length === 0) return;
+    if (!settings.email || settings.contacts.length === 0) {
+      alert("Vul eerst je naam en minimaal één contact in.");
+      return;
+    }
     setIsSending(true);
     try {
-      await fetch(`${PI_URL}/immediate_checkin`, {
+      const res = await fetch(`${PI_URL}/immediate_checkin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,9 +111,14 @@ export default function App() {
           contacts: settings.contacts
         })
       });
-      sendPingToPi(false);
+      const data = await res.json();
+      if (data.count > 0) {
+        sendPingToPi(false);
+      } else {
+        alert("Pi kon geen berichten versturen naar CallMeBot. Check API keys.");
+      }
     } catch (err) {
-      alert("Kan geen WhatsApp sturen. Is de Raspberry Pi online?");
+      alert("Geen verbinding met de Raspberry Pi.");
     } finally {
       setTimeout(() => setIsSending(false), 2000);
     }
@@ -151,9 +153,9 @@ export default function App() {
             <ShieldCheck className={`${isSyncActive ? 'text-indigo-400' : 'text-slate-500'} w-5 h-5`} />
           </div>
           <div>
-            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">SafeGuard V4.1</h1>
+            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">SafeGuard V4.1.5</h1>
             <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-rose-500'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : piStatus === 'checking' ? 'bg-amber-500 animate-bounce' : 'bg-rose-500'}`} />
               <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Pi {piStatus}</span>
             </div>
           </div>
@@ -191,8 +193,8 @@ export default function App() {
               }} 
               className={`w-full py-6 rounded-3xl text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-2xl ${piStatus === 'online' ? 'bg-indigo-600 shadow-indigo-900/50 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'}`}
             >
-              {isSending ? <CheckCircle2 size={18} /> : <Power size={18} />} 
-              {isSending ? 'WhatsApp Verzonden!' : 'Start Bewaking'}
+              {isSending ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />} 
+              {isSending ? 'Bezig...' : 'Start Bewaking'}
             </button>
           ) : (
             <button 
@@ -205,31 +207,60 @@ export default function App() {
               Bewaking Stoppen
             </button>
           )}
-          
-          <p className="text-[10px] text-center text-slate-600 leading-relaxed max-w-[200px] mx-auto">
-            {isSyncActive 
-              ? "Systeem waakt. Open de app elke dag voor de deadline om het alarm te voorkomen."
-              : "Activeer het systeem om de dagelijkse controle te starten."}
-          </p>
         </div>
       </main>
 
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col p-8 animate-in slide-in-from-bottom duration-500 overflow-y-auto pb-[safe-area-inset-bottom]">
           <div className="flex items-center justify-between mb-12">
-             <h3 className="text-lg font-black uppercase tracking-widest">Instellingen</h3>
+             <h3 className="text-lg font-black uppercase tracking-widest text-indigo-400">Instellingen</h3>
              <button onClick={() => setShowSettings(false)} className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center border border-white/5"><X size={20}/></button>
           </div>
           
           <div className="space-y-8 pb-12">
             <button 
+              disabled={isSending || piStatus !== 'online'}
               onClick={triggerImmediateCheckin}
-              className="w-full p-5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+              className="w-full p-5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
             >
-              <Send size={16} className="text-indigo-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Test WhatsApp Verbinding</span>
+              {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="text-indigo-400" />}
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Verstuur Test Appje</span>
             </button>
 
             <section className="space-y-4">
               <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] ml-1">Naam Gebruiker</label>
-              <input type="text" placeholder="Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus
+              <input type="text" placeholder="Jouw Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500/50 transition-all text-sm" />
+            </section>
+
+            <section className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900 p-5 rounded-3xl border border-white/5">
+                <label className="text-[9px] font-black text-slate-500 uppercase block mb-1 tracking-widest">Starttijd</label>
+                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="bg-transparent w-full font-bold outline-none text-lg" />
+              </div>
+              <div className="bg-slate-900 p-5 rounded-3xl border border-white/5">
+                <label className="text-[9px] font-black text-indigo-500 uppercase block mb-1 tracking-widest">Deadline</label>
+                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="bg-transparent w-full font-bold text-white outline-none text-lg" />
+              </div>
+            </section>
+
+            <section className="space-y-5">
+              <div className="flex items-center justify-between px-1">
+                <h4 className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em]">Ontvangers</h4>
+                <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-900/40"><Plus size={16} /></button>
+              </div>
+
+              {settings.contacts.map((contact) => (
+                <div key={contact.id} className="p-6 bg-slate-900 rounded-[2.5rem] border border-white/5 space-y-4 relative">
+                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) }))} className="absolute top-6 right-6 text-rose-500/30 hover:text-rose-500 transition-colors"><Trash2 size={16} /></button>
+                  <input type="text" placeholder="Naam Contact" value={contact.name} onChange={e => updateContact(contact.id, 'name', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none" />
+                  <input type="text" placeholder="WhatsApp (bijv 316...)" value={contact.phone} onChange={e => updateContact(contact.id, 'phone', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none" />
+                  <input type="password" placeholder="CallMeBot Key" value={contact.apiKey} onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-[10px] font-mono outline-none" />
+                </div>
+              ))}
+            </section>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
