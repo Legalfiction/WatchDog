@@ -11,7 +11,6 @@ import {
   User,
   Battery,
   Plane,
-  CalendarDays,
   History,
   Zap,
   Clock,
@@ -20,11 +19,13 @@ import {
   AlertTriangle,
   Info,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Share2,
+  MessageCircle
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.1.0';
+const VERSION = '8.2.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -86,9 +87,7 @@ export default function App() {
         setBatteryLevel(level);
         return level;
       }
-    } catch (e) { 
-      console.warn("Batterij status niet ondersteund op dit toestel.");
-    }
+    } catch (e) { console.warn("Batterij niet ondersteund."); }
     return null;
   };
 
@@ -99,7 +98,6 @@ export default function App() {
     return url.replace(/\/$/, '');
   }, [serverUrl]);
 
-  // Robustere fetch met handmatige timeout voor oudere browsers
   const robustFetch = async (url: string, options: RequestInit, timeoutMs: number = 8000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -126,12 +124,8 @@ export default function App() {
         const data = await res.json();
         setPiStatus('online');
         if (data.your_last_ping) setServerLastPing(data.your_last_ping);
-      } else { 
-        setPiStatus('error'); 
-      }
-    } catch (err) { 
-      setPiStatus('offline'); 
-    }
+      } else { setPiStatus('error'); }
+    } catch (err) { setPiStatus('offline'); }
   }, [getCleanUrl, settings.email]);
 
   const triggerCheckin = useCallback(async (force = false) => {
@@ -167,15 +161,25 @@ export default function App() {
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         updateHistory(timeStr, batt);
         lastTriggerRef.current = Date.now();
-        setShowPulse(true);
-        setTimeout(() => setShowPulse(false), 2000);
       }
-    } catch (err: any) { 
-      setPiStatus('offline'); 
-    } finally { 
-      setIsProcessing(false); 
-    }
+    } catch (err: any) { setPiStatus('offline'); } finally { setIsProcessing(false); }
   }, [settings, isSyncActive, getCleanUrl, history]);
+
+  const shareActivation = (contact: EmergencyContact) => {
+    const botNumber = "+34623789580";
+    const botCommand = "I allow callmebot to send me messages";
+    const botLink = `https://wa.me/${botNumber.replace('+', '')}?text=${encodeURIComponent(botCommand)}`;
+    
+    const message = `Hoi ${contact.name}, ik gebruik de SafeGuard app voor mijn veiligheid. Wil je mij helpen de monitor te activeren? 
+
+Klik op deze link: ${botLink}
+En druk in WhatsApp op 'verzend'. 
+
+Daarna krijg je een berichtje van de bot met een pincode. Wil je die pincode even naar mij doorsturen? Dan kan ik het hier instellen. Bedankt!`;
+    
+    const whatsappUrl = `https://wa.me/${contact.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
 
   useEffect(() => {
     getBattery();
@@ -215,7 +219,7 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
-      <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
+      <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50 shadow-none">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-orange-500' : 'bg-slate-200'}`}>
             <ShieldCheck className={`${isSyncActive ? 'text-white' : 'text-slate-500'} w-5 h-5`} />
@@ -265,10 +269,10 @@ export default function App() {
 
         {/* Status Alarm melding bij offline */}
         {piStatus !== 'online' && isSyncActive && (
-          <div className="bg-rose-50 border border-rose-100 p-4 rounded-3xl flex items-center gap-3 animate-pulse">
+          <div className="bg-rose-50 border border-rose-100 p-4 rounded-3xl flex items-center gap-3">
             <AlertTriangle className="text-rose-500 flex-shrink-0" size={18} />
             <p className="text-[10px] font-bold text-rose-700 leading-tight">
-              Let op: Er is momenteel geen verbinding met de Raspberry Pi. Checks komen mogelijk niet aan!
+              Monitor offline: Verbinding met Raspberry Pi verbroken.
             </p>
             <button onClick={() => checkPiStatus()} className="p-2 bg-rose-100 rounded-xl text-rose-600 active:rotate-180 transition-transform">
               <RefreshCw size={14} />
@@ -319,7 +323,7 @@ export default function App() {
             <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1">Let op voor contactpersonen</p>
             <p className="text-[11px] text-slate-600 leading-relaxed italic">
               Het kan zijn dat de monitor niet werkt bij een defect of lege telefoon van de hoofdpersoon. 
-              Breng je contacten hiervan op de hoogte zodat zij bij een alarm ook technische storingen overwegen.
+              Breng je contacten hiervan goed op de hoogte.
             </p>
           </div>
         </div>
@@ -394,17 +398,9 @@ export default function App() {
           </div>
           
           <div className="space-y-6 pb-20">
-            {/* Problemen op iPhone? */}
-            <div className="p-4 bg-orange-50 border border-orange-100 rounded-2xl flex gap-3">
-              <Info className="text-orange-500 shrink-0" size={16} />
-              <p className="text-[10px] text-orange-900 leading-tight">
-                <span className="font-bold">Problemen op mobiel?</span><br/>
-                Zet de app op je thuisscherm via "Zet op beginscherm" in Safari/Chrome voor een stabielere verbinding.
-              </p>
-            </div>
-
+            {/* Actieve Dagen */}
             <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Actieve Dagen</label>
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Bewakingsdagen</label>
               <div className="flex justify-between gap-1">
                 {DAYS.map((day, idx) => {
                   const isActive = settings.activeDays.includes(idx);
@@ -426,19 +422,18 @@ export default function App() {
               </div>
             </section>
 
+            {/* Cloudflare Tunnel */}
             <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
                 <Globe size={14}/> Cloudflare URL
               </label>
               <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
-              <button onClick={() => checkPiStatus()} className="w-full py-2 bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-                <RefreshCw size={12} /> Test Verbinding
-              </button>
             </section>
 
+            {/* Gebruiker & Tijden */}
             <section className="space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1">Naam Gebruiker</label>
-              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
+              <input type="text" placeholder="Jouw naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
@@ -452,59 +447,75 @@ export default function App() {
               </div>
             </section>
 
+            {/* Emergency Contacten */}
             <section className="space-y-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-black uppercase text-slate-900 tracking-widest">Emergency Contacten</h4>
-                  <button onClick={() => setShowHelp(!showHelp)} className="text-orange-500 hover:scale-110 transition-transform">
-                    <HelpCircle size={18} />
-                  </button>
+                  <h4 className="text-[10px] font-black uppercase text-orange-600 tracking-widest flex items-center gap-1.5">
+                    <HelpCircle size={14} className="text-orange-500" /> HOE ACTIVEER IK EEN CONTACT?
+                  </h4>
                 </div>
                 <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-500 rounded-xl text-white flex items-center justify-center active:scale-95"><Plus size={20} /></button>
               </div>
 
-              {showHelp && (
-                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6 text-[11px] text-orange-900 space-y-4 animate-in fade-in zoom-in duration-300">
-                  <div className="flex items-center gap-2 font-black uppercase text-[10px] text-orange-600 border-b border-orange-200 pb-2">
-                    <Info size={16} /> Hoe activeer ik een contact?
-                  </div>
-                  <ol className="space-y-3">
-                    <li className="flex gap-3">
-                      <span className="w-5 h-5 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold">1</span>
-                      <span>Contact stuurt WhatsApp naar <span className="font-bold">+34 623 78 95 80</span></span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="w-5 h-5 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold">2</span>
-                      <span>Berichtinhoud: <span className="font-mono bg-white px-1 border border-orange-100 rounded">I allow callmebot to send me messages</span></span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="w-5 h-5 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold">3</span>
-                      <span>De bot stuurt een <span className="font-bold">API Key (pincode)</span> terug.</span>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="w-5 h-5 bg-orange-500 text-white rounded-full flex-shrink-0 flex items-center justify-center font-bold italic">4</span>
-                      <span className="font-bold text-orange-950 underline decoration-orange-300">Het contact stuurt deze pincode naar jou (de hoofdgebruiker).</span>
-                    </li>
-                  </ol>
-                  <button onClick={() => setShowHelp(false)} className="w-full py-2 bg-orange-500 text-white rounded-xl font-black uppercase text-[9px] flex items-center justify-center gap-2">
-                    <CheckCircle2 size={12} /> Ik begrijp het
-                  </button>
-                </div>
-              )}
+              {/* Help Box exact volgens afbeelding */}
+              <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 text-[11px] text-orange-900 space-y-4">
+                <ol className="space-y-4">
+                  <li className="flex gap-4 items-start">
+                    <span className="w-6 h-6 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-orange-800">1</span>
+                    <span className="mt-1">Contact stuurt WhatsApp naar <span className="font-bold">+34 623 78 95 80</span></span>
+                  </li>
+                  <li className="flex gap-4 items-start">
+                    <span className="w-6 h-6 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-orange-800">2</span>
+                    <div className="mt-1">
+                      Berichtinhoud: <span className="font-mono bg-white px-2 py-0.5 border border-orange-200 rounded text-[10px]">I allow callmebot to send me messages</span>
+                    </div>
+                  </li>
+                  <li className="flex gap-4 items-start">
+                    <span className="w-6 h-6 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-orange-800">3</span>
+                    <span className="mt-1">De bot stuurt een <span className="font-bold uppercase">API Key (pincode)</span> terug.</span>
+                  </li>
+                  <li className="flex gap-4 items-start">
+                    <span className="w-6 h-6 bg-orange-500 text-white rounded-full flex-shrink-0 flex items-center justify-center font-bold italic">4</span>
+                    <span className="mt-1 font-bold text-orange-950 underline decoration-orange-400 decoration-2">Het contact stuurt deze pincode naar jou (de hoofdgebruiker).</span>
+                  </li>
+                </ol>
+              </div>
 
               <div className="space-y-4">
                 {settings.contacts.map((c) => (
-                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 relative">
+                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 relative overflow-hidden">
                     <div className="flex justify-between items-center">
-                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-2/3" />
+                      <div className="flex items-center gap-2 flex-1">
+                        <User size={14} className="text-slate-400" />
+                        <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
+                      </div>
                       <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-500 p-2"><Trash2 size={18} /></button>
                     </div>
-                    <input type="text" placeholder="Telefoon (316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
-                    <input type="password" placeholder="API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
+                    <div className="flex gap-2">
+                       <input type="text" placeholder="Telefoon (316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
+                       <button 
+                        onClick={() => shareActivation(c)}
+                        disabled={!c.phone}
+                        className="bg-emerald-500 text-white px-4 rounded-xl active:scale-95 disabled:opacity-30 flex items-center justify-center"
+                       >
+                         <MessageCircle size={20} />
+                       </button>
+                    </div>
+                    <input type="password" placeholder="API Key (Pincode van contact)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
+                    
+                    {c.phone && (
+                      <button 
+                        onClick={() => shareActivation(c)}
+                        className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                      >
+                        <Share2 size={12} /> Deel activatie link
+                      </button>
+                    )}
                   </div>
                 ))}
                 {settings.contacts.length === 0 && (
-                  <p className="text-center py-6 text-slate-400 text-[10px] italic">Voeg een contact toe om alarmen te kunnen versturen.</p>
+                  <p className="text-center py-6 text-slate-400 text-[10px] italic">Voeg een contact toe om meldingen te kunnen ontvangen.</p>
                 )}
               </div>
             </section>
