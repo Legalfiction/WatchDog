@@ -7,11 +7,9 @@ import {
   X,
   Trash2,
   Plus,
-  User,
-  Phone,
-  Key,
   Power,
-  Download
+  Download,
+  CheckCircle2
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -21,7 +19,7 @@ export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
   const [showSettings, setShowSettings] = useState(false);
   const [lastPingTime, setLastPingTime] = useState<string>(localStorage.getItem('safeguard_last_ping') || '--:--');
-  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   
   const lastCheckinRef = useRef<number>(0);
 
@@ -36,21 +34,26 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
-  // Luister naar PWA installatie mogelijkheid
+  // Luister naar installatie prompt
   useEffect(() => {
-    const handler = (e: any) => {
+    const handleBeforeInstall = (e: any) => {
       e.preventDefault();
-      setInstallPrompt(e);
+      setDeferredPrompt(e);
     };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
 
-  const triggerInstall = async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') setInstallPrompt(null);
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      alert("De browser biedt op dit moment geen installatie aan. Gebruik het Chrome menu (3 puntjes) en kies 'App installeren'.");
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
   };
 
   useEffect(() => {
@@ -60,7 +63,8 @@ export default function App() {
   const sendPingToPi = useCallback(async (isAuto = true) => {
     if (!settings.email || !isSyncActive) return;
     const now = Date.now();
-    if (isAuto && (now - lastCheckinRef.current < 5 * 60 * 1000)) return;
+    // Minimaal 2 minuten pauze tussen pings
+    if (isAuto && (now - lastCheckinRef.current < 2 * 60 * 1000)) return;
 
     try {
       const res = await fetch(`${PI_URL}/ping`, {
@@ -82,7 +86,7 @@ export default function App() {
         lastCheckinRef.current = now;
       }
     } catch (err) {
-      console.error("Pi niet bereikbaar");
+      console.warn("Pi offline");
     }
   }, [settings, isSyncActive]);
 
@@ -108,35 +112,36 @@ export default function App() {
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans">
-      <header className="flex items-center justify-between p-6 bg-slate-900/30 backdrop-blur-xl pt-[safe-area-inset-top]">
-        <div className="flex items-center gap-3">
-          <ShieldCheck className="text-indigo-500 w-7 h-7" />
-          <h1 className="text-lg font-black uppercase tracking-tight text-white">SafeGuard</h1>
+    <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
+      <header className="flex items-center justify-between p-6 bg-slate-900/40 backdrop-blur-2xl border-b border-white/5 pt-[safe-area-inset-top]">
+        <div className="flex items-center gap-2.5">
+          <div className={`p-1.5 rounded-lg ${isSyncActive ? 'bg-indigo-500/20' : 'bg-slate-800'}`}>
+            <ShieldCheck className={`${isSyncActive ? 'text-indigo-400' : 'text-slate-500'} w-5 h-5`} />
+          </div>
+          <h1 className="text-sm font-black uppercase tracking-[0.2em] text-white">SafeGuard</h1>
         </div>
-        <button onClick={() => setShowSettings(true)} className="p-2 rounded-lg bg-slate-900 border border-white/5 active:scale-90 transition-all">
+        <button onClick={() => setShowSettings(true)} className="p-2.5 rounded-xl bg-slate-900 border border-white/5 active:scale-90 transition-all">
           <SettingsIcon className="w-5 h-5 text-slate-400" />
         </button>
       </header>
 
-      <main className="flex-1 px-6 py-10 flex flex-col items-center justify-center space-y-12">
-        <div className={`w-56 h-56 rounded-full flex flex-col items-center justify-center relative transition-all duration-700 ${isSyncActive ? 'bg-indigo-500/10 shadow-[0_0_60px_-15px_rgba(79,70,229,0.3)] border-2 border-indigo-500/40' : 'bg-slate-900/50 border-2 border-white/5'}`}>
-          <Smartphone className={`w-16 h-16 mb-2 ${isSyncActive ? 'text-indigo-500' : 'text-slate-800'}`} />
+      <main className="flex-1 px-8 flex flex-col items-center justify-center space-y-16">
+        <div className={`w-60 h-60 rounded-[3rem] flex flex-col items-center justify-center relative transition-all duration-1000 ${isSyncActive ? 'bg-indigo-600/5 shadow-[0_0_100px_-20px_rgba(79,70,229,0.2)] border border-indigo-500/30 rotate-3' : 'bg-slate-900/40 border border-white/5'}`}>
+          <Smartphone className={`w-14 h-14 mb-4 ${isSyncActive ? 'text-indigo-500 animate-pulse' : 'text-slate-800'}`} />
           <div className="text-center">
-            <h2 className="text-xl font-black uppercase tracking-tight text-white">
+            <h2 className={`text-xl font-black uppercase tracking-widest ${isSyncActive ? 'text-white' : 'text-slate-700'}`}>
               {isSyncActive ? 'Actief' : 'Standby'}
             </h2>
           </div>
           
           {isSyncActive && (
-            <div className="absolute -bottom-10 flex flex-col items-center">
-               <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Laatste Check</span>
-               <span className="text-sm font-mono font-bold text-slate-300">{lastPingTime}</span>
+            <div className="absolute -bottom-4 bg-slate-900 border border-white/5 px-4 py-1.5 rounded-full shadow-2xl">
+               <span className="text-[10px] text-indigo-400 font-mono font-bold tracking-tight">CHECK-IN: {lastPingTime}</span>
             </div>
           )}
         </div>
 
-        <div className="w-full pt-10">
+        <div className="w-full">
           {!isSyncActive ? (
             <button 
               onClick={() => {
@@ -145,9 +150,9 @@ export default function App() {
                 localStorage.setItem('safeguard_active', 'true');
                 sendPingToPi(false);
               }} 
-              className="w-full p-6 bg-indigo-600 rounded-3xl text-sm font-black uppercase tracking-widest flex items-center justify-center gap-4 active:scale-95 transition-all shadow-lg shadow-indigo-900/40"
+              className="w-full py-6 bg-indigo-600 rounded-3xl text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all shadow-2xl shadow-indigo-900/50"
             >
-              <Power size={20} /> Start Bewaking
+              <Power size={18} /> Activeer Systeem
             </button>
           ) : (
             <button 
@@ -155,56 +160,66 @@ export default function App() {
                 setIsSyncActive(false);
                 localStorage.setItem('safeguard_active', 'false');
               }}
-              className="w-full p-5 bg-slate-900/80 text-slate-500 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 active:scale-95 transition-all"
+              className="w-full py-5 bg-slate-900 text-slate-500 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] border border-white/10 active:scale-95 transition-all"
             >
-              Stop Bewaking
+              Deactiveren
             </button>
           )}
         </div>
       </main>
 
       {showSettings && (
-        <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col p-6 animate-in slide-in-from-bottom duration-300 overflow-y-auto">
-          <div className="flex items-center justify-between mb-8">
-             <h3 className="text-lg font-black uppercase tracking-tight">Instellingen</h3>
-             <button onClick={() => setShowSettings(false)} className="w-10 h-10 bg-slate-900 rounded-full flex items-center justify-center"><X size={20}/></button>
+        <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col p-8 animate-in slide-in-from-bottom duration-500 overflow-y-auto">
+          <div className="flex items-center justify-between mb-12">
+             <h3 className="text-lg font-black uppercase tracking-widest">Configuratie</h3>
+             <button onClick={() => setShowSettings(false)} className="w-12 h-12 bg-slate-900 rounded-full flex items-center justify-center border border-white/5"><X size={20}/></button>
           </div>
           
-          <div className="space-y-6 pb-20">
-            {installPrompt && (
-              <button onClick={triggerInstall} className="w-full p-5 bg-emerald-600/20 border border-emerald-500/30 rounded-2xl text-emerald-400 text-xs font-bold flex items-center justify-center gap-3 active:scale-95 transition-all">
-                <Download size={16} /> Zet op Startscherm
-              </button>
-            )}
+          <div className="space-y-8 pb-12">
+            <button 
+              onClick={handleInstallClick}
+              className="w-full p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl flex items-center justify-between group active:scale-[0.98] transition-all"
+            >
+              <div className="flex items-center gap-4 text-left">
+                <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-900/40">
+                  <Download size={20} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-white">Zet op Startscherm</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Installeer als echte app op je telefoon</p>
+                </div>
+              </div>
+              <CheckCircle2 size={18} className="text-slate-800 group-hover:text-indigo-500" />
+            </button>
 
-            <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-indigo-500 tracking-widest ml-1">Jouw Naam</label>
-              <input type="text" placeholder="Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500 transition-all text-sm" />
+            <section className="space-y-4">
+              <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] ml-1">Gebruikersnaam</label>
+              <input type="text" placeholder="Bijv: Jan Janssen" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500/50 transition-all text-sm" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-900 p-4 rounded-2xl border border-white/5">
-                <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Vanaf</label>
-                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="bg-transparent w-full font-bold outline-none" />
+              <div className="bg-slate-900 p-5 rounded-3xl border border-white/5">
+                <label className="text-[9px] font-black text-slate-500 uppercase block mb-1 tracking-widest">Starttijd</label>
+                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="bg-transparent w-full font-bold outline-none text-lg" />
               </div>
-              <div className="bg-slate-900 p-4 rounded-2xl border border-white/5">
-                <label className="text-[8px] font-black text-slate-500 uppercase block mb-1">Deadline</label>
-                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="bg-transparent w-full font-bold text-indigo-500 outline-none" />
+              <div className="bg-slate-900 p-5 rounded-3xl border border-white/5">
+                <label className="text-[9px] font-black text-indigo-500 uppercase block mb-1 tracking-widest">Deadline</label>
+                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="bg-transparent w-full font-bold text-white outline-none text-lg" />
               </div>
             </section>
 
-            <section className="space-y-4">
+            <section className="space-y-5">
               <div className="flex items-center justify-between px-1">
-                <h4 className="text-[10px] font-black uppercase text-indigo-500 tracking-widest">Noodcontacten</h4>
-                <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="p-1.5 bg-indigo-600 rounded-lg"><Plus size={14} /></button>
+                <h4 className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em]">Contactpersonen</h4>
+                <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="p-2 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-900/40"><Plus size={16} /></button>
               </div>
 
               {settings.contacts.map((contact) => (
-                <div key={contact.id} className="p-5 bg-slate-900 rounded-2xl border border-white/5 space-y-3 relative">
-                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) }))} className="absolute top-4 right-4 text-rose-500/40"><Trash2 size={14} /></button>
-                  <input type="text" placeholder="Naam" value={contact.name} onChange={e => updateContact(contact.id, 'name', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-xl p-3 text-xs outline-none" />
-                  <input type="text" placeholder="Telefoon" value={contact.phone} onChange={e => updateContact(contact.id, 'phone', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-xl p-3 text-xs outline-none" />
-                  <input type="password" placeholder="CallMeBot Key" value={contact.apiKey} onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-xl p-3 text-xs font-mono outline-none" />
+                <div key={contact.id} className="p-6 bg-slate-900 rounded-[2.5rem] border border-white/5 space-y-4 relative">
+                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contact.id) }))} className="absolute top-6 right-6 text-rose-500/30 hover:text-rose-500 transition-colors"><Trash2 size={16} /></button>
+                  <input type="text" placeholder="Naam Contact" value={contact.name} onChange={e => updateContact(contact.id, 'name', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none focus:border-indigo-500/30" />
+                  <input type="text" placeholder="Telefoon (vrij: 31612345678)" value={contact.phone} onChange={e => updateContact(contact.id, 'phone', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-xs outline-none focus:border-indigo-500/30" />
+                  <input type="password" placeholder="CallMeBot Key" value={contact.apiKey} onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} className="w-full bg-slate-950 border border-white/5 rounded-2xl p-4 text-[10px] font-mono outline-none focus:border-indigo-500/30" />
                 </div>
               ))}
             </section>

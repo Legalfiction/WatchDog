@@ -1,9 +1,10 @@
 
 {
-  "name": "SafeGuard",
+  "name": "SafeGuard Watch",
   "short_name": "SafeGuard",
-  "description": "Welzijnsmonitor",
-  "start_url": "/",
+  "id": "safeguard-watch-v3",
+  "description": "Stille welzijnsmonitor voor Raspberry Pi",
+  "start_url": "/?utm_source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
