@@ -19,7 +19,7 @@ import { UserSettings, ActivityLog, AppStatus } from './types';
 
 // DE DEFINITIEVE HARDE LINK NAAR JOUW RASPBERRY PI
 const PI_URL = "http://192.168.1.38:5000";
-const APP_VERSION = "2.6.4";
+const APP_VERSION = "2.6.5";
 
 export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
@@ -86,7 +86,6 @@ export default function App() {
         })
       });
       if (response.ok) {
-        // Fix: Explicitly type the new log entry to prevent property 'status' from being widened to string
         const newLog: ActivityLog = { timestamp, type, status: 'sent' };
         setLogs(prev => [newLog, ...prev].slice(0, 5));
         setStatus(AppStatus.WATCHING);
@@ -99,8 +98,9 @@ export default function App() {
   }, [settings, isSyncActive]);
 
   const resetApp = () => {
-    if (confirm("Weet je zeker dat je alle gegevens wilt wissen? Dit kan niet ongedaan worden gemaakt.")) {
-      localStorage.clear();
+    if (confirm("Weet je zeker dat je alle gegevens wilt wissen? De app wordt volledig gereset.")) {
+      localStorage.removeItem('safeguard_settings');
+      localStorage.removeItem('safeguard_active');
       window.location.reload();
     }
   };
@@ -120,7 +120,7 @@ export default function App() {
           wa_key: settings.whatsappApiKey
         })
       });
-      if (res.ok) alert("Koppeling v2.6.4 bevestigd! Check je WhatsApp.");
+      if (res.ok) alert("Koppeling v2.6.5 bevestigd!");
       else alert("WhatsApp test mislukt op de Pi.");
     } catch (e) {
       alert("Geen verbinding met Pi op " + PI_URL);
@@ -152,12 +152,6 @@ export default function App() {
     };
   }, [sendPing]);
 
-  const copyCodeForManualSync = () => {
-    const code = document.documentElement.innerHTML;
-    navigator.clipboard.writeText(code);
-    alert("Code gekopieerd!");
-  };
-
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
       <header className="flex items-center justify-between p-6 bg-slate-900/50 backdrop-blur-md sticky top-0 z-30 border-b border-white/5">
@@ -170,7 +164,7 @@ export default function App() {
             <div className="flex items-center gap-1.5 mt-1">
               <span className={`w-1.5 h-1.5 rounded-full ${serverOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
               <span className="text-[7px] text-slate-500 font-black uppercase tracking-widest">
-                {serverOnline ? 'BUILD v2.6.4 LIVE' : 'SYNC ERROR'}
+                {serverOnline ? 'WATCHDOG v2.6.5' : 'OFFLINE'}
               </span>
             </div>
           </div>
@@ -192,7 +186,7 @@ export default function App() {
               <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center border border-white/5">
                 <Zap className="w-10 h-10 text-white fill-indigo-500 animate-pulse" />
               </div>
-              <p className="text-sm font-black uppercase tracking-[0.2em] text-indigo-400">Activeer Watchdog</p>
+              <p className="text-sm font-black uppercase tracking-[0.2em] text-indigo-400 text-center">Activeer Veiligheid</p>
             </button>
           </div>
         ) : (
@@ -201,7 +195,7 @@ export default function App() {
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
              </div>
              <div>
-                <p className="text-xs font-black uppercase tracking-widest text-emerald-500">Monitoring Actief</p>
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-500">Systeem Live</p>
                 <p className="text-[9px] text-slate-500 uppercase font-bold tracking-tight">Active: {settings.startTime} - {settings.endTime}</p>
              </div>
           </div>
@@ -212,10 +206,10 @@ export default function App() {
               <Smartphone className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-black uppercase italic leading-tight">
-            {isSyncActive ? 'VERBONDEN MET PI' : 'STATION STANDBY'}
+            {isSyncActive ? 'SYNCING WITH PI' : 'STANDBY'}
           </h2>
           <div className="space-y-2">
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Laatste Activiteit</p>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Laatste Hartslag</p>
             <p className="text-4xl font-black text-white font-mono">{lastPingTime}</p>
           </div>
         </div>
@@ -223,7 +217,7 @@ export default function App() {
         <div className="grid grid-cols-2 gap-4">
           <button onClick={() => sendPing('manual')} className="p-6 bg-slate-800/50 border border-white/5 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-all hover:bg-slate-800">
             <Activity className="w-6 h-6 text-indigo-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Verstuur Ping</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Manual Ping</span>
           </button>
           <button onClick={() => alert("Server IP: 192.168.1.38 (Tailscale)")} className="p-6 bg-slate-800/50 border border-white/5 rounded-[2rem] flex flex-col items-center gap-2 active:scale-95 transition-all hover:bg-slate-800">
             <UserPlus className="w-6 h-6 text-purple-400" />
@@ -260,28 +254,20 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WhatsApp (+316...)</label>
-                <input type="text" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WhatsApp Nummer</label>
+                <input type="text" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} placeholder="+316..." className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
               </div>
               <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">CallMeBot API Key</label>
+                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">API Key</label>
                 <input type="password" value={settings.whatsappApiKey} onChange={e => setSettings({...settings, whatsappApiKey: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white text-sm focus:border-indigo-500 outline-none" />
               </div>
-              
-              <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 space-y-3">
-                 <div className="flex items-center gap-2">
-                    <Info className="w-4 h-4 text-indigo-400" />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400">Systeem Info</span>
-                 </div>
-                 <p className="text-[9px] text-slate-400 font-bold uppercase">Target IP: 192.168.1.38</p>
-              </div>
 
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-3 pt-4">
                 <button onClick={testWhatsApp} className="w-full p-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all text-sm">
-                  <MessageSquare className="w-5 h-5" /> Test Verbinding
+                  <MessageSquare className="w-5 h-5" /> Test WhatsApp
                 </button>
                 <button onClick={resetApp} className="w-full p-4 bg-rose-600/10 hover:bg-rose-600/20 border border-rose-600/30 text-rose-500 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all text-[10px]">
-                  <Trash2 className="w-4 h-4" /> App Verwijderen / Reset
+                  <Trash2 className="w-4 h-4" /> App Gegevens Wissen
                 </button>
               </div>
             </div>

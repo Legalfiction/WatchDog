@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.6.4"
+VERSION = "2.6.5"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -35,7 +35,7 @@ def get_status():
         "version": VERSION,
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "active_users": list(db.keys()),
-        "build": "stable_vercel_sync"
+        "build": "watchdog_v265_stable"
     })
 
 @app.route('/ping', methods=['POST'])
@@ -99,7 +99,7 @@ def run_security_check():
             if last_ping < start_dt.timestamp():
                 send_whatsapp_alert(name, info)
                 alerts_triggered += 1
-                print(f"!!! v{VERSION} ALARM VERSTUURD VOOR {name} !!!")
+                print(f"!!! v{VERSION} ALARM: {name} !!!")
             
             info["last_check_date"] = today_str
 
@@ -113,11 +113,11 @@ def send_whatsapp_alert(name, info, is_test=False):
     if not phone or not apikey: return False
 
     if is_test:
-        bericht = f"SafeGuard v{VERSION}: Koppeling met Vercel succesvol!"
+        bericht = f"SafeGuard v{VERSION}: Test bericht succesvol!"
     else:
         bericht = (
-            f"ALARM: {name} heeft zijn/haar telefoon NIET geopend voor de deadline ({info.get('endTime')}). "
-            f"Onderneem actie."
+            f"WATCHDOG ALARM: {name} heeft zijn/haar telefoon NIET geopend voor de deadline ({info.get('endTime')}). "
+            f"Controleer direct of alles in orde is."
         )
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(bericht)}&apikey={apikey}"
@@ -129,5 +129,5 @@ def send_whatsapp_alert(name, info, is_test=False):
         return False
 
 if __name__ == '__main__':
-    print(f"SafeGuard v{VERSION} gestart.")
+    print(f"SafeGuard v{VERSION} Watchdog gestart op Pi.")
     app.run(host='0.0.0.0', port=5000, debug=False)
