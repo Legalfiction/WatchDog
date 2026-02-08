@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.6.2"
+VERSION = "2.6.3"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -37,8 +37,7 @@ def get_status():
         "version": VERSION,
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "active_users": list(db.keys()),
-        "total_registrations": len(db),
-        "sync_status": "verified"
+        "sync_status": "github_relink_attempt"
     })
 
 @app.route('/ping', methods=['POST'])
@@ -116,14 +115,21 @@ def send_whatsapp_alert(name, info, is_test=False):
     if not phone or not apikey: return False
 
     if is_test:
-        bericht = f"SafeGuard v{VERSION}: Koppeling met Pi op 192.168.1.38 is gelukt!"
+        bericht = f"SafeGuard v{VERSION}: Connectie met de Pi (192.168.1.38) is live!"
     else:
         bericht = (
             f"ALARM: {name} heeft zijn/haar telefoon vanochtend NIET geopend voor de deadline ({info.get('endTime')}). "
-            f"Neem direct contact op met {name}."
+            f"Neem direct contact op."
         )
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(bericht)}&apikey={apikey}"
     try:
         r = requests.get(url, timeout=15)
-        return r
+        return r.ok
+    except Exception as e:
+        print(f"WhatsApp Fout v{VERSION}: {e}")
+        return False
+
+if __name__ == '__main__':
+    print(f"SafeGuard v{VERSION} op Pi is gestart.")
+    app.run(host='0.0.0.0', port=5000, debug=False)
