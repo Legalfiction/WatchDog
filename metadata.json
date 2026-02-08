@@ -1,5 +1,9 @@
 {
   "name": "SafeGuard Watchdog",
-  "description": "Een intelligente PWA die waakt over je welzijn door activiteit te monitoren zonder app-installatie.",
-  "requestFramePermissions": []
+  "description": "Geautomatiseerde welzijnsmonitor met Screen Wake Lock integratie.",
+  "requestFramePermissions": [],
+  "short_name": "SafeGuard",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "display": "standalone"
 }

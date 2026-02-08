@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.7.0"
+VERSION = "2.7.5"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -31,6 +31,29 @@ def get_status():
         "version": VERSION,
         "server_time": datetime.now().strftime("%H:%M:%S")
     })
+
+# NIEUW: Endpoint voor MacroDroid (Directe trigger)
+@app.route('/trigger/<user_name>', methods=['GET', 'POST'])
+def external_trigger(user_name):
+    db = load_db()
+    if user_name not in db:
+        return jsonify({"status": "error", "message": "Gebruiker niet gevonden op Pi"}), 404
+    
+    info = db[user_name]
+    contacts = info.get('contacts', [])
+    
+    # Update de ping tijd zodat de watchdog gerustgesteld is
+    info["last_ping"] = time.time()
+    save_db(db)
+
+    # Stuur direct de WhatsApp berichten
+    success_count = 0
+    for contact in contacts:
+        bericht = f"✅ SafeGuard AUTOMATISERING: {user_name} heeft zojuist de telefoon ontgrendeld. Systeem gedetecteerd!"
+        if send_raw_wa(contact.get('phone'), contact.get('apiKey'), bericht):
+            success_count += 1
+            
+    return jsonify({"status": "triggered", "user": user_name, "messages_sent": success_count})
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():
@@ -56,19 +79,11 @@ def immediate_checkin():
     
     success_count = 0
     for contact in contacts:
-        bericht = f"✅ SafeGuard: {user_name} heeft zojuist de telefoon ontgrendeld. Alles is in orde!"
+        bericht = f"✅ SafeGuard: {user_name} is veilig ingelogd."
         if send_raw_wa(contact.get('phone'), contact.get('apiKey'), bericht):
             success_count += 1
             
     return jsonify({"status": "sent", "count": success_count})
-
-@app.route('/test_wa', methods=['POST'])
-def test_wa():
-    data = request.json
-    contact = data.get('contact', {})
-    bericht = f"SafeGuard v{VERSION}: Dit is een testbericht."
-    success = send_raw_wa(contact.get('phone'), contact.get('apiKey'), bericht)
-    return jsonify({"status": "sent" if success else "failed"})
 
 def send_raw_wa(phone, apikey, text):
     if not phone or not apikey: return False
@@ -91,6 +106,7 @@ def run_security_check():
             start_str = info.get("startTime", "07:00")
             start_dt = now.replace(hour=int(start_str.split(':')[0]), minute=int(start_str.split(':')[1]), second=0)
             
+            # Als er sinds de start-tijd geen ping is geweest...
             if info.get("last_ping", 0) < start_dt.timestamp():
                 for c in info.get("contacts", []):
                     msg = f"⚠️ ALARM: {name} heeft de telefoon NIET geopend voor de deadline van {now_str}. Controleer direct!"
