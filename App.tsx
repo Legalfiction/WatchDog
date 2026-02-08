@@ -6,16 +6,15 @@ import {
   Smartphone,
   Activity,
   Zap,
-  Wifi,
   UserPlus,
   CheckCircle2,
-  Clock,
-  Server,
   X,
-  Send,
   MessageSquare
 } from 'lucide-react';
 import { UserSettings, ActivityLog, AppStatus } from './types';
+
+// HIER WORDT HET ADRES VAN JE PI HARD INGESTELD
+const PI_URL = "http://192.168.1.38:5000";
 
 export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
@@ -27,18 +26,24 @@ export default function App() {
 
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
-    const params = new URLSearchParams(window.location.search);
     const defaultSettings = {
       email: '', 
       emergencyEmail: '',
-      startTime: params.get('start') || '07:00',
-      endTime: params.get('end') || '08:30',
+      startTime: '07:00',
+      endTime: '08:30',
       whatsappPhone: '',
       whatsappApiKey: '',
-      webhookUrl: params.get('pi') || '' 
+      webhookUrl: PI_URL // Gebruikt nu altijd het hardcoded adres
     };
     return saved ? JSON.parse(saved) : defaultSettings;
   });
+
+  // Forceer de webhookUrl altijd naar het hardcoded adres bij laden
+  useEffect(() => {
+    if (settings.webhookUrl !== PI_URL) {
+      setSettings(prev => ({ ...prev, webhookUrl: PI_URL }));
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
@@ -50,22 +55,22 @@ export default function App() {
   }, [isSyncActive]);
 
   const checkServerStatus = async () => {
-    if (!settings.webhookUrl) return;
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${settings.webhookUrl}/status`, { signal: controller.signal });
+      const res = await fetch(`${PI_URL}/status`, { signal: controller.signal });
       setServerOnline(res.ok);
+      clearTimeout(timeoutId);
     } catch (e) {
       setServerOnline(false);
     }
   };
 
   const sendPing = useCallback(async (type: ActivityLog['type']) => {
-    if (!settings.webhookUrl || !settings.email || !isSyncActive) return;
+    if (!settings.email || !isSyncActive) return;
     const timestamp = Date.now();
     try {
-      const response = await fetch(`${settings.webhookUrl}/ping`, {
+      const response = await fetch(`${PI_URL}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         mode: 'cors',
@@ -90,12 +95,12 @@ export default function App() {
   }, [settings, isSyncActive]);
 
   const testWhatsApp = async () => {
-    if (!settings.webhookUrl || !settings.whatsappPhone || !settings.whatsappApiKey) {
-      alert("Vul eerst alle gegevens in.");
+    if (!settings.whatsappPhone || !settings.whatsappApiKey) {
+      alert("Vul eerst je WhatsApp gegevens in bij instellingen.");
       return;
     }
     try {
-      const res = await fetch(`${settings.webhookUrl}/test_wa`, {
+      const res = await fetch(`${PI_URL}/test_wa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -105,9 +110,9 @@ export default function App() {
         })
       });
       if (res.ok) alert("Test verstuurd! Controleer je WhatsApp.");
-      else alert("Fout bij versturen test.");
+      else alert("Fout bij versturen test. Is de Pi online?");
     } catch (e) {
-      alert("Kan de Pi niet bereiken.");
+      alert("Kan de Pi niet bereiken op " + PI_URL);
     }
   };
 
@@ -135,9 +140,9 @@ export default function App() {
   }, [sendPing]);
 
   const handleShare = () => {
-    const shareUrl = `${window.location.origin}${window.location.pathname}?pi=${encodeURIComponent(settings.webhookUrl)}`;
+    const shareUrl = window.location.href;
     if (navigator.share) {
-      navigator.share({ title: 'Veiligheidssysteem', text: 'Doe je mee?', url: shareUrl });
+      navigator.share({ title: 'SafeGuard Watchdog', text: 'Sluit je aan bij mijn veiligheidsnetwerk.', url: shareUrl });
     } else {
       navigator.clipboard.writeText(shareUrl);
       alert("Link gekopieerd!");
@@ -161,7 +166,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <button onClick={() => setShowSettings(true)} className="p-3 rounded-xl bg-slate-800 border border-slate-700">
+        <button onClick={() => setShowSettings(true)} className="p-3 rounded-xl bg-slate-800 border border-slate-700 active:scale-90 transition-transform">
           <SettingsIcon className="w-5 h-5 text-slate-400" />
         </button>
       </header>
@@ -169,7 +174,7 @@ export default function App() {
       <main className="flex-1 px-6 pt-4 pb-32 space-y-6">
         {!isSyncActive ? (
           <div className="p-1 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-[2.5rem] shadow-2xl">
-            <button onClick={activateAlwaysOn} className="w-full p-8 bg-slate-950 rounded-[2.4rem] flex flex-col items-center gap-4">
+            <button onClick={activateAlwaysOn} className="w-full p-8 bg-slate-950 rounded-[2.4rem] flex flex-col items-center gap-4 active:scale-95 transition-transform">
               <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center">
                 <Zap className="w-8 h-8 text-white fill-indigo-500 animate-pulse" />
               </div>
@@ -223,31 +228,33 @@ export default function App() {
             <div className="space-y-4">
               <div>
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Jouw Naam</label>
-                <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} placeholder="Bijv. Jan" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 outline-none focus:border-indigo-500 transition-colors" />
+                <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} placeholder="Bijv. Jan" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 outline-none focus:border-indigo-500 transition-colors text-white" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Start Waak</label>
-                  <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
+                  <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white" />
                 </div>
                 <div>
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Eind Waak (Check)</label>
-                  <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
+                  <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white" />
                 </div>
               </div>
               <div>
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WA Nummer Contactpersoon</label>
-                <input type="text" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} placeholder="+316..." className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
+                <input type="text" value={settings.whatsappPhone} onChange={e => setSettings({...settings, whatsappPhone: e.target.value})} placeholder="+316..." className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white" />
               </div>
               <div>
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">WhatsApp API Key</label>
-                <input type="password" value={settings.whatsappApiKey} onChange={e => setSettings({...settings, whatsappApiKey: e.target.value})} placeholder="CallMeBot Key" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
+                <input type="password" value={settings.whatsappApiKey} onChange={e => setSettings({...settings, whatsappApiKey: e.target.value})} placeholder="CallMeBot Key" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-white" />
               </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-2">Pi Adres (Tailscale/Lokaal)</label>
-                <input type="text" value={settings.webhookUrl} onChange={e => setSettings({...settings, webhookUrl: e.target.value})} placeholder="http://192.168...:5000" className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5" />
+              
+              <div className="p-4 bg-slate-950/50 rounded-2xl border border-white/5">
+                <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-1">Verbonden met Pi op:</p>
+                <p className="text-[10px] font-mono text-indigo-400">{PI_URL}</p>
               </div>
-              <button onClick={testWhatsApp} className="w-full p-4 bg-emerald-600 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2">
+
+              <button onClick={testWhatsApp} className="w-full p-4 bg-emerald-600 rounded-2xl font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-transform">
                 <MessageSquare className="w-5 h-5" /> Test WhatsApp
               </button>
             </div>
