@@ -8,10 +8,6 @@ import {
   Trash2,
   Plus,
   Power,
-  Download,
-  CheckCircle2,
-  Info,
-  Send,
   Loader2
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
@@ -22,12 +18,9 @@ export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
   const [showSettings, setShowSettings] = useState(false);
   const [lastPingTime, setLastPingTime] = useState<string>(localStorage.getItem('safeguard_last_ping') || '--:--');
-  const [isStandalone, setIsStandalone] = useState(false);
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
-  const [isSending, setIsSending] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   
-  const lastCheckinRef = useRef<number>(0);
-
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
     const defaultSettings: UserSettings = {
@@ -59,19 +52,13 @@ export default function App() {
   }, [checkPiStatus]);
 
   useEffect(() => {
-    const checkStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    setIsStandalone(checkStandalone);
-  }, []);
-
-  useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
   }, [settings]);
 
-  const sendPingToPi = useCallback(async (isAuto = true) => {
-    if (!settings.email || !isSyncActive) return;
-    const now = Date.now();
-    if (isAuto && (now - lastCheckinRef.current < 2 * 60 * 1000)) return;
+  const triggerCheckin = useCallback(async () => {
+    if (!settings.email || !isSyncActive || isProcessing) return;
 
+    setIsProcessing(true);
     try {
       const res = await fetch(`${PI_URL}/ping`, {
         method: 'POST',
@@ -80,8 +67,7 @@ export default function App() {
           user: settings.email,
           startTime: settings.startTime,
           endTime: settings.endTime,
-          contacts: settings.contacts,
-          type: isAuto ? 'focus' : 'manual'
+          contacts: settings.contacts
         })
       });
       
@@ -89,54 +75,28 @@ export default function App() {
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         setLastPingTime(timeStr);
         localStorage.setItem('safeguard_last_ping', timeStr);
-        lastCheckinRef.current = now;
       }
     } catch (err) {
       setPiStatus('offline');
-    }
-  }, [settings, isSyncActive]);
-
-  const triggerImmediateCheckin = async () => {
-    if (!settings.email || settings.contacts.length === 0) {
-      alert("Vul eerst je naam en minimaal één contact in.");
-      return;
-    }
-    setIsSending(true);
-    try {
-      const res = await fetch(`${PI_URL}/immediate_checkin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user: settings.email,
-          contacts: settings.contacts
-        })
-      });
-      const data = await res.json();
-      if (data.count > 0) {
-        sendPingToPi(false);
-      } else {
-        alert("Pi kon geen berichten versturen naar CallMeBot. Check API keys.");
-      }
-    } catch (err) {
-      alert("Geen verbinding met de Raspberry Pi.");
     } finally {
-      setTimeout(() => setIsSending(false), 2000);
+      // Korte pauze om dubbele pings bij jitter te voorkomen
+      setTimeout(() => setIsProcessing(false), 2000);
     }
-  };
+  }, [settings, isSyncActive, isProcessing]);
 
   useEffect(() => {
-    const onFocus = () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isSyncActive) {
-        sendPingToPi(true);
+        triggerCheckin();
       }
     };
-    window.addEventListener('visibilitychange', onFocus);
-    window.addEventListener('focus', onFocus);
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
     return () => {
-      window.removeEventListener('visibilitychange', onFocus);
-      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [isSyncActive, sendPingToPi]);
+  }, [isSyncActive, triggerCheckin]);
 
   const updateContact = (id: string, field: keyof EmergencyContact, value: string) => {
     setSettings(prev => ({
@@ -153,9 +113,9 @@ export default function App() {
             <ShieldCheck className={`${isSyncActive ? 'text-indigo-400' : 'text-slate-500'} w-5 h-5`} />
           </div>
           <div>
-            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">SafeGuard V4.1.5</h1>
+            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">SafeGuard V4.2</h1>
             <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : piStatus === 'checking' ? 'bg-amber-500 animate-bounce' : 'bg-rose-500'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-rose-500'}`} />
               <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Pi {piStatus}</span>
             </div>
           </div>
@@ -189,12 +149,13 @@ export default function App() {
                 if (!settings.email || settings.contacts.length === 0) return setShowSettings(true);
                 setIsSyncActive(true);
                 localStorage.setItem('safeguard_active', 'true');
-                triggerImmediateCheckin();
+                // Directe checkin bij activatie
+                setTimeout(triggerCheckin, 500);
               }} 
               className={`w-full py-6 rounded-3xl text-xs font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-2xl ${piStatus === 'online' ? 'bg-indigo-600 shadow-indigo-900/50 active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'}`}
             >
-              {isSending ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />} 
-              {isSending ? 'Bezig...' : 'Start Bewaking'}
+              {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />} 
+              {isProcessing ? 'Versturen...' : 'Start Bewaking'}
             </button>
           ) : (
             <button 
@@ -218,18 +179,9 @@ export default function App() {
           </div>
           
           <div className="space-y-8 pb-12">
-            <button 
-              disabled={isSending || piStatus !== 'online'}
-              onClick={triggerImmediateCheckin}
-              className="w-full p-5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
-            >
-              {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="text-indigo-400" />}
-              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Verstuur Test Appje</span>
-            </button>
-
             <section className="space-y-4">
-              <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] ml-1">Naam Gebruiker</label>
-              <input type="text" placeholder="Jouw Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500/50 transition-all text-sm" />
+              <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] ml-1">Jouw Naam</label>
+              <input type="text" placeholder="Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 outline-none focus:border-indigo-500/50 transition-all text-sm" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
