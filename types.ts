@@ -6,7 +6,6 @@ export interface UserSettings {
   endTime: string;   // Bijv. "09:00"
   whatsappPhone: string; // Voor CallMeBot WhatsApp
   whatsappApiKey: string; // Voor CallMeBot API
-  webhookUrl: string;
 }
 
 export interface ActivityLog {
