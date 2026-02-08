@@ -1,0 +1,5 @@
+{
+  "name": "SafeGuard Watchdog",
+  "description": "Een intelligente PWA die waakt over je welzijn door activiteit te monitoren zonder app-installatie.",
+  "requestFramePermissions": []
+}
