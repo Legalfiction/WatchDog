@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.6.0"
+VERSION = "2.6.1"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -37,7 +37,8 @@ def get_status():
         "status": "online",
         "version": VERSION,
         "server_time": datetime.now().strftime("%H:%M:%S"),
-        "active_users": list(db.keys())
+        "active_users": list(db.keys()),
+        "total_registrations": len(db)
     })
 
 @app.route('/ping', methods=['POST'])
@@ -60,7 +61,7 @@ def handle_ping():
     }
     
     save_db(db)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] PING: {user_name}")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] v{VERSION} PING: {user_name}")
     return jsonify({"status": "ok"})
 
 @app.route('/test_wa', methods=['POST'])
@@ -77,7 +78,7 @@ def test_whatsapp():
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
-    """De motor die via Cron wordt aangeroepen om alarmen te checken."""
+    """Checkt of gebruikers hun telefoon hebben geopend voor de deadline."""
     db = load_db()
     now = datetime.now()
     now_str = now.strftime("%H:%M")
@@ -115,11 +116,11 @@ def send_whatsapp_alert(name, info, is_test=False):
     if not phone or not apikey: return False
 
     if is_test:
-        bericht = f"SafeGuard v{VERSION}: Test geslaagd! Jouw Pi is verbonden met WhatsApp."
+        bericht = f"SafeGuard v{VERSION}: Test geslaagd! Jouw Pi is verbonden."
     else:
         bericht = (
-            f"ALARM: {name} heeft zijn/haar telefoon vanochtend NIET geopend voor de deadline van {info.get('endTime')}. "
-            f"Neem a.u.b. contact op met {name}."
+            f"ALARM: {name} heeft zijn/haar telefoon vanochtend NIET geopend voor de deadline ({info.get('endTime')}). "
+            f"Neem a.u.b. direct contact op met {name}."
         )
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(bericht)}&apikey={apikey}"
@@ -127,9 +128,9 @@ def send_whatsapp_alert(name, info, is_test=False):
         r = requests.get(url, timeout=15)
         return r.ok
     except Exception as e:
-        print(f"Fout: {e}")
+        print(f"WhatsApp Fout: {e}")
         return False
 
 if __name__ == '__main__':
-    print(f"SafeGuard v{VERSION} op Pi is gestart.")
+    print(f"SafeGuard v{VERSION} op Pi (IP: 192.168.1.38) is gestart.")
     app.run(host='0.0.0.0', port=5000, debug=False)
