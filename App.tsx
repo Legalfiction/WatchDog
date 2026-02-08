@@ -1,13 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  ShieldCheck, 
   Settings as SettingsIcon, 
   Smartphone,
   X,
   Trash2,
   Plus,
-  Power,
   User,
   Battery,
   Plane,
@@ -18,25 +16,25 @@ import {
   HelpCircle,
   AlertTriangle,
   Info,
-  CheckCircle2,
   RefreshCw,
   Share2,
-  MessageCircle
+  MessageCircle,
+  Dog,
+  BookOpen,
+  CheckCircle2
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.2.0';
+const VERSION = '8.5.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 export default function App() {
-  const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
   const [showSettings, setShowSettings] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [serverLastPing, setServerLastPing] = useState<string>('--:--:--');
+  const [showManual, setShowManual] = useState(false);
+  const [lastSuccessTime, setLastSuccessTime] = useState<string | null>(localStorage.getItem('safeguard_last_success'));
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking' | 'error'>('checking');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showPulse, setShowPulse] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [history, setHistory] = useState<ActivityLog[]>(() => {
     const saved = localStorage.getItem('safeguard_history');
@@ -45,7 +43,6 @@ export default function App() {
   
   const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('safeguard_server_url') || DEFAULT_URL);
   const lastTriggerRef = useRef<number>(0);
-  const lastEventRef = useRef<number>(0);
   
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
@@ -76,7 +73,9 @@ export default function App() {
     const newLog = { timestamp: Date.now(), timeStr, battery: batt || undefined };
     const updated = [newLog, ...history].slice(0, 7);
     setHistory(updated);
+    setLastSuccessTime(timeStr);
     localStorage.setItem('safeguard_history', JSON.stringify(updated));
+    localStorage.setItem('safeguard_last_success', timeStr);
   };
 
   const getBattery = async () => {
@@ -87,7 +86,7 @@ export default function App() {
         setBatteryLevel(level);
         return level;
       }
-    } catch (e) { console.warn("Batterij niet ondersteund."); }
+    } catch (e) {}
     return null;
   };
 
@@ -98,50 +97,21 @@ export default function App() {
     return url.replace(/\/$/, '');
   }, [serverUrl]);
 
-  const robustFetch = async (url: string, options: RequestInit, timeoutMs: number = 8000) => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(id);
-      return response;
-    } catch (err) {
-      clearTimeout(id);
-      throw err;
-    }
-  };
-
-  const checkPiStatus = useCallback(async (silent = false) => {
-    const url = getCleanUrl();
-    if (!url) { setPiStatus('offline'); return; }
-    if (!silent) setPiStatus('checking');
-    try {
-      const res = await robustFetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
-        method: 'GET',
-        mode: 'cors'
-      }, 5000);
-      if (res.ok) {
-        const data = await res.json();
-        setPiStatus('online');
-        if (data.your_last_ping) setServerLastPing(data.your_last_ping);
-      } else { setPiStatus('error'); }
-    } catch (err) { setPiStatus('offline'); }
-  }, [getCleanUrl, settings.email]);
-
   const triggerCheckin = useCallback(async (force = false) => {
     const now = Date.now();
-    if (!force && now - lastTriggerRef.current < 10000) return; 
-    if (settings.vacationMode && !force) return;
-    if (!isTodayActive() && !force) return;
+    if (!force && now - lastTriggerRef.current < 60000) return; 
 
     const url = getCleanUrl();
-    if (!url || !settings.email || !isSyncActive) return;
+    if (!url || !settings.email || settings.vacationMode) return;
 
     setIsProcessing(true);
     const batt = await getBattery();
 
     try {
-      const response = await robustFetch(`${url}/ping`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const response = await fetch(`${url}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -153,29 +123,57 @@ export default function App() {
           battery: batt,
           contacts: settings.contacts
         }),
-        mode: 'cors'
-      }, 12000);
+        mode: 'cors',
+        signal: controller.signal
+      });
       
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         setPiStatus('online');
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         updateHistory(timeStr, batt);
         lastTriggerRef.current = Date.now();
+      } else {
+        setPiStatus('error');
       }
-    } catch (err: any) { setPiStatus('offline'); } finally { setIsProcessing(false); }
-  }, [settings, isSyncActive, getCleanUrl, history]);
+    } catch (err: any) { 
+      setPiStatus('offline'); 
+    } finally { 
+      setIsProcessing(false); 
+    }
+  }, [settings, getCleanUrl]);
+
+  const checkPiStatus = useCallback(async (silent = false) => {
+    const url = getCleanUrl();
+    if (!url) { setPiStatus('offline'); return; }
+    if (!silent) setPiStatus('checking');
+    try {
+      const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
+        method: 'GET',
+        mode: 'cors'
+      });
+      if (res.ok) {
+        setPiStatus('online');
+      } else { 
+        setPiStatus('error'); 
+      }
+    } catch (err) { 
+      setPiStatus('offline'); 
+    }
+  }, [getCleanUrl, settings.email]);
 
   const shareActivation = (contact: EmergencyContact) => {
-    const botNumber = "+34623789580";
+    const botNumber = "34623789580";
     const botCommand = "I allow callmebot to send me messages";
-    const botLink = `https://wa.me/${botNumber.replace('+', '')}?text=${encodeURIComponent(botCommand)}`;
+    const botLink = `https://wa.me/${botNumber}?text=${encodeURIComponent(botCommand)}`;
     
-    const message = `Hoi ${contact.name}, ik gebruik de SafeGuard app voor mijn veiligheid. Wil je mij helpen de monitor te activeren? 
+    const message = `Hoi ${contact.name}, ik gebruik de Watchdog app voor mijn veiligheid. Wil je mij helpen de monitor te activeren? 
 
-Klik op deze link: ${botLink}
-En druk in WhatsApp op 'verzend'. 
+1. Klik op deze link: ${botLink}
+2. Druk in WhatsApp op 'verzend'. 
 
-Daarna krijg je een berichtje van de bot met een pincode. Wil je die pincode even naar mij doorsturen? Dan kan ik het hier instellen. Bedankt!`;
+Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mij door!`;
     
     const whatsappUrl = `https://wa.me/${contact.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -183,34 +181,16 @@ Daarna krijg je een berichtje van de bot met een pincode. Wil je die pincode eve
 
   useEffect(() => {
     getBattery();
-    const interval = setInterval(() => {
-      if (isSyncActive) {
-        checkPiStatus(true);
-        triggerCheckin();
-      }
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [checkPiStatus, isSyncActive, triggerCheckin]);
+    checkPiStatus();
+    triggerCheckin(); // Directe check bij opstarten app
 
-  useEffect(() => {
-    const handleSyncTrigger = () => {
-      const now = Date.now();
-      if (now - lastEventRef.current < 5000) return;
-      lastEventRef.current = now;
-      if (document.visibilityState === 'visible' && isSyncActive) {
-        setTimeout(() => {
-          triggerCheckin(true);
-          checkPiStatus(true);
-        }, 1200);
-      }
-    };
-    document.addEventListener('visibilitychange', handleSyncTrigger);
-    window.addEventListener('focus', handleSyncTrigger);
-    return () => {
-      document.removeEventListener('visibilitychange', handleSyncTrigger);
-      window.removeEventListener('focus', handleSyncTrigger);
-    };
-  }, [isSyncActive, triggerCheckin, checkPiStatus]);
+    const interval = setInterval(() => {
+      checkPiStatus(true);
+      triggerCheckin();
+    }, 120000); // Check elke 2 minuten
+    
+    return () => clearInterval(interval);
+  }, [checkPiStatus, triggerCheckin]);
 
   useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
@@ -219,83 +199,97 @@ Daarna krijg je een berichtje van de bot met een pincode. Wil je die pincode eve
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
-      <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50 shadow-none">
+      <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-orange-500' : 'bg-slate-200'}`}>
-            <ShieldCheck className={`${isSyncActive ? 'text-white' : 'text-slate-500'} w-5 h-5`} />
+          <div className="p-2 bg-orange-500 text-white rounded-xl">
+            <Dog size={20} strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="text-xs font-black uppercase tracking-widest text-slate-900">SafeGuard</h1>
+            <h1 className="text-xs font-black uppercase tracking-widest text-slate-900">Watchdog</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-1.5 h-1.5 rounded-full ${
                 piStatus === 'online' ? 'bg-emerald-500' : 
-                piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 
-                piStatus === 'error' ? 'bg-orange-400' : 'bg-rose-500'}`} 
+                piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} 
               />
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
-                {piStatus === 'online' ? 'Status: Online' : 
-                 piStatus === 'checking' ? 'Verbinden...' : 
-                 piStatus === 'error' ? 'Tunnel Fout' : 'Geen verbinding'}
+              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">
+                {piStatus === 'online' ? 'Systeem Actief' : 'Verbinding Zoeken'}
               </span>
             </div>
           </div>
         </div>
-        <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-100 rounded-2xl active:scale-95 transition-all">
-          <SettingsIcon className="w-5 h-5 text-slate-600" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowManual(true)} className="p-3 bg-orange-50 rounded-2xl active:scale-90 transition-all">
+            <Info className="w-5 h-5 text-orange-600" />
+          </button>
+          <button onClick={() => setShowSettings(true)} className="p-3 bg-slate-100 rounded-2xl active:scale-90 transition-all">
+            <SettingsIcon className="w-5 h-5 text-slate-600" />
+          </button>
+        </div>
       </header>
 
-      <main className="flex-1 px-6 flex flex-col space-y-4 py-6 pb-20">
+      <main className="flex-1 px-6 flex flex-col space-y-5 py-6 pb-12">
         
-        {/* Profile Card */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-200 flex items-center justify-between">
-           <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600">
-                <User size={24} />
+        {/* Status Dashboard Card */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 flex flex-col gap-6">
+           <div className="flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600 border border-orange-100">
+                  <User size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-tight">Welzijnsmonitor</p>
+                  <p className="text-base font-bold text-slate-900">{settings.email || 'Instellen via menu'}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">Monitoren van</p>
-                <p className="text-sm font-bold text-slate-900 truncate max-w-[120px]">{settings.email || 'Gebruiker'}</p>
-              </div>
-           </div>
-           <div className="flex flex-col items-end text-emerald-600">
-              <div className="flex items-center gap-1.5">
-                <Battery size={16} className={batteryLevel !== null && batteryLevel < 20 ? 'text-rose-500' : ''} />
+              <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl border border-emerald-100">
+                <Battery size={16} />
                 <span className="text-xs font-black">{batteryLevel !== null ? `${batteryLevel}%` : '--'}</span>
               </div>
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Toestel</p>
+           </div>
+           
+           <div className="bg-slate-50 rounded-2xl p-5 flex items-center justify-between border border-slate-100">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase text-slate-400 italic">Laatste Check-in</p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-2xl font-black ${lastSuccessTime ? 'text-slate-900' : 'text-slate-200'}`}>
+                    {lastSuccessTime || '--:--'}
+                  </p>
+                  {lastSuccessTime && <CheckCircle2 size={18} className="text-emerald-500" />}
+                </div>
+              </div>
+              <button 
+                onClick={() => triggerCheckin(true)} 
+                disabled={isProcessing}
+                className="flex flex-col items-center gap-1 group active:scale-95 transition-transform"
+              >
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isProcessing ? 'bg-slate-100 text-slate-400' : 'bg-orange-500 text-white shadow-lg shadow-orange-100'}`}>
+                  <Zap size={20} className={isProcessing ? 'animate-pulse' : ''} />
+                </div>
+                <span className="text-[9px] font-black uppercase text-slate-400">Meld Nu</span>
+              </button>
+           </div>
+
+           <div className="flex items-center gap-3 px-1">
+              <Clock size={16} className="text-rose-500" />
+              <p className="text-[11px] font-bold text-slate-600">
+                Volgende deadline: <span className="text-rose-600 font-black">{settings.endTime} uur</span>
+              </p>
            </div>
         </div>
-
-        {/* Status Alarm melding bij offline */}
-        {piStatus !== 'online' && isSyncActive && (
-          <div className="bg-rose-50 border border-rose-100 p-4 rounded-3xl flex items-center gap-3">
-            <AlertTriangle className="text-rose-500 flex-shrink-0" size={18} />
-            <p className="text-[10px] font-bold text-rose-700 leading-tight">
-              Monitor offline: Verbinding met Raspberry Pi verbroken.
-            </p>
-            <button onClick={() => checkPiStatus()} className="p-2 bg-rose-100 rounded-xl text-rose-600 active:rotate-180 transition-transform">
-              <RefreshCw size={14} />
-            </button>
-          </div>
-        )}
 
         {/* Schema Status */}
         <div className="bg-orange-500 rounded-3xl p-6 text-white">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 italic">Huidig Schema</p>
-            <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${isTodayActive() ? 'bg-white text-orange-600' : 'bg-orange-600 border border-orange-400 text-orange-100'}`}>
-              {isTodayActive() ? 'Vandaag Actief' : 'Vandaag Rust'}
+            <p className="text-[10px] font-black uppercase tracking-widest text-orange-100">Actief Venster</p>
+            <div className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase ${isTodayActive() ? 'bg-white text-orange-600' : 'bg-orange-600 border border-orange-400'}`}>
+              {isTodayActive() ? 'Vandaag Actief' : 'Rustdag'}
             </div>
           </div>
           <h2 className="text-xl font-bold mb-1">{getDaySummary()}</h2>
-          <div className="flex items-center gap-2 text-orange-50">
-            <Clock size={14} />
-            <span className="text-xs font-medium italic">{settings.startTime} tot {settings.endTime} uur</span>
-          </div>
+          <p className="text-xs text-orange-50 italic opacity-90">De monitor checkt of je tussen {settings.startTime} en {settings.endTime} de app opent.</p>
         </div>
 
-        {/* Vakantie Schakelaar */}
+        {/* Vakantie Modus */}
         <button 
           onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
           className={`w-full p-5 rounded-3xl border transition-all flex items-center justify-between ${settings.vacationMode ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}
@@ -304,222 +298,145 @@ Daarna krijg je een berichtje van de bot met een pincode. Wil je die pincode eve
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${settings.vacationMode ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
               <Plane size={20} />
             </div>
-            <div className="text-left">
+            <div>
               <p className="text-sm font-bold text-slate-900">Vakantie Modus</p>
-              <p className="text-[10px] text-slate-500 font-medium">Alle meldingen tijdelijk uit</p>
+              <p className="text-[10px] text-slate-500 font-medium italic">Tijdelijk geen alarmen</p>
             </div>
           </div>
-          <div className={`w-11 h-6 rounded-full p-1 transition-colors duration-300 ${settings.vacationMode ? 'bg-amber-500' : 'bg-slate-200'}`}>
-            <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-300 ${settings.vacationMode ? 'translate-x-5' : 'translate-x-0'}`} />
+          <div className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.vacationMode ? 'bg-amber-500' : 'bg-slate-200'}`}>
+            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${settings.vacationMode ? 'translate-x-6' : 'translate-x-0'}`} />
           </div>
         </button>
 
-        {/* Belangrijke Disclaimer */}
-        <div className="bg-slate-100 border border-slate-200 rounded-3xl p-5 flex gap-4">
-          <div className="text-amber-600 mt-1">
-            <AlertTriangle size={20} />
-          </div>
-          <div className="flex-1">
-            <p className="text-[10px] font-black uppercase text-slate-900 tracking-tight mb-1">Let op voor contactpersonen</p>
-            <p className="text-[11px] text-slate-600 leading-relaxed italic">
-              Het kan zijn dat de monitor niet werkt bij een defect of lege telefoon van de hoofdpersoon. 
-              Breng je contacten hiervan goed op de hoogte.
-            </p>
-          </div>
-        </div>
-
-        {/* Historie */}
+        {/* Historie Log */}
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
             <History size={14} className="text-slate-400" />
-            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Activiteiten Log</h3>
+            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recente Meldingen</h3>
           </div>
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-50">
             {history.length === 0 ? (
-              <p className="p-6 text-center text-slate-400 text-xs italic">Nog geen pings vastgelegd</p>
+              <p className="p-8 text-center text-slate-300 text-[10px] font-bold uppercase italic">Geen activiteit</p>
             ) : (
               history.map((log, idx) => (
-                <div key={idx} className="p-4 flex items-center justify-between">
+                <div key={idx} className="p-4 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-3">
-                    <Zap size={14} className="text-emerald-500" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     <div>
-                      <p className="text-xs font-bold text-slate-900">{log.timeStr}</p>
+                      <p className="text-xs font-black text-slate-900">{log.timeStr}</p>
                       <p className="text-[9px] text-slate-400 font-bold uppercase">{new Date(log.timestamp).toLocaleDateString('nl-NL', {weekday: 'short', day: 'numeric'})}</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400">{log.battery ? `${log.battery}%` : '--'}</span>
+                  <div className="flex items-center gap-1.5 text-slate-400">
+                    <Battery size={10} />
+                    <span className="text-[10px] font-bold">{log.battery}%</span>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
-
-        {/* Main Action */}
-        <div className="pt-2 flex flex-col items-center">
-          <button 
-            onClick={() => triggerCheckin(true)}
-            disabled={isProcessing}
-            className={`w-32 h-32 rounded-full flex flex-col items-center justify-center mb-6 border transition-all duration-500 bg-white active:scale-95 ${isSyncActive && !settings.vacationMode ? 'border-orange-500' : 'border-slate-200 grayscale opacity-50'}`}
-          >
-            <Smartphone className={`w-8 h-8 mb-2 ${isSyncActive ? 'text-orange-500' : 'text-slate-300'} ${isProcessing ? 'animate-bounce' : ''}`} />
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-              {isProcessing ? 'Systeem Bezig' : 'Handmatige Check'}
-            </span>
-          </button>
-
-          <button 
-            onClick={() => {
-              if (!serverUrl || !settings.email) return setShowSettings(true);
-              const newState = !isSyncActive;
-              setIsSyncActive(newState);
-              localStorage.setItem('safeguard_active', newState.toString());
-              if (newState) {
-                checkPiStatus();
-                setTimeout(() => triggerCheckin(true), 1200);
-              }
-            }} 
-            className={`w-full py-5 rounded-3xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95 ${isSyncActive ? 'bg-slate-900 text-white' : 'bg-orange-500 text-white'}`}
-          >
-            <Power size={18} />
-            {isSyncActive ? 'Bewaking Stopzetten' : 'Bewaking Starten'}
-          </button>
-        </div>
       </main>
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto animate-in fade-in duration-200">
           <div className="flex items-center justify-between mb-8">
              <div>
                <h3 className="text-xl font-black uppercase text-slate-900 italic">Instellingen</h3>
-               <p className="text-[10px] font-bold text-orange-600 uppercase mt-1">Configuratie</p>
+               <p className="text-[10px] font-bold text-orange-600 uppercase mt-1">Systeem Configuratie</p>
              </div>
              <button onClick={() => setShowSettings(false)} className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center active:scale-90"><X size={24}/></button>
           </div>
           
           <div className="space-y-6 pb-20">
-            {/* Actieve Dagen */}
-            <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Bewakingsdagen</label>
-              <div className="flex justify-between gap-1">
-                {DAYS.map((day, idx) => {
-                  const isActive = settings.activeDays.includes(idx);
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        const newDays = isActive 
-                          ? settings.activeDays.filter(d => d !== idx)
-                          : [...settings.activeDays, idx];
-                        setSettings({...settings, activeDays: newDays});
-                      }}
-                      className={`flex-1 h-12 rounded-xl flex items-center justify-center text-[10px] font-black transition-all ${isActive ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-400'}`}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Cloudflare Tunnel */}
             <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2">
-                <Globe size={14}/> Cloudflare URL
+                <Globe size={14}/> Raspberry Pi URL
               </label>
-              <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
+              <input type="text" placeholder="https://..." value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
             </section>
 
-            {/* Gebruiker & Tijden */}
             <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Naam Gebruiker</label>
-              <input type="text" placeholder="Jouw naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1">Jouw Naam</label>
+              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors" />
             </section>
 
             <section className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 px-1">Start Tijd</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 px-1">Window Start</label>
                 <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-rose-500 px-1 italic">Deadline</label>
+                <label className="text-[10px] font-black uppercase text-rose-500 px-1 italic">Window Deadline</label>
                 <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold text-rose-600" />
               </div>
             </section>
 
-            {/* Emergency Contacten */}
             <section className="space-y-4 pt-4 border-t border-slate-100">
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-[10px] font-black uppercase text-orange-600 tracking-widest flex items-center gap-1.5">
-                    <HelpCircle size={14} className="text-orange-500" /> HOE ACTIVEER IK EEN CONTACT?
-                  </h4>
-                </div>
-                <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-500 rounded-xl text-white flex items-center justify-center active:scale-95"><Plus size={20} /></button>
-              </div>
-
-              {/* Help Box exact volgens afbeelding */}
-              <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 text-[11px] text-orange-900 space-y-4">
-                <ol className="space-y-4">
-                  <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-orange-800">1</span>
-                    <span className="mt-1">Contact stuurt WhatsApp naar <span className="font-bold">+34 623 78 95 80</span></span>
-                  </li>
-                  <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-orange-800">2</span>
-                    <div className="mt-1">
-                      Berichtinhoud: <span className="font-mono bg-white px-2 py-0.5 border border-orange-200 rounded text-[10px]">I allow callmebot to send me messages</span>
-                    </div>
-                  </li>
-                  <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 bg-orange-200 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-orange-800">3</span>
-                    <span className="mt-1">De bot stuurt een <span className="font-bold uppercase">API Key (pincode)</span> terug.</span>
-                  </li>
-                  <li className="flex gap-4 items-start">
-                    <span className="w-6 h-6 bg-orange-500 text-white rounded-full flex-shrink-0 flex items-center justify-center font-bold italic">4</span>
-                    <span className="mt-1 font-bold text-orange-950 underline decoration-orange-400 decoration-2">Het contact stuurt deze pincode naar jou (de hoofdgebruiker).</span>
-                  </li>
-                </ol>
-              </div>
-
-              <div className="space-y-4">
-                {settings.contacts.map((c) => (
-                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 relative overflow-hidden">
+               <div className="flex items-center justify-between px-1">
+                  <h4 className="text-[10px] font-black uppercase text-orange-600 tracking-widest italic">Noodcontacten</h4>
+                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-500 rounded-xl text-white flex items-center justify-center active:scale-95 shadow-md shadow-orange-100"><Plus size={20} /></button>
+               </div>
+               {settings.contacts.map((c) => (
+                  <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2 flex-1">
-                        <User size={14} className="text-slate-400" />
-                        <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
-                      </div>
-                      <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-500 p-2"><Trash2 size={18} /></button>
+                      <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
+                      <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-400 p-2"><Trash2 size={18} /></button>
                     </div>
-                    <div className="flex gap-2">
-                       <input type="text" placeholder="Telefoon (316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
-                       <button 
-                        onClick={() => shareActivation(c)}
-                        disabled={!c.phone}
-                        className="bg-emerald-500 text-white px-4 rounded-xl active:scale-95 disabled:opacity-30 flex items-center justify-center"
-                       >
-                         <MessageCircle size={20} />
-                       </button>
-                    </div>
-                    <input type="password" placeholder="API Key (Pincode van contact)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-orange-500" />
-                    
+                    <input type="text" placeholder="Mobiel (bijv 316...)" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
+                    <input type="password" placeholder="Bot API Key (Pincode)" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm outline-none" />
                     {c.phone && (
                       <button 
                         onClick={() => shareActivation(c)}
-                        className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                        className="w-full py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm shadow-emerald-50"
                       >
                         <Share2 size={12} /> Deel activatie link
                       </button>
                     )}
                   </div>
                 ))}
-                {settings.contacts.length === 0 && (
-                  <p className="text-center py-6 text-slate-400 text-[10px] italic">Voeg een contact toe om meldingen te kunnen ontvangen.</p>
-                )}
-              </div>
             </section>
           </div>
+        </div>
+      )}
+
+      {/* Manual Modal */}
+      {showManual && (
+        <div className="fixed inset-0 z-[120] bg-white p-8 overflow-y-auto animate-in slide-in-from-bottom-4 duration-300">
+           <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3 text-orange-600">
+                <BookOpen size={24} />
+                <h3 className="text-xl font-black uppercase italic text-slate-900">Handleiding</h3>
+              </div>
+              <button onClick={() => setShowManual(false)} className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center active:scale-90"><X size={24}/></button>
+           </div>
+           <div className="space-y-6">
+              <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
+                 <p className="text-[10px] font-black uppercase text-orange-600 mb-2 italic underline underline-offset-4 decoration-2">Het Doel van de Watchdog</p>
+                 <p className="text-sm text-orange-950 leading-relaxed italic">
+                   "De Watchdog is een digitale waakvriend die je familie waarschuwt bij nood. Je hoeft alleen maar de app 1x per dag te openen voor de deadline. Doe je dit niet? Dan krijgt je familie direct een WhatsApp-bericht."
+                 </p>
+              </section>
+              <section className="space-y-4">
+                <p className="text-[10px] font-black uppercase text-slate-400 px-1">Hoe werkt het?</p>
+                {[
+                  { n: 1, t: "Altijd Aan", d: "De monitor draait 24/7 op je Raspberry Pi. Je hoeft in deze app niets te starten." },
+                  { n: 2, t: "De Check-in", d: "Zodra je deze app opent, wordt er automatisch een seintje gestuurd naar de server." },
+                  { n: 3, t: "De Deadline", d: "Geef je geen seintje voor je gekozen deadline? Dan start het alarm." },
+                  { n: 4, t: "Contacten", d: "Gebruik 'Deel activatie link' om familieleden toe te voegen aan het alarmsysteem." }
+                ].map(s => (
+                  <div key={s.n} className="flex gap-4 items-start p-4 bg-white border border-slate-100 rounded-2xl">
+                     <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold">{s.n}</span>
+                     <div>
+                       <p className="text-xs font-bold text-slate-900">{s.t}</p>
+                       <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{s.d}</p>
+                     </div>
+                  </div>
+                ))}
+              </section>
+              <button onClick={() => setShowManual(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-slate-100 active:scale-95 transition-transform">Ik heb het gelezen</button>
+           </div>
         </div>
       )}
     </div>
