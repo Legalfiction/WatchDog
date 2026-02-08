@@ -11,15 +11,13 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.6.8"
+VERSION = "2.7.0"
 
 def load_db():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r') as f:
-            try:
-                return json.load(f)
-            except:
-                return {}
+            try: return json.load(f)
+            except: return {}
     return {}
 
 def save_db(db):
@@ -28,23 +26,17 @@ def save_db(db):
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    db = load_db()
     return jsonify({
         "status": "online",
         "version": VERSION,
-        "server_time": datetime.now().strftime("%H:%M:%S"),
-        "active_users": list(db.keys()),
-        "build": "watchdog_v268_stable"
+        "server_time": datetime.now().strftime("%H:%M:%S")
     })
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():
     data = request.json
     user_name = data.get('user')
-    
-    if not user_name:
-        return jsonify({"status": "error", "message": "Naam ontbreekt"}), 400
-
+    if not user_name: return jsonify({"status": "error"}), 400
     db = load_db()
     db[user_name] = {
         "last_ping": time.time(),
@@ -53,19 +45,38 @@ def handle_ping():
         "contacts": data.get('contacts', []),
         "last_check_date": db.get(user_name, {}).get("last_check_date", "")
     }
-    
     save_db(db)
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] v{VERSION} PING: {user_name}")
-    return jsonify({"status": "ok", "version": VERSION})
+    return jsonify({"status": "ok"})
+
+@app.route('/immediate_checkin', methods=['POST'])
+def immediate_checkin():
+    data = request.json
+    user_name = data.get('user')
+    contacts = data.get('contacts', [])
+    
+    success_count = 0
+    for contact in contacts:
+        bericht = f"✅ SafeGuard: {user_name} heeft zojuist de telefoon ontgrendeld. Alles is in orde!"
+        if send_raw_wa(contact.get('phone'), contact.get('apiKey'), bericht):
+            success_count += 1
+            
+    return jsonify({"status": "sent", "count": success_count})
 
 @app.route('/test_wa', methods=['POST'])
-def test_whatsapp():
+def test_wa():
     data = request.json
-    user = data.get('user', 'SafeGuard Gebruiker')
     contact = data.get('contact', {})
-    
-    success = send_whatsapp_alert(user, contact, is_test=True)
+    bericht = f"SafeGuard v{VERSION}: Dit is een testbericht."
+    success = send_raw_wa(contact.get('phone'), contact.get('apiKey'), bericht)
     return jsonify({"status": "sent" if success else "failed"})
+
+def send_raw_wa(phone, apikey, text):
+    if not phone or not apikey: return False
+    url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(text)}&apikey={apikey}"
+    try:
+        r = requests.get(url, timeout=10)
+        return r.ok
+    except: return False
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
@@ -73,57 +84,22 @@ def run_security_check():
     now = datetime.now()
     now_str = now.strftime("%H:%M")
     today_str = now.strftime("%Y-%m-%d")
-    alerts_triggered = 0
+    alerts = 0
 
     for name, info in db.items():
-        alarm_time = info.get("endTime", "08:30")
-        
-        if now_str == alarm_time and info.get("last_check_date") != today_str:
-            start_time_str = info.get("startTime", "07:00")
-            try:
-                start_dt = now.replace(
-                    hour=int(start_time_str.split(':')[0]), 
-                    minute=int(start_time_str.split(':')[1]), 
-                    second=0, microsecond=0
-                )
-            except: continue
+        if now_str == info.get("endTime", "08:30") and info.get("last_check_date") != today_str:
+            start_str = info.get("startTime", "07:00")
+            start_dt = now.replace(hour=int(start_str.split(':')[0]), minute=int(start_str.split(':')[1]), second=0)
             
-            last_ping = info.get("last_ping", 0)
-            if last_ping < start_dt.timestamp():
-                contacts = info.get("contacts", [])
-                for contact in contacts:
-                    send_whatsapp_alert(name, contact)
-                    alerts_triggered += 1
-                print(f"!!! v{VERSION} ALARM VOOR {name} !!!")
-            
+            if info.get("last_ping", 0) < start_dt.timestamp():
+                for c in info.get("contacts", []):
+                    msg = f"⚠️ ALARM: {name} heeft de telefoon NIET geopend voor de deadline van {now_str}. Controleer direct!"
+                    send_raw_wa(c.get('phone'), c.get('apiKey'), msg)
+                    alerts += 1
             info["last_check_date"] = today_str
 
     save_db(db)
-    return jsonify({"status": "check_complete", "total_alerts": alerts_triggered})
-
-def send_whatsapp_alert(user_name, contact, is_test=False):
-    phone = contact.get("phone")
-    apikey = contact.get("apiKey")
-    contact_name = contact.get("name", "Contact")
-    
-    if not phone or not apikey: return False
-
-    if is_test:
-        bericht = f"SafeGuard v{VERSION}: Test bericht voor {contact_name} succesvol!"
-    else:
-        bericht = (
-            f"WATCHDOG ALARM: {user_name} heeft zijn/haar telefoon NIET geopend "
-            f"voor de deadline van {datetime.now().strftime('%H:%M')}. "
-            f"Controleer direct of alles goed gaat met {user_name}."
-        )
-
-    url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={requests.utils.quote(bericht)}&apikey={apikey}"
-    try:
-        r = requests.get(url, timeout=15)
-        return r.ok
-    except Exception as e:
-        print(f"WhatsApp Error v{VERSION}: {e}")
-        return False
+    return jsonify({"alerts": alerts})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000)
