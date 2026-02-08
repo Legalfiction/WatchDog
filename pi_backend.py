@@ -3,7 +3,7 @@ import json
 import os
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "3.8.1"
+VERSION = "3.9.0"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -89,7 +89,7 @@ def handle_ping():
     }
     save_db(db)
     print(f"[PING] {user_name} succesvol geregistreerd.")
-    return jsonify({"status": "success", "server_received": True})
+    return jsonify({"status": "success", "server_received": True, "time": datetime.now().strftime("%H:%M:%S")})
 
 @app.route('/manual_checkin', methods=['POST'])
 def handle_manual():
@@ -125,27 +125,38 @@ def run_security_check():
     alerts = 0
 
     for name, info in db.items():
-        deadline = info.get("endTime", "08:30")
-        
-        if now_hm == deadline and info.get("last_check_date") != today_str:
-            print(f"[WATCHDOG] Deadline bereikt voor {name}")
+        deadline_str = info.get("endTime", "08:30")
+        try:
+            h, m = map(int, deadline_str.split(':'))
+            deadline_today = now.replace(hour=h, minute=m, second=0)
+        except:
+            deadline_today = now.replace(hour=8, minute=30, second=0)
+
+        # TRIGGER: Alleen als de huidige tijd NA de deadline is EN we vandaag nog niet gecheckt hebben
+        if now > deadline_today and info.get("last_check_date") != today_str:
+            print(f"[WATCHDOG] Deadline verstreken ({deadline_str}) voor {name}. Controleren...")
+            
             try:
-                h, m = map(int, info.get("startTime", "07:00").split(':'))
-                start_of_day = now.replace(hour=h, minute=m, second=0).timestamp()
+                sh, sm = map(int, info.get("startTime", "07:00").split(':'))
+                start_of_day = now.replace(hour=sh, minute=sm, second=0).timestamp()
             except:
                 start_of_day = now.replace(hour=7, minute=0, second=0).timestamp()
 
+            # Is er een ping geweest SINDS de starttijd van vandaag?
             if info.get("last_ping", 0) < start_of_day:
-                print(f"[ALERT] {name} heeft deadline gemist!")
+                print(f"[ALERT] {name} heeft deadline gemist! Geen ping gezien sinds {datetime.fromtimestamp(start_of_day).strftime('%H:%M')}")
                 for c in info.get("contacts", []):
-                    alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline}!"
+                    alert_msg = f"⚠️ SafeGuard ALARM: {name} heeft zich niet gemeld voor de deadline van {deadline_str}!"
                     send_wa(c.get('name'), c.get('phone'), c.get('apiKey'), alert_msg)
                     alerts += 1
+            else:
+                print(f"[OK] {name} heeft zich op tijd gemeld.")
             
+            # Markeer als gecheckt voor vandaag
             info["last_check_date"] = today_str
 
     save_db(db)
-    return jsonify({"time": now_hm, "alerts": alerts})
+    return jsonify({"time": now_hm, "alerts_sent": alerts, "status": "checks_completed"})
 
 if __name__ == '__main__':
     print(f"--- SafeGuard Backend v{VERSION} Gestart op poort 5000 ---")

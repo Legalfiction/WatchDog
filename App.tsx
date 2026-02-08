@@ -22,7 +22,8 @@ import {
   WifiOff,
   RefreshCw,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -35,6 +36,7 @@ export default function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isManualProcessing, setIsManualProcessing] = useState(false);
+  const [showPulse, setShowPulse] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [connectionTesting, setConnectionTesting] = useState(false);
   const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('safeguard_server_url') || '');
@@ -54,10 +56,8 @@ export default function App() {
   const getCleanUrl = useCallback((urlInput?: string) => {
     let url = (urlInput || serverUrl).trim();
     if (!url) return '';
-    // Verwijder eventuele witruimte of rare tekens
     url = url.replace(/\s/g, '');
     if (!url.startsWith('http')) url = `https://${url}`;
-    // Verwijder trailing slash
     return url.replace(/\/$/, '');
   }, [serverUrl]);
 
@@ -67,50 +67,42 @@ export default function App() {
     const url = getCleanUrl();
     if (!url) {
       setPiStatus('offline');
-      setConnectionError('Geen URL ingevuld');
       return;
     }
     try {
       setPiStatus('checking');
-      setConnectionError(null);
-      
       const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
         method: 'GET',
-        signal: AbortSignal.timeout(6000),
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json'
-        }
+        signal: AbortSignal.timeout(5000),
+        mode: 'cors'
       });
       
       if (res.ok) {
         const data = await res.json();
         setPiStatus('online');
+        setConnectionError(null);
         if (data.your_last_ping) setServerLastPing(data.your_last_ping);
       } else {
         setPiStatus('offline');
-        setConnectionError(`HTTP Fout: ${res.status}`);
       }
     } catch (err: any) {
-      console.error('Connection check failed:', err);
       setPiStatus('offline');
-      if (err.name === 'AbortError') setConnectionError('Time-out (Server te traag)');
-      else if (err.message.includes('Failed to fetch')) setConnectionError('Netwerkfout (Check Cloudflare)');
-      else setConnectionError(err.message || 'Onbekende fout');
+      setConnectionError(err.message || 'Geen verbinding');
     }
   }, [getCleanUrl, settings.email]);
 
-  // Eerste check en herhaalde checks
   useEffect(() => {
     checkPiStatus();
-    const interval = setInterval(checkPiStatus, 30000);
+    const interval = setInterval(() => {
+      checkPiStatus();
+      if (isSyncActive) triggerCheckin();
+    }, 45000);
     return () => clearInterval(interval);
-  }, [checkPiStatus]);
+  }, [checkPiStatus, isSyncActive]);
 
   const triggerCheckin = useCallback(async (force = false, isManual = false) => {
     const now = Date.now();
-    // Voorkom spamming, behalve bij handmatige actie
-    if (!force && now - lastTriggerRef.current < 20000) return; 
+    if (!force && now - lastTriggerRef.current < 30000) return; 
     
     const url = getCleanUrl();
     if (!url || !settings.email || !isSyncActive) return;
@@ -133,35 +125,36 @@ export default function App() {
         signal: AbortSignal.timeout(10000)
       });
       
-      if (!response.ok) throw new Error(`Ping mislukt (${response.status})`);
-
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      setLastPingTime(timeStr);
-      lastTriggerRef.current = Date.now();
-      localStorage.setItem('safeguard_last_ping', timeStr);
-      
-      // Update server status kort daarna
-      setTimeout(checkPiStatus, 1500);
+      if (response.ok) {
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setLastPingTime(timeStr);
+        lastTriggerRef.current = Date.now();
+        localStorage.setItem('safeguard_last_ping', timeStr);
+        
+        // Visuele feedback
+        setShowPulse(true);
+        setTimeout(() => setShowPulse(false), 2000);
+        
+        // Update server status na korte vertraging
+        setTimeout(checkPiStatus, 1000);
+      }
     } catch (err: any) {
-      console.error('Ping failed:', err);
       setPiStatus('offline');
-      setConnectionError(err.message || 'Ping mislukt');
     } finally {
       setIsProcessing(false);
       setIsManualProcessing(false);
     }
   }, [settings, isSyncActive, getCleanUrl, checkPiStatus]);
 
-  // Reageer op focus (als gebruiker app opent)
   useEffect(() => {
     const handleFocus = () => {
       if (isSyncActive) {
         checkPiStatus();
-        triggerCheckin();
+        triggerCheckin(true);
       }
     };
     window.addEventListener('focus', handleFocus);
-    window.addEventListener('visibilitychange', () => {
+    document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') handleFocus();
     });
     return () => {
@@ -178,7 +171,7 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans select-none">
       <header className="flex items-center justify-between p-6 bg-slate-900/40 border-b border-white/5 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-xl ${isSyncActive ? 'bg-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-800'}`}>
+          <div className={`p-2 rounded-xl transition-all duration-500 ${isSyncActive ? 'bg-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-800'}`}>
             <ShieldCheck className={`${isSyncActive ? 'text-indigo-400' : 'text-slate-500'} w-5 h-5`} />
           </div>
           <div>
@@ -186,7 +179,7 @@ export default function App() {
             <div className="flex items-center gap-1.5 mt-0.5" onClick={() => checkPiStatus()}>
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : piStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'}`} />
               <span className="text-[9px] text-slate-500 font-black uppercase tracking-tighter italic">
-                {piStatus === 'online' ? 'Verbonden met Pi' : piStatus === 'checking' ? 'Verbinding testen...' : 'Server Offline'}
+                {piStatus === 'online' ? 'Gekoppeld' : piStatus === 'checking' ? 'Zoeken...' : 'Pi Offline'}
               </span>
             </div>
           </div>
@@ -197,53 +190,25 @@ export default function App() {
       </header>
 
       <main className="flex-1 px-8 flex flex-col items-center justify-center space-y-12 py-10">
-        {piStatus === 'offline' && isSyncActive && (
-          <div className="w-full p-5 bg-rose-500/10 border border-rose-500/20 rounded-[2.5rem] flex flex-col gap-4 animate-in fade-in slide-in-from-top-4">
-            <div className="flex items-start gap-4">
-              <div className="mt-1 bg-rose-500/20 p-2 rounded-lg">
-                <WifiOff size={20} className="text-rose-500" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[11px] font-black text-rose-500 uppercase tracking-tighter leading-tight">
-                  Pi onbereikbaar
-                </p>
-                <p className="text-[10px] text-rose-500/70 font-medium">
-                  Status: {connectionError || 'Geen verbinding mogelijk'}
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-2 pt-2 border-t border-rose-500/10">
-               <p className="text-[9px] font-bold text-rose-500/50 uppercase italic">Probeer dit:</p>
-               <a 
-                href={getCleanUrl()} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 bg-rose-500/10 rounded-xl group active:scale-95 transition-transform"
-               >
-                 <span className="text-[10px] font-black uppercase text-rose-500">1. Open Link in Browser</span>
-                 <ExternalLink size={14} className="text-rose-500" />
-               </a>
-               <button 
-                onClick={() => setShowSettings(true)}
-                className="w-full p-3 border border-rose-500/20 rounded-xl text-[10px] font-black uppercase text-rose-500 text-left"
-               >
-                 2. Check URL bij Instellingen
-               </button>
-            </div>
-          </div>
-        )}
-
         <div className="relative">
+          {/* Pulse Effect bij succesvolle ping */}
+          {showPulse && (
+            <div className="absolute inset-0 bg-emerald-500/20 blur-[80px] rounded-full animate-ping" />
+          )}
           {isSyncActive && piStatus === 'online' && (
             <div className="absolute inset-0 bg-indigo-500/10 blur-[60px] rounded-full animate-pulse" />
           )}
+          
           <button 
             onClick={() => isSyncActive && triggerCheckin(true)}
             disabled={isProcessing}
             className={`group w-64 h-64 rounded-[4.5rem] flex flex-col items-center justify-center relative border transition-all duration-700 ${isSyncActive && piStatus === 'online' ? 'bg-slate-900/40 border-indigo-500/30 shadow-2xl active:scale-95' : 'bg-slate-900/10 border-white/5 opacity-40 grayscale'}`}
           >
-            <Smartphone className={`w-14 h-14 mb-4 ${isSyncActive ? 'text-indigo-400' : 'text-slate-700'} ${isProcessing ? 'animate-bounce' : ''}`} />
+            <div className="relative">
+              <Smartphone className={`w-14 h-14 mb-4 transition-colors ${isSyncActive ? 'text-indigo-400' : 'text-slate-700'} ${isProcessing ? 'animate-bounce' : ''}`} />
+              {showPulse && <Zap size={20} className="absolute -top-2 -right-4 text-emerald-500 animate-bounce" />}
+            </div>
+            
             <h2 className="text-base font-black uppercase tracking-[0.2em] text-slate-200">
               {isSyncActive ? (isProcessing ? 'Syncen...' : 'Bewaakt') : 'Inactief'}
             </h2>
@@ -251,12 +216,14 @@ export default function App() {
             {isSyncActive && (
               <div className="mt-4 flex flex-col items-center gap-2">
                 <div className="bg-slate-950/80 px-4 py-2 rounded-full border border-white/5 flex items-center gap-2 shadow-inner">
-                  <Activity size={10} className={piStatus === 'online' ? "text-emerald-500" : "text-rose-500"} />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gezien door Pi: {serverLastPing}</span>
+                  <Activity size={10} className={showPulse ? "text-emerald-500" : "text-slate-500"} />
+                  <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${showPulse ? 'text-emerald-500' : 'text-slate-400'}`}>
+                    Pi Gezien: {serverLastPing}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 opacity-60">
                   <Clock size={10} className="text-indigo-500" />
-                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter">Deadline: {settings.endTime}</span>
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter italic">Deadline: {settings.endTime}</span>
                 </div>
               </div>
             )}
@@ -272,8 +239,8 @@ export default function App() {
             >
               {isManualProcessing ? <Loader2 className="animate-spin text-emerald-500" size={18} /> : <CheckCircle2 className="text-emerald-500" size={18} />}
               <div className="text-left">
-                <span className="block text-[11px] font-black uppercase text-emerald-500 leading-none">Nu Inchecken</span>
-                <span className="block text-[8px] text-emerald-500/60 uppercase font-bold mt-1">Stuur handmatige OK</span>
+                <span className="block text-[11px] font-black uppercase text-emerald-500 leading-none">Handmatig OK</span>
+                <span className="block text-[8px] text-emerald-500/60 uppercase font-bold mt-1 tracking-widest">Stuur WhatsApp Bevestiging</span>
               </div>
               <ChevronRight size={14} className="ml-auto mr-4 text-emerald-500/40" />
             </button>
@@ -298,6 +265,7 @@ export default function App() {
         </div>
       </main>
 
+      {/* Settings Modal (ongewijzigd qua velden, alleen UI tweaks voor snelheid) */}
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom duration-500">
           <div className="flex items-center justify-between mb-10">
@@ -311,7 +279,7 @@ export default function App() {
           <div className="space-y-10 pb-20">
             <section className="bg-slate-900/50 p-6 rounded-[2.5rem] border border-white/5 space-y-5">
               <label className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em] flex items-center gap-2 px-1">
-                <Globe size={14}/> Cloudflare Server URL
+                <Globe size={14}/> Server URL
               </label>
               <div className="flex gap-2">
                 <input 
@@ -332,18 +300,10 @@ export default function App() {
                   <RefreshCw size={20} className={connectionTesting ? 'animate-spin' : ''} />
                 </button>
               </div>
-              
-              {connectionError && (
-                <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20 flex items-center gap-2">
-                  <AlertCircle size={14} className="text-rose-500" />
-                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tighter">{connectionError}</span>
-                </div>
-              )}
-
               <div className="flex items-center gap-2 p-3 bg-slate-950 rounded-xl border border-white/5">
                 {piStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-rose-500" />}
                 <span className={`text-[10px] font-bold uppercase ${piStatus === 'online' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {piStatus === 'online' ? 'Verbinding OK' : piStatus === 'checking' ? 'Testen...' : 'Offline'}
+                  {piStatus === 'online' ? 'Gekoppeld met Pi' : 'Niet verbonden'}
                 </span>
               </div>
             </section>
@@ -355,11 +315,11 @@ export default function App() {
 
             <section className="grid grid-cols-2 gap-4">
               <div className="bg-slate-900 p-6 rounded-[2rem] border border-white/5">
-                <label className="text-[9px] font-black text-slate-600 uppercase block mb-3">Vanaf Hoe Laat</label>
+                <label className="text-[9px] font-black text-slate-600 uppercase block mb-3">Vanaf (Start)</label>
                 <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="bg-transparent w-full font-black text-2xl outline-none text-white" />
               </div>
               <div className="bg-slate-900 p-6 rounded-[2rem] border border-white/5">
-                <label className="text-[9px] font-black text-indigo-500 uppercase block mb-3 italic">De Deadline</label>
+                <label className="text-[9px] font-black text-indigo-500 uppercase block mb-3 italic tracking-widest">Deadline</label>
                 <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="bg-transparent w-full font-black text-2xl outline-none text-indigo-400" />
               </div>
             </section>
@@ -367,7 +327,7 @@ export default function App() {
             <section className="space-y-6">
               <div className="flex items-center justify-between px-2">
                 <h4 className="text-[12px] font-black uppercase text-indigo-400 tracking-widest flex items-center gap-2 italic">
-                  <Users size={16}/> Alarm Ontvangers
+                  <Users size={16}/> Ontvangers
                 </h4>
                 <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center active:scale-90"><Plus size={20} /></button>
               </div>
@@ -382,13 +342,11 @@ export default function App() {
                           const url = getCleanUrl();
                           if (!url) return;
                           setTestStatus(c.id);
-                          try {
-                             await fetch(`${url}/test_contact`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ name: c.name, phone: cleanPhone(c.phone), apiKey: c.apiKey })
-                            });
-                          } catch(e) {}
+                          await fetch(`${url}/test_contact`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: c.name, phone: cleanPhone(c.phone), apiKey: c.apiKey })
+                          });
                           setTimeout(() => setTestStatus(null), 2000);
                         }} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg">
                           {testStatus === c.id ? <CheckCircle2 size={18}/> : <Send size={18}/>}
