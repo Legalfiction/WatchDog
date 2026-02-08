@@ -8,10 +8,11 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app) 
+# Zeer permissieve CORS voor mobiele PWA's
+CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "3.7.0"
+VERSION = "3.8.1"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -29,11 +30,20 @@ def send_wa(name, phone, apikey, text):
     url = "https://api.callmebot.com/whatsapp.php"
     try:
         r = requests.get(url, params={"phone": phone, "apikey": apikey, "text": text}, timeout=15)
-        print(f"[WA] Bericht naar {name}: {text[:30]}...")
+        print(f"[WA] {datetime.now().strftime('%H:%M:%S')} - Bericht naar {name}: {text[:30]}...")
         return r.status_code == 200
     except Exception as e:
         print(f"[WA ERROR] {e}")
         return False
+
+@app.before_request
+def log_request_info():
+    # Toon elke binnenkomende aanroep in de terminal
+    print(f"[REQ] {datetime.now().strftime('%H:%M:%S')} - {request.method} {request.path} van {request.remote_addr}")
+
+@app.route('/', methods=['GET'])
+def health_check():
+    return f"SafeGuard Backend v{VERSION} is ONLINE. Server tijd: {datetime.now().strftime('%H:%M:%S')}"
 
 @app.route('/status', methods=['GET'])
 def get_status():
@@ -78,7 +88,7 @@ def handle_ping():
         "last_check_date": db.get(user_name, {}).get("last_check_date", "")
     }
     save_db(db)
-    print(f"[PING] {user_name} meldt zich om {datetime.fromtimestamp(now_ts).strftime('%H:%M:%S')}")
+    print(f"[PING] {user_name} succesvol geregistreerd.")
     return jsonify({"status": "success", "server_received": True})
 
 @app.route('/manual_checkin', methods=['POST'])
@@ -117,7 +127,6 @@ def run_security_check():
     for name, info in db.items():
         deadline = info.get("endTime", "08:30")
         
-        # Check alleen op de exacte minuut van de deadline
         if now_hm == deadline and info.get("last_check_date") != today_str:
             print(f"[WATCHDOG] Deadline bereikt voor {name}")
             try:
@@ -139,5 +148,5 @@ def run_security_check():
     return jsonify({"time": now_hm, "alerts": alerts})
 
 if __name__ == '__main__':
-    print(f"--- SafeGuard Backend v{VERSION} Gestart ---")
-    app.run(host='0.0.0.0', port=5000)
+    print(f"--- SafeGuard Backend v{VERSION} Gestart op poort 5000 ---")
+    app.run(host='0.0.0.0', port=5000, debug=False)

@@ -20,7 +20,9 @@ import {
   Activity,
   Wifi,
   WifiOff,
-  RefreshCw
+  RefreshCw,
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 import { UserSettings, EmergencyContact } from './types';
 
@@ -30,6 +32,7 @@ export default function App() {
   const [lastPingTime, setLastPingTime] = useState<string>(localStorage.getItem('safeguard_last_ping') || '--:--');
   const [serverLastPing, setServerLastPing] = useState<string>('--:--:--');
   const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isManualProcessing, setIsManualProcessing] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
@@ -48,10 +51,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
-  const getCleanUrl = useCallback(() => {
-    let url = serverUrl.trim();
+  const getCleanUrl = useCallback((urlInput?: string) => {
+    let url = (urlInput || serverUrl).trim();
     if (!url) return '';
+    // Verwijder eventuele witruimte of rare tekens
+    url = url.replace(/\s/g, '');
     if (!url.startsWith('http')) url = `https://${url}`;
+    // Verwijder trailing slash
     return url.replace(/\/$/, '');
   }, [serverUrl]);
 
@@ -61,35 +67,50 @@ export default function App() {
     const url = getCleanUrl();
     if (!url) {
       setPiStatus('offline');
+      setConnectionError('Geen URL ingevuld');
       return;
     }
     try {
       setPiStatus('checking');
+      setConnectionError(null);
+      
       const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email)}`, { 
-        signal: AbortSignal.timeout(5000),
-        mode: 'cors'
+        method: 'GET',
+        signal: AbortSignal.timeout(6000),
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json'
+        }
       });
+      
       if (res.ok) {
         const data = await res.json();
         setPiStatus('online');
         if (data.your_last_ping) setServerLastPing(data.your_last_ping);
       } else {
         setPiStatus('offline');
+        setConnectionError(`HTTP Fout: ${res.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Connection check failed:', err);
       setPiStatus('offline');
+      if (err.name === 'AbortError') setConnectionError('Time-out (Server te traag)');
+      else if (err.message.includes('Failed to fetch')) setConnectionError('Netwerkfout (Check Cloudflare)');
+      else setConnectionError(err.message || 'Onbekende fout');
     }
   }, [getCleanUrl, settings.email]);
 
+  // Eerste check en herhaalde checks
   useEffect(() => {
     checkPiStatus();
-    const interval = setInterval(checkPiStatus, 20000);
+    const interval = setInterval(checkPiStatus, 30000);
     return () => clearInterval(interval);
   }, [checkPiStatus]);
 
   const triggerCheckin = useCallback(async (force = false, isManual = false) => {
     const now = Date.now();
-    if (!force && now - lastTriggerRef.current < 10000) return; 
+    // Voorkom spamming, behalve bij handmatige actie
+    if (!force && now - lastTriggerRef.current < 20000) return; 
     
     const url = getCleanUrl();
     if (!url || !settings.email || !isSyncActive) return;
@@ -108,30 +129,45 @@ export default function App() {
           endTime: settings.endTime,
           contacts: settings.contacts.map(c => ({ ...c, phone: cleanPhone(c.phone) }))
         }),
+        mode: 'cors',
         signal: AbortSignal.timeout(10000)
       });
       
-      if (!response.ok) throw new Error();
+      if (!response.ok) throw new Error(`Ping mislukt (${response.status})`);
 
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastPingTime(timeStr);
       lastTriggerRef.current = Date.now();
       localStorage.setItem('safeguard_last_ping', timeStr);
       
+      // Update server status kort daarna
       setTimeout(checkPiStatus, 1500);
-    } catch (err) {
+    } catch (err: any) {
+      console.error('Ping failed:', err);
       setPiStatus('offline');
+      setConnectionError(err.message || 'Ping mislukt');
     } finally {
       setIsProcessing(false);
       setIsManualProcessing(false);
     }
   }, [settings, isSyncActive, getCleanUrl, checkPiStatus]);
 
+  // Reageer op focus (als gebruiker app opent)
   useEffect(() => {
-    const handleFocus = () => isSyncActive && triggerCheckin();
+    const handleFocus = () => {
+      if (isSyncActive) {
+        checkPiStatus();
+        triggerCheckin();
+      }
+    };
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [isSyncActive, triggerCheckin]);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') handleFocus();
+    });
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isSyncActive, triggerCheckin, checkPiStatus]);
 
   useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
@@ -162,14 +198,39 @@ export default function App() {
 
       <main className="flex-1 px-8 flex flex-col items-center justify-center space-y-12 py-10">
         {piStatus === 'offline' && isSyncActive && (
-          <div className="w-full p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex flex-col gap-2">
-            <div className="flex items-center gap-3">
-              <WifiOff size={18} className="text-rose-500" />
-              <p className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">
-                Pi onbereikbaar. Is de tunnel URL veranderd?
-              </p>
+          <div className="w-full p-5 bg-rose-500/10 border border-rose-500/20 rounded-[2.5rem] flex flex-col gap-4 animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 bg-rose-500/20 p-2 rounded-lg">
+                <WifiOff size={20} className="text-rose-500" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] font-black text-rose-500 uppercase tracking-tighter leading-tight">
+                  Pi onbereikbaar
+                </p>
+                <p className="text-[10px] text-rose-500/70 font-medium">
+                  Status: {connectionError || 'Geen verbinding mogelijk'}
+                </p>
+              </div>
             </div>
-            <button onClick={() => setShowSettings(true)} className="text-[9px] font-black text-rose-500/60 uppercase tracking-widest text-left pl-7 underline">Update Server URL bij instellingen</button>
+            
+            <div className="space-y-2 pt-2 border-t border-rose-500/10">
+               <p className="text-[9px] font-bold text-rose-500/50 uppercase italic">Probeer dit:</p>
+               <a 
+                href={getCleanUrl()} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 bg-rose-500/10 rounded-xl group active:scale-95 transition-transform"
+               >
+                 <span className="text-[10px] font-black uppercase text-rose-500">1. Open Link in Browser</span>
+                 <ExternalLink size={14} className="text-rose-500" />
+               </a>
+               <button 
+                onClick={() => setShowSettings(true)}
+                className="w-full p-3 border border-rose-500/20 rounded-xl text-[10px] font-black uppercase text-rose-500 text-left"
+               >
+                 2. Check URL bij Instellingen
+               </button>
+            </div>
           </div>
         )}
 
@@ -190,7 +251,7 @@ export default function App() {
             {isSyncActive && (
               <div className="mt-4 flex flex-col items-center gap-2">
                 <div className="bg-slate-950/80 px-4 py-2 rounded-full border border-white/5 flex items-center gap-2 shadow-inner">
-                  <Activity size={10} className="text-emerald-500" />
+                  <Activity size={10} className={piStatus === 'online' ? "text-emerald-500" : "text-rose-500"} />
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gezien door Pi: {serverLastPing}</span>
                 </div>
                 <div className="flex items-center gap-2 opacity-60">
@@ -224,7 +285,10 @@ export default function App() {
               const newState = !isSyncActive;
               setIsSyncActive(newState);
               localStorage.setItem('safeguard_active', newState.toString());
-              if (newState) setTimeout(() => triggerCheckin(true), 500);
+              if (newState) {
+                checkPiStatus();
+                setTimeout(() => triggerCheckin(true), 1000);
+              }
             }} 
             className={`w-full py-6 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center justify-center gap-3 transition-all active:scale-95 border-b-4 ${isSyncActive ? 'bg-slate-900 text-rose-500 border-rose-900' : 'bg-indigo-600 text-white border-indigo-800 shadow-2xl shadow-indigo-500/30'}`}
           >
@@ -268,10 +332,18 @@ export default function App() {
                   <RefreshCw size={20} className={connectionTesting ? 'animate-spin' : ''} />
                 </button>
               </div>
+              
+              {connectionError && (
+                <div className="p-3 bg-rose-500/10 rounded-xl border border-rose-500/20 flex items-center gap-2">
+                  <AlertCircle size={14} className="text-rose-500" />
+                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-tighter">{connectionError}</span>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 p-3 bg-slate-950 rounded-xl border border-white/5">
                 {piStatus === 'online' ? <Wifi size={14} className="text-emerald-500" /> : <WifiOff size={14} className="text-rose-500" />}
                 <span className={`text-[10px] font-bold uppercase ${piStatus === 'online' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                  {piStatus === 'online' ? 'Verbinding OK' : piStatus === 'checking' ? 'Testen...' : 'Geen verbinding met Pi'}
+                  {piStatus === 'online' ? 'Verbinding OK' : piStatus === 'checking' ? 'Testen...' : 'Offline'}
                 </span>
               </div>
             </section>
@@ -310,11 +382,13 @@ export default function App() {
                           const url = getCleanUrl();
                           if (!url) return;
                           setTestStatus(c.id);
-                          await fetch(`${url}/test_contact`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: c.name, phone: cleanPhone(c.phone), apiKey: c.apiKey })
-                          });
+                          try {
+                             await fetch(`${url}/test_contact`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ name: c.name, phone: cleanPhone(c.phone), apiKey: c.apiKey })
+                            });
+                          } catch(e) {}
                           setTimeout(() => setTestStatus(null), 2000);
                         }} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg">
                           {testStatus === c.id ? <CheckCircle2 size={18}/> : <Send size={18}/>}
