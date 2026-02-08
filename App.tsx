@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ShieldCheck, 
@@ -14,12 +13,16 @@ import {
   Trash2,
   ExternalLink,
   Plus,
-  AlertCircle
+  AlertCircle,
+  User,
+  Phone,
+  Key
 } from 'lucide-react';
 import { UserSettings, ActivityLog, AppStatus, EmergencyContact } from './types';
 
+// DE DEFINITIEVE HARDE LINK NAAR JOUW RASPBERRY PI
 const PI_URL = "http://192.168.1.38:5000";
-const APP_VERSION = "2.6.7";
+const APP_VERSION = "2.6.8";
 
 export default function App() {
   const [isSyncActive, setIsSyncActive] = useState(() => localStorage.getItem('safeguard_active') === 'true');
@@ -39,11 +42,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
+  // Opslaan van instellingen bij elke wijziging
   useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
     checkServerStatus();
   }, [settings]);
 
+  // Synchroniseer activatie-status
   useEffect(() => {
     localStorage.setItem('safeguard_active', isSyncActive.toString());
   }, [isSyncActive]);
@@ -52,7 +57,7 @@ export default function App() {
     setIsChecking(true);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(`${PI_URL}/status`, { signal: controller.signal });
       const data = await res.json();
       setServerOnline(data.status === "online");
@@ -66,7 +71,6 @@ export default function App() {
 
   const sendPing = useCallback(async (type: ActivityLog['type']) => {
     if (!settings.email || !isSyncActive) return;
-    const timestamp = Date.now();
     try {
       const response = await fetch(`${PI_URL}/ping`, {
         method: 'POST',
@@ -85,6 +89,7 @@ export default function App() {
         setLastPingTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       }
     } catch (err) {
+      console.error("Ping failed", err);
       setServerOnline(false);
     }
   }, [settings, isSyncActive]);
@@ -96,18 +101,18 @@ export default function App() {
       phone: '',
       apiKey: ''
     };
-    setSettings({ ...settings, contacts: [...settings.contacts, newContact] });
+    setSettings(prev => ({ ...prev, contacts: [...prev.contacts, newContact] }));
   };
 
   const removeContact = (id: string) => {
-    setSettings({ ...settings, contacts: settings.contacts.filter(c => c.id !== id) });
+    setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== id) }));
   };
 
   const updateContact = (id: string, field: keyof EmergencyContact, value: string) => {
-    setSettings({
-      ...settings,
-      contacts: settings.contacts.map(c => c.id === id ? { ...c, [field]: value } : c)
-    });
+    setSettings(prev => ({
+      ...prev,
+      contacts: prev.contacts.map(c => c.id === id ? { ...c, [field]: value } : c)
+    }));
   };
 
   const openWhatsAppActivation = () => {
@@ -117,7 +122,7 @@ export default function App() {
 
   const testContact = async (contact: EmergencyContact) => {
     if (!contact.phone || !contact.apiKey) {
-      alert("Vul telefoonnummer en API-key in.");
+      alert("Vul telefoonnummer en API-key in voor deze persoon.");
       return;
     }
     try {
@@ -129,15 +134,15 @@ export default function App() {
           contact: contact
         })
       });
-      if (res.ok) alert(`Test bericht verstuurd naar ${contact.name}!`);
-      else alert("Test mislukt. Controleer API-key.");
+      if (res.ok) alert(`Test succesvol verstuurd naar ${contact.name}!`);
+      else alert("Test mislukt. Controleer of de API-key klopt.");
     } catch (e) {
-      alert("Geen verbinding met Pi.");
+      alert("Kan de Raspberry Pi niet bereiken.");
     }
   };
 
   const resetApp = () => {
-    if (confirm("Alles wissen?")) {
+    if (confirm("Weet je dit zeker? Alle instellingen en contacten worden verwijderd.")) {
       localStorage.clear();
       window.location.reload();
     }
@@ -156,7 +161,8 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30">
-      <header className="flex items-center justify-between p-6 bg-slate-900/50 backdrop-blur-md sticky top-0 z-30 border-b border-white/5">
+      {/* HEADER */}
+      <header className="flex items-center justify-between p-6 bg-slate-900/50 backdrop-blur-md sticky top-0 z-40 border-b border-white/5 pt-[safe-area-inset-top]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-900/20">
             <ShieldCheck className="text-white w-6 h-6" />
@@ -166,21 +172,33 @@ export default function App() {
             <div className="flex items-center gap-1.5 mt-1">
               <span className={`w-1.5 h-1.5 rounded-full ${serverOnline ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
               <span className="text-[7px] text-slate-500 font-black uppercase tracking-widest">
-                {serverOnline ? 'WATCHDOG v2.6.7' : 'OFFLINE'}
+                {serverOnline ? `WATCHDOG v${APP_VERSION}` : 'OFFLINE'}
               </span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={checkServerStatus} className={`p-3 rounded-xl bg-slate-800 border border-slate-700 transition-all ${isChecking ? 'animate-spin opacity-50' : 'active:scale-90'}`}>
-            <RefreshCcw className="w-4 h-4 text-slate-400" />
+          <button 
+            onClick={checkServerStatus} 
+            className={`p-3 rounded-xl bg-slate-800 border border-slate-700 active:scale-90 transition-all ${isChecking ? 'opacity-50' : ''}`}
+            aria-label="Ververs status"
+          >
+            <RefreshCcw className={`w-4 h-4 text-slate-400 ${isChecking ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={() => setShowSettings(true)} className="p-3 rounded-xl bg-slate-800 border border-slate-700 active:scale-90 transition-all hover:bg-slate-700">
+          <button 
+            onClick={() => {
+              console.log("Opening settings...");
+              setShowSettings(true);
+            }} 
+            className="p-3 rounded-xl bg-slate-800 border border-slate-700 active:scale-90 transition-all hover:bg-slate-700"
+            aria-label="Instellingen"
+          >
             <SettingsIcon className="w-5 h-5 text-slate-400" />
           </button>
         </div>
       </header>
 
+      {/* MAIN CONTENT */}
       <main className="flex-1 px-6 pt-8 pb-32 space-y-8">
         {!isSyncActive ? (
           <div className="p-1 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-[2.5rem] shadow-2xl shadow-indigo-500/10">
@@ -213,7 +231,7 @@ export default function App() {
         )}
 
         <div className="p-10 rounded-[3rem] bg-slate-900 border border-white/5 flex flex-col items-center gap-6 text-center shadow-2xl">
-          <Smartphone className={`w-12 h-12 ${isSyncActive ? 'text-indigo-500' : 'text-slate-700'}`} />
+          <Smartphone className={`w-12 h-12 transition-colors duration-500 ${isSyncActive ? 'text-indigo-500' : 'text-slate-700'}`} />
           <h2 className="text-2xl font-black uppercase italic tracking-tighter">
             {isSyncActive ? 'SYNCING...' : 'STANDBY'}
           </h2>
@@ -222,82 +240,195 @@ export default function App() {
             <p className="text-4xl font-black text-white font-mono">{lastPingTime}</p>
           </div>
         </div>
+
+        <button 
+          onClick={() => sendPing('manual')}
+          className="w-full p-6 bg-slate-900/50 border border-white/5 rounded-[2rem] flex items-center justify-center gap-3 active:scale-95 transition-all"
+        >
+          <Activity className="w-5 h-5 text-indigo-400" />
+          <span className="text-xs font-black uppercase tracking-widest">Handmatige Check</span>
+        </button>
       </main>
 
+      {/* SETTINGS MODAL */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/95 backdrop-blur-md p-4">
-          <div className="w-full max-w-md bg-slate-900 rounded-[3rem] p-8 space-y-6 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto pb-12">
-            <div className="flex items-center justify-between sticky top-0 bg-slate-900 py-2 z-10 border-b border-white/5">
-              <h3 className="text-xl font-black uppercase italic tracking-tighter text-white">Configuratie</h3>
-              <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-800 rounded-full"><X className="w-5 h-5" /></button>
-            </div>
-            
-            <div className="space-y-6">
+        <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 p-0 animate-in fade-in slide-in-from-bottom duration-300">
+          <div className="flex items-center justify-between p-6 border-b border-white/5 bg-slate-900/80 backdrop-blur-xl sticky top-0 pt-[safe-area-inset-top]">
+             <div className="flex flex-col">
+                <h3 className="text-xl font-black uppercase italic tracking-tighter text-white leading-none">Instellingen</h3>
+                <span className="text-[8px] text-indigo-500 font-black uppercase tracking-widest mt-1">Version v{APP_VERSION}</span>
+             </div>
+             <button 
+               onClick={() => setShowSettings(false)} 
+               className="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center active:scale-90"
+             >
+               <X className="w-6 h-6 text-white" />
+             </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-32">
+            {/* BASIS INFO */}
+            <section className="space-y-4">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 px-2 flex items-center gap-2">
+                <User className="w-3 h-3" /> Jouw Gegevens
+              </h4>
               <div className="space-y-4">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Basis</h4>
-                <div className="space-y-4">
-                  <input type="text" placeholder="Jouw Naam" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-950 rounded-2xl border border-white/5 text-sm" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="p-4 bg-slate-950 rounded-2xl border border-white/5 text-sm" />
-                    <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="p-4 bg-slate-950 rounded-2xl border border-white/5 text-sm" />
+                <div className="relative">
+                   <input 
+                     type="text" 
+                     placeholder="Je voornaam" 
+                     value={settings.email} 
+                     onChange={e => setSettings({...settings, email: e.target.value})} 
+                     className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 text-sm outline-none focus:border-indigo-500 transition-colors" 
+                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-2">Check vanaf</label>
+                    <input 
+                      type="time" 
+                      value={settings.startTime} 
+                      onChange={e => setSettings({...settings, startTime: e.target.value})} 
+                      className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 text-sm outline-none focus:border-indigo-500 transition-colors" 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-bold text-slate-500 uppercase ml-2">Deadline</label>
+                    <input 
+                      type="time" 
+                      value={settings.endTime} 
+                      onChange={e => setSettings({...settings, endTime: e.target.value})} 
+                      className="w-full p-5 bg-slate-900 rounded-2xl border border-white/5 text-sm outline-none focus:border-indigo-500 transition-colors font-bold text-indigo-400" 
+                    />
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Contactpersonen</h4>
-                  <button onClick={addContact} className="p-2 bg-indigo-600 rounded-lg active:scale-90"><Plus className="w-4 h-4" /></button>
-                </div>
-
-                {settings.contacts.map((contact) => (
-                  <div key={contact.id} className="p-5 bg-slate-950 rounded-3xl border border-white/5 space-y-4 relative group">
-                    <button onClick={() => removeContact(contact.id)} className="absolute top-4 right-4 text-slate-600 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
-                    
-                    <div className="space-y-3 pt-2">
-                      <input type="text" placeholder="Naam Contact" value={contact.name} onChange={e => updateContact(contact.id, 'name', e.target.value)} className="w-full bg-transparent border-b border-white/10 p-1 text-sm outline-none focus:border-indigo-500" />
-                      <input type="text" placeholder="Telefoon (+316...)" value={contact.phone} onChange={e => updateContact(contact.id, 'phone', e.target.value)} className="w-full bg-transparent border-b border-white/10 p-1 text-sm outline-none focus:border-indigo-500" />
-                      
-                      <div className="space-y-2 pt-2">
-                         <div className="flex items-center justify-between">
-                            <label className="text-[8px] font-black uppercase text-slate-500">API Key</label>
-                            {!contact.apiKey && (
-                              <button onClick={openWhatsAppActivation} className="text-[8px] font-black uppercase text-emerald-500 flex items-center gap-1">
-                                <ExternalLink className="w-2 h-2" /> Key Nodig?
-                              </button>
-                            )}
-                         </div>
-                         <input type="password" placeholder="Plak API Key" value={contact.apiKey} onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} className="w-full bg-slate-900 rounded-xl p-3 text-xs border border-white/5" />
-                      </div>
-                    </div>
-
-                    <button onClick={() => testContact(contact)} className="w-full py-2 bg-slate-900 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white">
-                      Test Verbinding
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-6 bg-indigo-500/5 rounded-[2rem] border border-indigo-500/10 space-y-4">
-                <h5 className="text-[9px] font-black uppercase tracking-widest flex items-center gap-2 text-indigo-400">
-                  <AlertCircle className="w-4 h-4" /> WhatsApp Setup Gids
-                </h5>
-                <ol className="text-[10px] text-slate-400 space-y-3 font-medium">
-                  <li className="flex gap-2"><span>1.</span> <span>Klik op de knop hieronder om WhatsApp te openen.</span></li>
-                  <li className="flex gap-2"><span>2.</span> <span>Stuur het bericht naar CallMeBot.</span></li>
-                  <li className="flex gap-2"><span>3.</span> <span>Wacht op de API-key en plak deze in het veld hierboven.</span></li>
-                </ol>
+            {/* CONTACTEN */}
+            <section className="space-y-4">
+              <div className="flex items-center justify-between px-2">
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 flex items-center gap-2">
+                  <Phone className="w-3 h-3" /> Noodcontacten
+                </h4>
                 <button 
-                  onClick={openWhatsAppActivation}
-                  className="w-full p-4 bg-emerald-600 rounded-2xl flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-lg shadow-emerald-900/20"
+                  onClick={addContact} 
+                  className="px-4 py-2 bg-indigo-600 rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest active:scale-95"
                 >
-                  <MessageSquare className="w-5 h-5 fill-white/20" /> Activeer WhatsApp
+                  <Plus className="w-3 h-3" /> Toevoegen
                 </button>
               </div>
 
-              <button onClick={resetApp} className="w-full p-4 text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-rose-500 opacity-50">
-                Reset Alle Gegevens
-              </button>
+              {settings.contacts.length === 0 && (
+                <div className="p-8 bg-slate-900/50 border border-dashed border-white/10 rounded-3xl text-center">
+                   <p className="text-xs text-slate-500 font-medium">Nog geen contactpersonen toegevoegd.</p>
+                </div>
+              )}
+
+              {settings.contacts.map((contact) => (
+                <div key={contact.id} className="p-6 bg-slate-900 rounded-3xl border border-white/10 space-y-4 relative overflow-hidden">
+                  <button 
+                    onClick={() => removeContact(contact.id)} 
+                    className="absolute top-4 right-4 p-2 bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  
+                  <div className="space-y-4 pt-2">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Naam (bijv. Dochter)" 
+                        value={contact.name} 
+                        onChange={e => updateContact(contact.id, 'name', e.target.value)} 
+                        className="w-full bg-slate-950 border border-white/5 rounded-xl p-4 text-sm outline-none focus:border-indigo-500" 
+                      />
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="Telefoon (+316...)" 
+                        value={contact.phone} 
+                        onChange={e => updateContact(contact.id, 'phone', e.target.value)} 
+                        className="w-full bg-slate-950 border border-white/5 rounded-xl p-4 text-sm outline-none focus:border-indigo-500" 
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <div className="flex items-center justify-between px-1">
+                          <label className="text-[8px] font-black uppercase text-slate-500 flex items-center gap-1">
+                            <Key className="w-2 h-2" /> CallMeBot API Key
+                          </label>
+                          {!contact.apiKey && (
+                            <button 
+                              onClick={openWhatsAppActivation} 
+                              className="text-[8px] font-black uppercase text-emerald-500 flex items-center gap-1 underline"
+                            >
+                              Code Nodig?
+                            </button>
+                          )}
+                       </div>
+                       <input 
+                         type="password" 
+                         placeholder="Plak API Key hier" 
+                         value={contact.apiKey} 
+                         onChange={e => updateContact(contact.id, 'apiKey', e.target.value)} 
+                         className="w-full bg-slate-950 rounded-xl p-4 text-xs border border-white/5 font-mono" 
+                       />
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => testContact(contact)} 
+                    className="w-full py-3 bg-indigo-600/10 border border-indigo-600/20 rounded-xl text-[9px] font-black uppercase tracking-widest text-indigo-400 active:bg-indigo-600 active:text-white transition-all"
+                  >
+                    Stuur Test Bericht
+                  </button>
+                </div>
+              ))}
+            </section>
+
+            {/* WHATSAPP HELPER */}
+            <div className="p-8 bg-emerald-500/5 rounded-[2.5rem] border border-emerald-500/10 space-y-5">
+              <h5 className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 text-emerald-500">
+                <AlertCircle className="w-4 h-4" /> WhatsApp Activatie
+              </h5>
+              <div className="space-y-4">
+                <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+                  De watchdog gebruikt WhatsApp om je contactpersonen te waarschuwen. Volg deze stappen:
+                </p>
+                <ol className="text-[11px] text-slate-300 space-y-4 ml-1">
+                  <li className="flex gap-3 items-start">
+                    <span className="w-5 h-5 bg-emerald-500 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-black text-white">1</span>
+                    <span>Klik op de knop hieronder om WhatsApp te openen.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="w-5 h-5 bg-emerald-500 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-black text-white">2</span>
+                    <span>Stuur het bericht naar CallMeBot om je API-key te ontvangen.</span>
+                  </li>
+                  <li className="flex gap-3 items-start">
+                    <span className="w-5 h-5 bg-emerald-500 rounded-full flex-shrink-0 flex items-center justify-center text-[9px] font-black text-white">3</span>
+                    <span>Kopieer de 7-cijferige code uit het antwoord en plak deze hierboven.</span>
+                  </li>
+                </ol>
+                <button 
+                  onClick={openWhatsAppActivation}
+                  className="w-full p-5 bg-emerald-600 rounded-[1.5rem] flex items-center justify-center gap-3 font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-xl shadow-emerald-900/30"
+                >
+                  <MessageSquare className="w-5 h-5 fill-white/20" /> Open WhatsApp
+                </button>
+              </div>
+            </div>
+
+            {/* DELETE / RESET */}
+            <div className="pt-8 border-t border-white/5 space-y-4">
+               <button 
+                 onClick={resetApp} 
+                 className="w-full p-5 text-[10px] font-black uppercase tracking-[0.2em] text-rose-500/60 hover:text-rose-500 border border-rose-500/10 rounded-2xl transition-all"
+               >
+                 <Trash2 className="w-4 h-4 inline mr-2" /> App Volledig Resetten
+               </button>
+               <p className="text-[8px] text-slate-600 text-center uppercase font-black tracking-widest">SafeGuard Watchdog Engine v{APP_VERSION}</p>
             </div>
           </div>
         </div>

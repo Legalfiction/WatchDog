@@ -1,4 +1,3 @@
-
 import json
 import os
 import time
@@ -12,7 +11,7 @@ app = Flask(__name__)
 CORS(app) 
 
 DATA_FILE = "safeguard_users.json"
-VERSION = "2.6.7"
+VERSION = "2.6.8"
 
 def load_db():
     if os.path.exists(DATA_FILE):
@@ -35,7 +34,7 @@ def get_status():
         "version": VERSION,
         "server_time": datetime.now().strftime("%H:%M:%S"),
         "active_users": list(db.keys()),
-        "build": "watchdog_v267_multi_contact"
+        "build": "watchdog_v268_stable"
     })
 
 @app.route('/ping', methods=['POST'])
@@ -79,7 +78,6 @@ def run_security_check():
     for name, info in db.items():
         alarm_time = info.get("endTime", "08:30")
         
-        # Alleen checken op het exacte tijdstip van de deadline
         if now_str == alarm_time and info.get("last_check_date") != today_str:
             start_time_str = info.get("startTime", "07:00")
             try:
@@ -91,13 +89,12 @@ def run_security_check():
             except: continue
             
             last_ping = info.get("last_ping", 0)
-            # Als laatste ping OUDER is dan de starttijd van vanochtend -> ALARM
             if last_ping < start_dt.timestamp():
                 contacts = info.get("contacts", [])
                 for contact in contacts:
                     send_whatsapp_alert(name, contact)
                     alerts_triggered += 1
-                print(f"!!! v{VERSION} MULTI-ALARM VOOR {name} VERSTUURD !!!")
+                print(f"!!! v{VERSION} ALARM VOOR {name} !!!")
             
             info["last_check_date"] = today_str
 
