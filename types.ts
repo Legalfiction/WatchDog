@@ -7,9 +7,9 @@ export interface EmergencyContact {
 }
 
 export interface UserSettings {
-  email: string;
-  startTime: string; // Bijv. "07:00"
-  endTime: string;   // Bijv. "09:00"
+  email: string;      // Jouw Naam (bijv. Aldo)
+  startTime: string; 
+  endTime: string;   
   contacts: EmergencyContact[];
 }
 
