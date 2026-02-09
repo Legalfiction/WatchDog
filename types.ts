@@ -7,7 +7,8 @@ export interface EmergencyContact {
 }
 
 export interface UserSettings {
-  email: string;
+  email: string; // Gebruikt als 'Naam'
+  phone: string; // Het eigen nummer van de mobiel
   startTime: string; 
   endTime: string;   
   contacts: EmergencyContact[];

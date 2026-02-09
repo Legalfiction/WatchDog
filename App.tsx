@@ -22,11 +22,12 @@ import {
   Dog,
   BookOpen,
   CheckCircle2,
-  ShieldCheck
+  ShieldCheck,
+  Phone
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.7.5';
+const VERSION = '8.8.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -49,6 +50,7 @@ export default function App() {
     const saved = localStorage.getItem('safeguard_settings');
     return saved ? JSON.parse(saved) : { 
       email: '', 
+      phone: '',
       startTime: '07:00', 
       endTime: '08:30', 
       contacts: [],
@@ -100,7 +102,6 @@ export default function App() {
 
   const triggerCheckin = useCallback(async (force = false) => {
     const now = Date.now();
-    // Throttle pings: minstens 15 seconden tussen automatische pings, tenzij geforceerd
     if (!force && now - lastTriggerRef.current < 15000) return; 
 
     const url = getCleanUrl();
@@ -117,13 +118,14 @@ export default function App() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const response = await fetch(`${url}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user: settings.email.trim(),
+          phone: settings.phone.trim(),
           startTime: settings.startTime,
           endTime: settings.endTime,
           vacationMode: settings.vacationMode,
@@ -190,9 +192,8 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
   useEffect(() => {
     getBattery();
     checkPiStatus();
-    triggerCheckin(true); // Onmiddellijke sync bij start
+    triggerCheckin(true); 
 
-    // Verhoogde frequentie: elke 30 seconden checken zolang de app open is
     const interval = setInterval(() => {
       checkPiStatus(true);
       triggerCheckin();
@@ -208,8 +209,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
 
   const handleSettingsUpdate = (newSettings: UserSettings) => {
     setSettings(newSettings);
-    // Forceer sync bij elke wijziging in instellingen
-    setTimeout(() => triggerCheckin(true), 100);
+    setTimeout(() => triggerCheckin(true), 200);
   };
 
   return (
@@ -252,6 +252,7 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
                 <div>
                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-tight">Welzijnsmonitor</p>
                   <p className="text-base font-bold text-slate-900">{settings.email || 'Instellen via menu'}</p>
+                  {settings.phone && <p className="text-[10px] text-slate-400 font-mono mt-0.5">{settings.phone}</p>}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl border border-emerald-100">
@@ -388,13 +389,19 @@ Daarna krijg je een berichtje van de bot met een pincode. Stuur die even naar mi
               <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic">
                 <Globe size={14}/> Raspberry Pi URL
               </label>
-              <input type="text" placeholder="https://..." value={serverUrl} onChange={e => setServerUrl(e.target.value)} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
+              <input type="text" placeholder="https://..." value={serverUrl} onChange={e => setServerUrl(e.target.value)} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500 shadow-none" />
             </section>
 
-            <section className="space-y-3">
-              <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Jouw Naam</label>
-              <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors shadow-none" />
-            </section>
+            <div className="grid grid-cols-1 gap-4">
+              <section className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2"><User size={12}/> Jouw Naam</label>
+                <input type="text" placeholder="Bijv. Aldo" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-bold outline-none focus:border-orange-500 transition-colors shadow-none" />
+              </section>
+              <section className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2"><Smartphone size={12}/> Mijn Mobiel</label>
+                <input type="text" placeholder="Bijv. 0612345678" value={settings.phone} onChange={e => setSettings({...settings, phone: e.target.value})} onBlur={() => triggerCheckin(true)} className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 font-mono text-sm outline-none focus:border-orange-500 transition-colors shadow-none" />
+              </section>
+            </div>
 
             <section className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
