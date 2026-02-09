@@ -17,11 +17,12 @@ import {
   Dog,
   BookOpen,
   CheckCircle2,
-  ShieldCheck
+  ShieldCheck,
+  Phone
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '8.9.0';
+const VERSION = '9.0.1';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -42,14 +43,16 @@ export default function App() {
   
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
-    return saved ? JSON.parse(saved) : { 
-      email: '', 
-      phone: '',
-      startTime: '07:00', 
-      endTime: '08:30', 
-      contacts: [],
-      vacationMode: false,
-      activeDays: [0, 1, 2, 3, 4, 5, 6] 
+    const parsed = saved ? JSON.parse(saved) : null;
+    
+    return { 
+      email: parsed?.email || '', 
+      myPhone: parsed?.myPhone || parsed?.phone || '',
+      startTime: parsed?.startTime || '07:00', 
+      endTime: parsed?.endTime || '08:30', 
+      contacts: parsed?.contacts || [],
+      vacationMode: parsed?.vacationMode || false,
+      activeDays: parsed?.activeDays || [0, 1, 2, 3, 4, 5, 6] 
     };
   });
 
@@ -98,25 +101,27 @@ export default function App() {
     if (!force && now - lastTriggerRef.current < 15000) return; 
 
     const url = getCleanUrl();
-    if (!url || !settings.email || !settings.phone) return;
+    if (!url || !settings.email || !settings.myPhone) return;
 
     setIsProcessing(true);
     const batt = await getBattery();
+
+    const payload = {
+        user: settings.email.trim(),
+        phone: settings.myPhone.trim(), 
+        battery: batt,
+        startTime: settings.startTime,
+        endTime: settings.endTime,
+        contacts: settings.contacts,
+        vacationMode: settings.vacationMode,
+        activeDays: settings.activeDays
+    };
 
     try {
       const response = await fetch(`${url}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user: settings.email.trim(),
-          phone: settings.phone.trim(),
-          startTime: settings.startTime,
-          endTime: settings.endTime,
-          vacationMode: settings.vacationMode,
-          activeDays: settings.activeDays,
-          battery: batt,
-          contacts: settings.contacts
-        }),
+        body: JSON.stringify(payload),
         mode: 'cors'
       });
       
@@ -186,7 +191,7 @@ export default function App() {
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-900">Watchdog</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{piStatus === 'online' ? 'Live' : 'Offline'}</span>
+              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{piStatus === 'online' ? 'Verbonden' : 'Geen Verbinding'}</span>
             </div>
           </div>
         </div>
@@ -204,9 +209,9 @@ export default function App() {
                   <User size={28} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-tight tracking-widest">Monitor Actief</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Monitor Actief</p>
                   <p className="text-base font-bold text-slate-900">{settings.email || 'Naam instellen...'}</p>
-                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">{settings.phone || 'Nummer instellen...'}</p>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">{settings.myPhone || 'Nummer instellen...'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl border border-emerald-100">
@@ -278,14 +283,14 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
-             <h3 className="text-xl font-black uppercase italic">Instellingen</h3>
+             <h3 className="text-xl font-black uppercase italic text-slate-900">Instellingen</h3>
              <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="p-3 bg-slate-100 rounded-2xl"><X size={24}/></button>
           </div>
           
           <div className="space-y-6 pb-20">
             <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
-              <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic"><Globe size={14}/> Raspberry Pi URL</label>
-              <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
+              <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic"><Globe size={14}/> Cloudflare Tunnel URL</label>
+              <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" placeholder="https://..." />
             </section>
 
             <div className="grid grid-cols-1 gap-4">
@@ -294,8 +299,8 @@ export default function App() {
                 <input type="text" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
               </section>
               <section className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Mijn Mobiel (voor alarm)</label>
-                <input type="text" placeholder="Bijv. 0612345678" value={settings.phone} onChange={e => setSettings({...settings, phone: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm" />
+                <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Mijn Mobiel (Bewaakt Nummer)</label>
+                <input type="text" placeholder="Bijv. 0612345678" value={settings.myPhone} onChange={e => setSettings({...settings, myPhone: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm" />
               </section>
             </div>
 
@@ -325,7 +330,7 @@ export default function App() {
                       <input type="text" placeholder="Nummer" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm" />
                       <button onClick={() => shareActivation(c)} className="p-3 bg-emerald-500 text-white rounded-xl"><MessageCircle size={20} /></button>
                     </div>
-                    <input type="password" placeholder="API Key" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm" />
+                    <input type="password" placeholder="CallMeBot API Key" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm" />
                   </div>
                 ))}
             </section>
@@ -342,7 +347,7 @@ export default function App() {
                 {[
                   { n: 1, t: "Automatische Check", d: "Open de app en je veiligheid is direct bevestigd op de server." },
                   { n: 2, t: "Stille Bewaking", d: "De Raspberry Pi houdt bij of je je hebt gemeld." },
-                  { n: 3, t: "Noodgeval", d: "Geen activiteit voor de deadline? Dan gaan er direct WhatsApp berichten uit." }
+                  { n: 3, t: "Noodgeval", d: "Geen activiteit voor de deadline? Dan gaan er direct WhatsApp berichten naar je noodgecontacten." }
                 ].map(s => (
                   <div key={s.n} className="flex gap-4 p-4 bg-white border border-slate-100 rounded-2xl">
                      <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold">{s.n}</span>
