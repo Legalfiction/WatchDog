@@ -83,6 +83,10 @@ def get_status():
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():
+    """
+    Update data voor een specifieke gebruiker.
+    Identificatie op basis van Naam (user) en Nummer (phone).
+    """
     data = request.json
     user_name = data.get('user', '').strip()
     
@@ -105,11 +109,14 @@ def handle_ping():
     db[user_name] = user_data
     save_db(db)
     
-    logging.info(f"PING van {user_name} ({user_data['phone']}) - Accu: {user_data['last_battery']}%")
+    logging.info(f"PING: {user_name} ({user_data['phone']}) | Accu: {user_data['last_battery']}%")
     return jsonify({"status": "success"})
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
+    """
+    Hoofd-logica die elke minuut checkt of er alarmen moeten worden verstuurd.
+    """
     db = load_db()
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
@@ -146,8 +153,8 @@ def run_security_check():
                 print(f" ! ALARM: {name} ({info.get('phone')}) niet gezien.", flush=True)
                 
                 contacts = info.get("contacts", [])
-                msg = (f"🚨 ALARM: {name} heeft zich vandaag niet gemeld tussen {info['startTime']} en {info['endTime']}!\n"
-                       f"Batterij: {info.get('last_battery')}%")
+                msg = (f"🚨 WATCHDOG ALARM: {name} ({info.get('phone')}) heeft zich vandaag niet gemeld tussen {info['startTime']} en {info['endTime']}!\n"
+                       f"Laatste accu: {info.get('last_battery')}%")
                 
                 success_count = 0
                 for c in contacts:
