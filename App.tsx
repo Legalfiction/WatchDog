@@ -19,13 +19,13 @@ import {
   CheckCircle2,
   ShieldCheck,
   Phone,
-  CalendarDays
+  CalendarDays,
+  Zap
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '9.2.0';
+const VERSION = '9.3.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
-const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 export default function App() {
@@ -190,11 +190,11 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
       <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-500 text-white rounded-xl shadow-lg shadow-orange-100">
-            <Dog size={20} strokeWidth={2.5} />
+          <div className="p-2 bg-orange-600 text-white rounded-xl shadow-lg shadow-orange-100">
+            <Dog size={22} strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="text-xs font-black uppercase tracking-widest text-slate-900">Watchdog</h1>
+            <h1 className="text-sm font-black uppercase tracking-widest text-slate-900">Barkr</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{piStatus === 'online' ? 'Verbonden' : 'Geen Verbinding'}</span>
@@ -245,12 +245,12 @@ export default function App() {
            </div>
         </div>
 
-        <div className="bg-orange-500 rounded-3xl p-6 text-white shadow-lg shadow-orange-100">
+        <div className="bg-orange-600 rounded-3xl p-6 text-white shadow-lg shadow-orange-100">
           <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 mb-2 flex items-center gap-2">
             <CalendarDays size={12} /> Bewakingsdagen
           </p>
           <h2 className="text-xl font-bold mb-1">{getDaySummary()}</h2>
-          <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">De Raspberry Pi bewaakt je tussen {settings.startTime} en {settings.endTime} uur.</p>
+          <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">Barkr bewaakt je elke dag op de geselecteerde tijden.</p>
         </div>
 
         <button 
@@ -291,7 +291,10 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
-             <h3 className="text-xl font-black uppercase italic text-slate-900">Instellingen</h3>
+             <div className="flex items-center gap-3">
+               <div className="p-2 bg-orange-600 text-white rounded-lg"><Dog size={18}/></div>
+               <h3 className="text-xl font-black uppercase italic text-slate-900">Barkr Setup</h3>
+             </div>
              <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="p-3 bg-slate-100 rounded-2xl"><X size={24}/></button>
           </div>
           
@@ -299,24 +302,34 @@ export default function App() {
             <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic"><Globe size={14}/> Cloudflare Tunnel URL</label>
-                {piStatus !== 'online' && <span className="text-[9px] text-rose-500 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Controleer Tunnel</span>}
+                <button 
+                  onClick={() => checkPiStatus()} 
+                  className={`flex items-center gap-1.5 text-[9px] font-bold px-3 py-1.5 rounded-lg border transition-all ${
+                    piStatus === 'online' 
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                      : 'bg-orange-500 text-white border-orange-600 shadow-sm'
+                  }`}
+                >
+                  <RefreshCw size={10} className={piStatus === 'checking' ? 'animate-spin' : ''} />
+                  {piStatus === 'online' ? 'Tunnel OK' : 'Check Tunnel'}
+                </button>
               </div>
               <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" placeholder="https://..." />
-              <p className="text-[9px] text-slate-400 leading-tight">Zorg dat deze URL overeenkomt met de tunnel op je Pi voor gebruik buiten WiFi.</p>
+              <p className="text-[9px] text-slate-400 leading-tight">Plak hier de URL van je Raspberry Pi. Dit is essentieel voor verbinding buiten WiFi.</p>
             </section>
 
             <section className="bg-white p-2 border-slate-100 space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2">
                 <CalendarDays size={14}/> Bewakingsdagen
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full gap-1 overflow-x-hidden">
                 {DAYS_SHORT.map((day, idx) => (
                   <button
                     key={day}
                     onClick={() => toggleDay(idx)}
-                    className={`flex-1 min-w-[45px] py-3 rounded-xl text-xs font-bold transition-all border ${
+                    className={`flex-1 min-w-0 py-3 rounded-xl text-[11px] font-black transition-all border ${
                       settings.activeDays.includes(idx) 
-                        ? 'bg-orange-500 text-white border-orange-600 shadow-md shadow-orange-100' 
+                        ? 'bg-orange-600 text-white border-orange-700 shadow-sm' 
                         : 'bg-slate-50 text-slate-400 border-slate-200'
                     }`}
                   >
@@ -351,7 +364,7 @@ export default function App() {
             <section className="space-y-4 pt-4 border-t">
                <div className="flex items-center justify-between px-1">
                   <h4 className="text-[10px] font-black uppercase text-orange-600 tracking-widest italic">Noodcontacten</h4>
-                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-500 rounded-xl text-white flex items-center justify-center shadow-md shadow-orange-100"><Plus size={20} /></button>
+                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-10 h-10 bg-orange-600 rounded-xl text-white flex items-center justify-center shadow-md shadow-orange-100"><Plus size={20} /></button>
                </div>
                {settings.contacts.map((c) => (
                   <div key={c.id} className="p-5 bg-slate-50 rounded-3xl border border-slate-200 space-y-3">
@@ -375,7 +388,7 @@ export default function App() {
         <div className="fixed inset-0 z-[120] bg-white p-8 overflow-y-auto animate-in slide-in-from-bottom-4">
            <div className="flex justify-between items-center mb-8 text-orange-600"><BookOpen size={24} /><button onClick={() => setShowManual(false)} className="p-3 bg-slate-100 rounded-2xl text-slate-900"><X size={24}/></button></div>
            <div className="space-y-6">
-              <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100 italic text-orange-950 leading-relaxed">"Watchdog is een passieve bewaker. Je hoeft de app alleen maar 1x per dag te openen binnen je venster. De rest gaat vanzelf."</section>
+              <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100 italic text-orange-950 leading-relaxed">"Barkr is jouw stille bewaker. Je hoeft de app alleen maar 1x per dag te openen binnen je venster. De rest gaat vanzelf."</section>
               <div className="space-y-4">
                 {[
                   { n: 1, t: "Automatische Check", d: "Open de app en je veiligheid is direct bevestigd op de server." },

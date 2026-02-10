@@ -1,8 +1,8 @@
 {
-  "name": "Watchdog",
+  "name": "Barkr",
   "description": "Geautomatiseerde welzijnsmonitor die waakt over je veiligheid.",
   "requestFramePermissions": [],
-  "short_name": "Watchdog",
+  "short_name": "Barkr",
   "theme_color": "#f97316",
   "background_color": "#f8fafc",
   "display": "standalone"
