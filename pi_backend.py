@@ -88,9 +88,6 @@ def handle_ping():
     user_data["vacationMode"] = data.get('vacationMode', False)
     user_data["activeDays"] = data.get('activeDays', [0,1,2,3,4,5,6])
     
-    # Als de gebruiker zich meldt, resetten we NIET direct het alarm van vandaag,
-    # dat gebeurt pas de volgende dag OF als we check_all draaien en zien dat hij er weer is.
-    
     db[user_name] = user_data
     save_db(db)
     
@@ -110,21 +107,17 @@ def run_security_check():
         print("║  (Geen gebruikers in database)                    ║")
 
     for name, info in db.items():
-        # Variabelen ophalen
         phone_display = info.get('phone', 'No Phone')
         last_ping = info.get("last_ping", 0)
         battery = info.get("last_battery", "?")
         
-        # 1. Reset dagstatus indien nodig
         if info.get("last_check_date") != today_str:
             info["alarm_sent_today"] = False
             info["last_check_date"] = today_str
 
-        # 2. Status Bepalen
         is_vacation = info.get("vacationMode")
         is_active_day = current_weekday in info.get("activeDays", [])
         
-        # Tijd conversie
         try:
             s_h, s_m = map(int, info.get("startTime", "07:00").split(':'))
             e_h, e_m = map(int, info.get("endTime", "09:00").split(':'))
@@ -134,7 +127,6 @@ def run_security_check():
             print(f"║ ⚠️  Foute tijdinstelling voor {name:<23} ║")
             continue
 
-        # LOGICA
         if is_vacation:
             print(f"║ 🌴 {name:<20} | Vakantiemodus          ║")
             continue
@@ -143,27 +135,20 @@ def run_security_check():
             print(f"║ 💤 {name:<20} | Vandaag geen bewaking  ║")
             continue
 
-        # Check: Heeft gebruiker zich gemeld NA de starttijd van vandaag?
         has_valid_ping = last_ping >= start_dt.timestamp()
 
-        # Situatie 1: We zitten NOG in het tijdslot
         if now < deadline_dt:
             if has_valid_ping:
                 print(f"║ ✅ {name:<20} | Aangemeld (Veilig)     ║")
             else:
                 time_left = int((deadline_dt - now).total_seconds() / 60)
                 print(f"║ ⏳ {name:<20} | Wachten... ({time_left} min)    ║")
-        
-        # Situatie 2: Deadline is VERSTREKEN
         else:
             if has_valid_ping:
                 print(f"║ ✅ {name:<20} | Veilig (Was op tijd)   ║")
             else:
-                # OEI: Niet gemeld en deadline voorbij!
                 if not info.get("alarm_sent_today"):
-                    # --- ALARM SLAAN ---
                     print(f"║ 🚨 {name:<20} | ALARM TRIGGERED!       ║")
-                    
                     contacts = info.get("contacts", [])
                     msg = (f"🚨 *WATCHDOG ALARM* 🚨\n\n"
                            f"Gebruiker: *{name}*\n"
@@ -182,9 +167,7 @@ def run_security_check():
                         info["alarm_sent_today"] = True
                     else:
                         print(f"║ ❌ {name:<20} | WhatsApp Fout!         ║")
-                
                 else:
-                    # Alarm is al verstuurd, maar hij is er nog steeds niet
                     print(f"║ ⚠️  {name:<20} | NOG STEEDS NIET GEMELD ║")
 
     print("╚═══════════════════════════════════════════════════╝")

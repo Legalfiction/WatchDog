@@ -18,13 +18,15 @@ import {
   BookOpen,
   CheckCircle2,
   ShieldCheck,
-  Phone
+  Phone,
+  CalendarDays
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog } from './types';
 
-const VERSION = '9.0.1';
+const VERSION = '9.2.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
-const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
+const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 export default function App() {
   const [showSettings, setShowSettings] = useState(false);
@@ -56,16 +58,19 @@ export default function App() {
     };
   });
 
+  const toggleDay = (dayIndex: number) => {
+    setSettings(prev => {
+      const activeDays = prev.activeDays.includes(dayIndex)
+        ? prev.activeDays.filter(d => d !== dayIndex)
+        : [...prev.activeDays, dayIndex].sort((a, b) => a - b);
+      return { ...prev, activeDays };
+    });
+  };
+
   const getDaySummary = () => {
     if (settings.activeDays.length === 7) return "Elke dag";
     if (settings.activeDays.length === 0) return "Geen actieve dagen";
-    return settings.activeDays.sort((a,b) => a-b).map(d => DAYS[d]).join(', ');
-  };
-
-  const isTodayActive = () => {
-    const jsDay = new Date().getDay(); 
-    const pyDay = (jsDay + 6) % 7; 
-    return settings.activeDays.includes(pyDay);
+    return settings.activeDays.map(d => DAYS_SHORT[d]).join(', ');
   };
 
   const updateHistory = (timeStr: string, batt: number | null) => {
@@ -145,20 +150,21 @@ export default function App() {
     if (!url) { setPiStatus('offline'); return; }
     if (!silent) setPiStatus('checking');
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      
       const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email.trim())}`, { 
         method: 'GET',
-        mode: 'cors'
+        mode: 'cors',
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (res.ok) setPiStatus('online');
       else setPiStatus('error');
-    } catch (err) { setPiStatus('offline'); }
+    } catch (err) { 
+      setPiStatus('offline'); 
+    }
   }, [getCleanUrl, settings.email]);
-
-  const shareActivation = (contact: EmergencyContact) => {
-    const botLink = `https://wa.me/34623789580?text=${encodeURIComponent("I allow callmebot to send me messages")}`;
-    const message = `Hoi ${contact.name}, ik gebruik de Watchdog app. Wil je op deze link klikken en 'verzend' drukken in WhatsApp? Dan kan het systeem je berichten sturen als er iets is: ${botLink}`;
-    window.open(`https://wa.me/${contact.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
-  };
 
   useEffect(() => {
     checkPiStatus();
@@ -239,10 +245,12 @@ export default function App() {
            </div>
         </div>
 
-        <div className="bg-orange-500 rounded-3xl p-6 text-white">
-          <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 mb-2">Schema</p>
+        <div className="bg-orange-500 rounded-3xl p-6 text-white shadow-lg shadow-orange-100">
+          <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 mb-2 flex items-center gap-2">
+            <CalendarDays size={12} /> Bewakingsdagen
+          </p>
           <h2 className="text-xl font-bold mb-1">{getDaySummary()}</h2>
-          <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">Watchdog controleert of je de app opent tussen {settings.startTime} en {settings.endTime}.</p>
+          <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">De Raspberry Pi bewaakt je tussen {settings.startTime} en {settings.endTime} uur.</p>
         </div>
 
         <button 
@@ -289,8 +297,33 @@ export default function App() {
           
           <div className="space-y-6 pb-20">
             <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
-              <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic"><Globe size={14}/> Cloudflare Tunnel URL</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic"><Globe size={14}/> Cloudflare Tunnel URL</label>
+                {piStatus !== 'online' && <span className="text-[9px] text-rose-500 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Controleer Tunnel</span>}
+              </div>
               <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" placeholder="https://..." />
+              <p className="text-[9px] text-slate-400 leading-tight">Zorg dat deze URL overeenkomt met de tunnel op je Pi voor gebruik buiten WiFi.</p>
+            </section>
+
+            <section className="bg-white p-2 border-slate-100 space-y-3">
+              <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2">
+                <CalendarDays size={14}/> Bewakingsdagen
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DAYS_SHORT.map((day, idx) => (
+                  <button
+                    key={day}
+                    onClick={() => toggleDay(idx)}
+                    className={`flex-1 min-w-[45px] py-3 rounded-xl text-xs font-bold transition-all border ${
+                      settings.activeDays.includes(idx) 
+                        ? 'bg-orange-500 text-white border-orange-600 shadow-md shadow-orange-100' 
+                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
             </section>
 
             <div className="grid grid-cols-1 gap-4">
@@ -328,7 +361,7 @@ export default function App() {
                     </div>
                     <div className="flex gap-2">
                       <input type="text" placeholder="Nummer" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="flex-1 bg-white border border-slate-200 rounded-xl p-3 text-sm" />
-                      <button onClick={() => shareActivation(c)} className="p-3 bg-emerald-500 text-white rounded-xl"><MessageCircle size={20} /></button>
+                      <button onClick={() => window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("I allow callmebot to send me messages")}`, '_blank')} className="p-3 bg-emerald-500 text-white rounded-xl"><MessageCircle size={20} /></button>
                     </div>
                     <input type="password" placeholder="CallMeBot API Key" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm" />
                   </div>
