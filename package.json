@@ -1,7 +1,7 @@
 {
   "name": "safeguard-watchdog",
   "private": true,
-  "version": "2.6.5",
+  "version": "9.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

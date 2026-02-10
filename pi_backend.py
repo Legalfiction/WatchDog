@@ -83,7 +83,7 @@ def handle_ping():
     user_data["last_battery"] = data.get('battery', '?')
     user_data["phone"] = format_phone(data.get('phone', '')) 
     user_data["startTime"] = data.get('startTime', '07:00')
-    user_data["endTime"] = data.get('endTime', '09:00')
+    user_data["endTime"] = data.get('endTime', '08:30')
     user_data["contacts"] = data.get('contacts', [])
     user_data["vacationMode"] = data.get('vacationMode', False)
     user_data["activeDays"] = data.get('activeDays', [0,1,2,3,4,5,6])
@@ -120,7 +120,7 @@ def run_security_check():
         
         try:
             s_h, s_m = map(int, info.get("startTime", "07:00").split(':'))
-            e_h, e_m = map(int, info.get("endTime", "09:00").split(':'))
+            e_h, e_m = map(int, info.get("endTime", "08:30").split(':'))
             start_dt = now.replace(hour=s_h, minute=s_m, second=0, microsecond=0)
             deadline_dt = now.replace(hour=e_h, minute=e_m, second=0, microsecond=0)
         except:
