@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Settings as SettingsIcon, 
@@ -20,12 +21,20 @@ import {
   ShieldCheck,
   Phone,
   CalendarDays,
-  Zap
+  Zap,
+  HelpCircle,
+  AlertTriangle,
+  Mail,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Calendar
 } from 'lucide-react';
-import { UserSettings, EmergencyContact, ActivityLog } from './types';
+import { UserSettings, EmergencyContact, ActivityLog, DaySchedule } from './types';
 
-const VERSION = '9.3.0';
+const VERSION = '9.5.0';
 const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
+const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 export default function App() {
@@ -47,6 +56,11 @@ export default function App() {
     const saved = localStorage.getItem('safeguard_settings');
     const parsed = saved ? JSON.parse(saved) : null;
     
+    const defaultSchedules: Record<number, DaySchedule> = {};
+    [0,1,2,3,4,5,6].forEach(d => {
+      defaultSchedules[d] = { startTime: parsed?.startTime || '07:00', endTime: parsed?.endTime || '08:30' };
+    });
+
     return { 
       email: parsed?.email || '', 
       myPhone: parsed?.myPhone || parsed?.phone || '',
@@ -54,7 +68,9 @@ export default function App() {
       endTime: parsed?.endTime || '08:30', 
       contacts: parsed?.contacts || [],
       vacationMode: parsed?.vacationMode || false,
-      activeDays: parsed?.activeDays || [0, 1, 2, 3, 4, 5, 6] 
+      activeDays: parsed?.activeDays || [0, 1, 2, 3, 4, 5, 6],
+      useCustomSchedule: parsed?.useCustomSchedule || false,
+      schedules: parsed?.schedules || defaultSchedules
     };
   });
 
@@ -65,6 +81,19 @@ export default function App() {
         : [...prev.activeDays, dayIndex].sort((a, b) => a - b);
       return { ...prev, activeDays };
     });
+  };
+
+  const updateDaySchedule = (dayIndex: number, field: keyof DaySchedule, value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      schedules: {
+        ...prev.schedules,
+        [dayIndex]: {
+          ...prev.schedules[dayIndex],
+          [field]: value
+        }
+      }
+    }));
   };
 
   const getDaySummary = () => {
@@ -112,14 +141,9 @@ export default function App() {
     const batt = await getBattery();
 
     const payload = {
+        ...settings,
         user: settings.email.trim(),
-        phone: settings.myPhone.trim(), 
-        battery: batt,
-        startTime: settings.startTime,
-        endTime: settings.endTime,
-        contacts: settings.contacts,
-        vacationMode: settings.vacationMode,
-        activeDays: settings.activeDays
+        battery: batt
     };
 
     try {
@@ -186,6 +210,11 @@ export default function App() {
     setTimeout(() => triggerCheckin(true), 200);
   };
 
+  const currentDayIndex = (new Date().getDay() + 6) % 7;
+  const currentDeadline = settings.useCustomSchedule 
+    ? settings.schedules[currentDayIndex]?.endTime 
+    : settings.endTime;
+
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
       <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -197,7 +226,9 @@ export default function App() {
             <h1 className="text-sm font-black uppercase tracking-widest text-slate-900">Barkr</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-1.5 h-1.5 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{piStatus === 'online' ? 'Verbonden' : 'Geen Verbinding'}</span>
+              <span className={`text-[9px] font-bold uppercase tracking-tight ${piStatus === 'online' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {piStatus === 'online' ? 'Barkr is waakzaam' : 'Barkr is niet waakzaam'}
+              </span>
             </div>
           </div>
         </div>
@@ -241,7 +272,7 @@ export default function App() {
 
            <div className="flex items-center gap-3 px-1">
               <Clock size={16} className="text-rose-500" />
-              <p className="text-[11px] font-bold text-slate-600">Deadline: <span className="text-rose-600 font-black">{settings.endTime} uur</span></p>
+              <p className="text-[11px] font-bold text-slate-600">Vandaag deadline: <span className="text-rose-600 font-black">{currentDeadline} uur</span></p>
            </div>
         </div>
 
@@ -250,7 +281,7 @@ export default function App() {
             <CalendarDays size={12} /> Bewakingsdagen
           </p>
           <h2 className="text-xl font-bold mb-1">{getDaySummary()}</h2>
-          <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">Barkr bewaakt je elke dag op de geselecteerde tijden.</p>
+          <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">Barkr bewaakt je op de geselecteerde dagen en tijden.</p>
         </div>
 
         <button 
@@ -315,14 +346,13 @@ export default function App() {
                 </button>
               </div>
               <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" placeholder="https://..." />
-              <p className="text-[9px] text-slate-400 leading-tight">Plak hier de URL van je Raspberry Pi. Dit is essentieel voor verbinding buiten WiFi.</p>
             </section>
 
-            <section className="bg-white p-2 border-slate-100 space-y-3">
+            <section className="bg-white p-2 space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2">
                 <CalendarDays size={14}/> Bewakingsdagen
               </label>
-              <div className="flex w-full gap-1 overflow-x-hidden">
+              <div className="flex w-full gap-1">
                 {DAYS_SHORT.map((day, idx) => (
                   <button
                     key={day}
@@ -339,6 +369,61 @@ export default function App() {
               </div>
             </section>
 
+            <section className="bg-white border border-slate-100 rounded-3xl p-5 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-900 italic">Slimme Planning</h4>
+                    <p className="text-[10px] text-slate-400">Verschillende tijden per dag instellen</p>
+                  </div>
+                  <button 
+                    onClick={() => setSettings(prev => ({ ...prev, useCustomSchedule: !prev.useCustomSchedule }))}
+                    className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.useCustomSchedule ? 'bg-orange-500' : 'bg-slate-200'}`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {!settings.useCustomSchedule ? (
+                  <div className="grid grid-cols-2 gap-4 pt-2 animate-in fade-in slide-in-from-top-1">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-slate-400 px-1 italic">Standaard Start</label>
+                      <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black uppercase text-rose-500 px-1 italic">Standaard Deadline</label>
+                      <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-rose-600" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-2 max-h-[400px] overflow-y-auto animate-in fade-in slide-in-from-top-2">
+                    {DAYS_FULL.map((dayName, idx) => (
+                      <div key={idx} className={`p-4 rounded-2xl border ${settings.activeDays.includes(idx) ? 'bg-orange-50/50 border-orange-100' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                           <Calendar size={12} className={settings.activeDays.includes(idx) ? 'text-orange-500' : 'text-slate-400'} />
+                           <span className="text-[11px] font-black uppercase text-slate-700 tracking-tight">{dayName}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input 
+                            type="time" 
+                            value={settings.schedules[idx]?.startTime || '07:00'} 
+                            onChange={e => updateDaySchedule(idx, 'startTime', e.target.value)} 
+                            className="p-2.5 bg-white border border-slate-200 rounded-lg text-xs font-bold" 
+                            disabled={!settings.activeDays.includes(idx)}
+                          />
+                          <input 
+                            type="time" 
+                            value={settings.schedules[idx]?.endTime || '08:30'} 
+                            onChange={e => updateDaySchedule(idx, 'endTime', e.target.value)} 
+                            className="p-2.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-rose-600" 
+                            disabled={!settings.activeDays.includes(idx)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </section>
+
             <div className="grid grid-cols-1 gap-4">
               <section className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Jouw Naam</label>
@@ -349,17 +434,6 @@ export default function App() {
                 <input type="text" placeholder="Bijv. 0612345678" value={settings.myPhone} onChange={e => setSettings({...settings, myPhone: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-sm" />
               </section>
             </div>
-
-            <section className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Start Venster</label>
-                <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-rose-500 px-1 italic">Deadline</label>
-                <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-bold text-rose-600" />
-              </div>
-            </section>
 
             <section className="space-y-4 pt-4 border-t">
                <div className="flex items-center justify-between px-1">
@@ -385,23 +459,138 @@ export default function App() {
       )}
 
       {showManual && (
-        <div className="fixed inset-0 z-[120] bg-white p-8 overflow-y-auto animate-in slide-in-from-bottom-4">
-           <div className="flex justify-between items-center mb-8 text-orange-600"><BookOpen size={24} /><button onClick={() => setShowManual(false)} className="p-3 bg-slate-100 rounded-2xl text-slate-900"><X size={24}/></button></div>
-           <div className="space-y-6">
-              <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100 italic text-orange-950 leading-relaxed">"Barkr is jouw stille bewaker. Je hoeft de app alleen maar 1x per dag te openen binnen je venster. De rest gaat vanzelf."</section>
-              <div className="space-y-4">
-                {[
-                  { n: 1, t: "Automatische Check", d: "Open de app en je veiligheid is direct bevestigd op de server." },
-                  { n: 2, t: "Stille Bewaking", d: "De Raspberry Pi houdt bij of je je hebt gemeld." },
-                  { n: 3, t: "Noodgeval", d: "Geen activiteit voor de deadline? Dan gaan er direct WhatsApp berichten naar je noodgecontacten." }
-                ].map(s => (
-                  <div key={s.n} className="flex gap-4 p-4 bg-white border border-slate-100 rounded-2xl">
-                     <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold">{s.n}</span>
-                     <div><p className="text-xs font-bold text-slate-900">{s.t}</p><p className="text-[10px] text-slate-500 mt-0.5">{s.d}</p></div>
-                  </div>
-                ))}
+        <div className="fixed inset-0 z-[120] bg-white flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom-4">
+           <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-600 text-white rounded-lg shadow-lg shadow-orange-100">
+                  <Dog size={20} />
+                </div>
+                <h2 className="text-xl font-black uppercase italic text-slate-900">Over Barkr</h2>
               </div>
-              <button onClick={() => setShowManual(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest">Begrepen</button>
+              <button onClick={() => setShowManual(false)} className="p-3 bg-slate-100 rounded-2xl text-slate-900"><X size={24}/></button>
+           </div>
+
+           <div className="space-y-10 pb-16">
+              <section className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
+                <h3 className="text-sm font-black uppercase text-orange-600 mb-3 flex items-center gap-2">
+                  <ShieldCheck size={18} /> De Waakhond die over je waakt
+                </h3>
+                <p className="text-sm text-orange-950 leading-relaxed italic mb-4">
+                  De naam <strong>Barkr</strong> is afgeleid van het Engelse 'to bark' (blaffen). Net als een trouwe viervoeter is deze applicatie ontworpen om over je veiligheid te waken.
+                </p>
+                <p className="text-xs text-orange-900 leading-relaxed">
+                  Een waakhond is stil zolang alles goed gaat. Maar als er onraad is — in dit geval als jij je niet tijdig meldt — dan "blaft" Barkr door direct een alarmsignaal te sturen naar je naasten. Zo ben je nooit ongemerkt in nood.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xs font-black uppercase text-slate-400 px-1 tracking-widest flex items-center gap-2">
+                  <BookOpen size={16} /> Wat doet Barkr precies?
+                </h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Barkr is een welzijnsmonitor. Het systeem controleert dagelijks of je actief bent binnen een door jou gekozen tijdvenster. 
+                  Zodra je de applicatie opent, ontvangt je eigen Raspberry Pi een 'hartslag'. Blijft deze hartslag uit na de gestelde deadline? 
+                  Dan wordt er automatisch een WhatsApp-bericht gestuurd naar je noodcontacten.
+                </p>
+              </section>
+
+              <section className="space-y-6">
+                <h3 className="text-xs font-black uppercase text-slate-400 px-1 tracking-widest flex items-center gap-2">
+                  <HelpCircle size={16} /> Uitgebreide Handleiding
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3">
+                    <div className="flex items-center gap-2 text-slate-900 font-bold">
+                      <Smartphone size={18} className="text-orange-500" /> Het Dashboard
+                    </div>
+                    <p className="text-xs text-slate-500 leading-normal">
+                      Dit is het hoofdscherm. Hier zie je direct of "Barkr waakzaam" is. De grote tijdstempel toont je laatste succesvolle aanmelding. 
+                      Je ziet ook je batterijpercentage; dit is cruciaal omdat Barkr dit meestuurt naar je contacten. Zo weten zij of je telefoon wellicht gewoon leeg is.
+                    </p>
+                  </div>
+
+                  <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3">
+                    <div className="flex items-center gap-2 text-slate-900 font-bold">
+                      <SettingsIcon size={18} className="text-slate-400" /> De Setup (Instellingen)
+                    </div>
+                    <ul className="text-xs text-slate-500 space-y-3">
+                      <li className="flex gap-2">
+                        <span className="font-bold text-slate-700 min-w-[80px]">Tunnel URL:</span> 
+                        De verbinding met jouw persoonlijke Raspberry Pi. Zonder deze URL kan de app geen gegevens opslaan.
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="font-bold text-slate-700 min-w-[80px]">Naam & Nr:</span> 
+                        Zodat je noodgecontacten in het WhatsApp-bericht precies zien over wie de melding gaat.
+                      </li>
+                      <li className="flex gap-2">
+                        <span className="font-bold text-slate-700 min-w-[80px]">Tijdvenster:</span> 
+                        Stel in vanaf wanneer je wakker bent en wanneer Barkr uiterlijk een teken van leven verwacht (de Deadline).
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3">
+                    <div className="flex items-center gap-2 text-slate-900 font-bold">
+                      <MessageCircle size={18} className="text-emerald-500" /> Noodcontacten
+                    </div>
+                    <p className="text-xs text-slate-500 leading-normal">
+                      Hier voer je de mensen in die gewaarschuwd moeten worden. We gebruiken de CallMeBot API. 
+                      Vergeet niet dat elk contact éénmalig toestemming moet geven aan de bot via de WhatsApp-knop!
+                    </p>
+                  </div>
+
+                  <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl space-y-3">
+                    <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                      <Zap size={18} className="text-emerald-600" /> Jouw Dagelijkse Rol
+                    </div>
+                    <p className="text-xs text-emerald-800 leading-normal font-medium">
+                      Vooralsnog is de techniek zo dat je de applicatie <strong>altijd éénmaal per dag moet openen</strong> binnen je gekozen tijdsvenster. 
+                      Zodra je de app opent en de groene status ziet, is je veiligheid voor die dag bevestigd. Verder hoef je niets te doen!
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-slate-900 p-6 rounded-3xl text-white">
+                <h3 className="text-xs font-black uppercase text-orange-400 mb-3 flex items-center gap-2">
+                  <RefreshCw size={16} /> De Toekomst
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed italic">
+                  We werken continu aan verbetering. In de nabije toekomst zal Barkr zo intelligent worden dat het volledig op de achtergrond draait. 
+                  Je hoeft de app dan niet meer handmatig te openen; Barkr zal zelfstandig detecteren of alles in orde is.
+                </p>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-xs font-black uppercase text-slate-400 px-1 tracking-widest flex items-center gap-2">
+                  <Mail size={16} /> Support & Contact
+                </h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <a href="https://www.barkr.nl" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl group transition-all hover:bg-white hover:border-orange-200">
+                    <div className="flex items-center gap-3">
+                      <Globe size={20} className="text-slate-400 group-hover:text-orange-500" />
+                      <span className="text-xs font-bold text-slate-700">www.barkr.nl</span>
+                    </div>
+                    <ExternalLink size={16} className="text-slate-300 group-hover:text-orange-500" />
+                  </a>
+                  <a href="mailto:info@barkr.nl" className="flex items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl group transition-all hover:bg-white hover:border-orange-200">
+                    <div className="flex items-center gap-3">
+                      <Mail size={20} className="text-slate-400 group-hover:text-orange-500" />
+                      <span className="text-xs font-bold text-slate-700">info@barkr.nl</span>
+                    </div>
+                    <ExternalLink size={16} className="text-slate-300 group-hover:text-orange-500" />
+                  </a>
+                </div>
+              </section>
+
+              <div className="pt-6 flex flex-col items-center gap-3">
+                 <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full">
+                    <Dog size={14} className="text-slate-400" />
+                    <p className="text-[10px] text-slate-400 font-mono font-bold tracking-tighter">Barkr SafeGuard v{VERSION}</p>
+                 </div>
+                 <button onClick={() => setShowManual(false)} className="w-full py-5 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-200 active:scale-95 transition-transform">Begrepen</button>
+              </div>
            </div>
         </div>
       )}
