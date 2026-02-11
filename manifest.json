@@ -1,15 +1,16 @@
 
 {
-  "name": "SafeGuard V4",
-  "short_name": "SafeGuard",
-  "id": "safeguard-v4-final",
-  "description": "Stille welzijnsmonitor voor Raspberry Pi",
-  "start_url": "/?mode=standalone_v4",
+  "name": "Barkr SafeGuard",
+  "short_name": "Barkr",
+  "id": "barkr-safeguard-v10",
+  "description": "Slimme welzijnsmonitor die over je veiligheid waakt via WhatsApp.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#020617",
-  "theme_color": "#4f46e5",
+  "background_color": "#f8fafc",
+  "theme_color": "#ea580c",
+  "categories": ["lifestyle", "security", "health"],
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/1099/1099680.png",
