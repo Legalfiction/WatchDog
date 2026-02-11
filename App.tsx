@@ -32,8 +32,8 @@ import {
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog, DaySchedule } from './types';
 
-const VERSION = '9.5.0';
-const DEFAULT_URL = 'https://inspector-basket-cause-favor.trycloudflare.com';
+const VERSION = '9.6.0';
+const DEFAULT_URL = 'https://barkr.nl';
 const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
@@ -49,7 +49,8 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
   
-  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('safeguard_server_url') || DEFAULT_URL);
+  // Hardcoded serverUrl, geen gebruiker invoer meer nodig
+  const serverUrl = DEFAULT_URL;
   const lastTriggerRef = useRef<number>(0);
   
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -123,19 +124,11 @@ export default function App() {
     return null;
   };
 
-  const getCleanUrl = useCallback((urlInput?: string) => {
-    let url = (urlInput || serverUrl).trim().replace(/\s/g, '');
-    if (!url) return '';
-    if (!url.startsWith('http')) url = `https://${url}`;
-    return url.replace(/\/$/, '');
-  }, [serverUrl]);
-
   const triggerCheckin = useCallback(async (force = false) => {
     const now = Date.now();
     if (!force && now - lastTriggerRef.current < 15000) return; 
 
-    const url = getCleanUrl();
-    if (!url || !settings.email || !settings.myPhone) return;
+    if (!serverUrl || !settings.email || !settings.myPhone) return;
 
     setIsProcessing(true);
     const batt = await getBattery();
@@ -147,7 +140,7 @@ export default function App() {
     };
 
     try {
-      const response = await fetch(`${url}/ping`, {
+      const response = await fetch(`${serverUrl}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -167,17 +160,16 @@ export default function App() {
     } finally { 
       setIsProcessing(false); 
     }
-  }, [settings, getCleanUrl]);
+  }, [settings, serverUrl]);
 
   const checkPiStatus = useCallback(async (silent = false) => {
-    const url = getCleanUrl();
-    if (!url) { setPiStatus('offline'); return; }
+    if (!serverUrl) { setPiStatus('offline'); return; }
     if (!silent) setPiStatus('checking');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       
-      const res = await fetch(`${url}/status?user=${encodeURIComponent(settings.email.trim())}`, { 
+      const res = await fetch(`${serverUrl}/status?user=${encodeURIComponent(settings.email.trim())}`, { 
         method: 'GET',
         mode: 'cors',
         signal: controller.signal
@@ -188,7 +180,7 @@ export default function App() {
     } catch (err) { 
       setPiStatus('offline'); 
     }
-  }, [getCleanUrl, settings.email]);
+  }, [serverUrl, settings.email]);
 
   useEffect(() => {
     checkPiStatus();
@@ -202,8 +194,7 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('safeguard_settings', JSON.stringify(settings));
-    localStorage.setItem('safeguard_server_url', serverUrl);
-  }, [settings, serverUrl]);
+  }, [settings]);
 
   const handleSettingsUpdate = (newSettings: UserSettings) => {
     setSettings(newSettings);
@@ -330,24 +321,6 @@ export default function App() {
           </div>
           
           <div className="space-y-6 pb-20">
-            <section className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 italic"><Globe size={14}/> Cloudflare Tunnel URL</label>
-                <button 
-                  onClick={() => checkPiStatus()} 
-                  className={`flex items-center gap-1.5 text-[9px] font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                    piStatus === 'online' 
-                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                      : 'bg-orange-500 text-white border-orange-600 shadow-sm'
-                  }`}
-                >
-                  <RefreshCw size={10} className={piStatus === 'checking' ? 'animate-spin' : ''} />
-                  {piStatus === 'online' ? 'Tunnel OK' : 'Check Tunnel'}
-                </button>
-              </div>
-              <input type="text" value={serverUrl} onChange={e => setServerUrl(e.target.value)} className="w-full p-4 bg-white border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" placeholder="https://..." />
-            </section>
-
             <section className="bg-white p-2 space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2">
                 <CalendarDays size={14}/> Bewakingsdagen
@@ -476,10 +449,10 @@ export default function App() {
                   <ShieldCheck size={18} /> De Waakhond die over je waakt
                 </h3>
                 <p className="text-sm text-orange-950 leading-relaxed italic mb-4">
-                  De naam <strong>Barkr</strong> is afgeleid van het Engelse 'to bark' (blaffen). Net als een trouwe viervoeter is deze applicatie ontworpen om over je veiligheid te waken.
+                  De naam <strong>Barkr</strong> is afgeleid van het Engelse 'to bark' (blaffen). Net als een trouwe viervoeter is deze applicatie ontworpen om over je veiligheid te waken en onraad te detecteren.
                 </p>
                 <p className="text-xs text-orange-900 leading-relaxed">
-                  Een waakhond is stil zolang alles goed gaat. Maar als er onraad is — in dit geval als jij je niet tijdig meldt — dan "blaft" Barkr door direct een alarmsignaal te sturen naar je naasten. Zo ben je nooit ongemerkt in nood.
+                  Een waakhond is stil zolang alles goed gaat. Maar als er onraad is — in dit geval als jij je niet tijdig meldt — dan "blaft" Barkr door direct een alarmsignaal via WhatsApp te sturen naar je naasten. Zo ben je nooit ongemerkt in nood.
                 </p>
               </section>
 
@@ -488,9 +461,9 @@ export default function App() {
                   <BookOpen size={16} /> Wat doet Barkr precies?
                 </h3>
                 <p className="text-sm text-slate-600 leading-relaxed">
-                  Barkr is een welzijnsmonitor. Het systeem controleert dagelijks of je actief bent binnen een door jou gekozen tijdvenster. 
-                  Zodra je de applicatie opent, ontvangt je eigen Raspberry Pi een 'hartslag'. Blijft deze hartslag uit na de gestelde deadline? 
-                  Dan wordt er automatisch een WhatsApp-bericht gestuurd naar je noodcontacten.
+                  Barkr is een geautomatiseerde welzijnsmonitor. In grote lijnen controleert het systeem dagelijks of je actief bent binnen een vooraf ingesteld tijdvenster. 
+                  Zodra je de applicatie opent, ontvangt onze server een 'hartslag'. Blijft deze hartslag uit na de gestelde deadline? 
+                  Dan wordt er automatisch een noodmelding verstuurd naar je vooraf ingestelde contacten.
                 </p>
               </section>
 
@@ -502,51 +475,43 @@ export default function App() {
                 <div className="space-y-4">
                   <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3">
                     <div className="flex items-center gap-2 text-slate-900 font-bold">
-                      <Smartphone size={18} className="text-orange-500" /> Het Dashboard
+                      <Smartphone size={18} className="text-orange-500" /> Dashboard & Schermen
                     </div>
                     <p className="text-xs text-slate-500 leading-normal">
-                      Dit is het hoofdscherm. Hier zie je direct of "Barkr waakzaam" is. De grote tijdstempel toont je laatste succesvolle aanmelding. 
-                      Je ziet ook je batterijpercentage; dit is cruciaal omdat Barkr dit meestuurt naar je contacten. Zo weten zij of je telefoon wellicht gewoon leeg is.
+                      <strong>Dashboard:</strong> Toont je huidige status. Groen betekent "waakzaam". De grote tijdstempel geeft aan hoe laat je vandaag voor het laatst succesvol bent ingecheckt. Ook zie je hier je batterijpercentage; dit is belangrijk omdat Barkr dit meestuurt in noodmeldingen zodat contacten weten of je mobiel simpelweg leeg is.
+                    </p>
+                    <p className="text-xs text-slate-500 leading-normal">
+                      <strong>Activiteit:</strong> Hieronder zie je de geschiedenis van je laatste aanmeldingen. Zo kun je zelf controleren of het systeem goed functioneert.
                     </p>
                   </div>
 
                   <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3">
                     <div className="flex items-center gap-2 text-slate-900 font-bold">
-                      <SettingsIcon size={18} className="text-slate-400" /> De Setup (Instellingen)
+                      <SettingsIcon size={18} className="text-slate-400" /> Waarom gegevens invoeren?
                     </div>
                     <ul className="text-xs text-slate-500 space-y-3">
                       <li className="flex gap-2">
-                        <span className="font-bold text-slate-700 min-w-[80px]">Tunnel URL:</span> 
-                        De verbinding met jouw persoonlijke Raspberry Pi. Zonder deze URL kan de app geen gegevens opslaan.
+                        <span className="font-bold text-slate-700 min-w-[100px]">Naam & Nummer:</span> 
+                        Deze zijn essentieel zodat we in de alarmmelding aan je contacten kunnen doorgeven wie er hulp nodig heeft.
                       </li>
                       <li className="flex gap-2">
-                        <span className="font-bold text-slate-700 min-w-[80px]">Naam & Nr:</span> 
-                        Zodat je noodgecontacten in het WhatsApp-bericht precies zien over wie de melding gaat.
+                        <span className="font-bold text-slate-700 min-w-[100px]">Planning:</span> 
+                        We moeten weten tussen welke tijden je gewoonlijk wakker bent, zodat we niet onnodig "blaffen" terwijl je nog slaapt.
                       </li>
                       <li className="flex gap-2">
-                        <span className="font-bold text-slate-700 min-w-[80px]">Tijdvenster:</span> 
-                        Stel in vanaf wanneer je wakker bent en wanneer Barkr uiterlijk een teken van leven verwacht (de Deadline).
+                        <span className="font-bold text-slate-700 min-w-[100px]">Contacten:</span> 
+                        Zonder noodcontacten kan Barkr niemand waarschuwen. De CallMeBot API key is nodig om veilig via WhatsApp te kunnen communiceren.
                       </li>
                     </ul>
                   </div>
 
-                  <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3">
-                    <div className="flex items-center gap-2 text-slate-900 font-bold">
-                      <MessageCircle size={18} className="text-emerald-500" /> Noodcontacten
-                    </div>
-                    <p className="text-xs text-slate-500 leading-normal">
-                      Hier voer je de mensen in die gewaarschuwd moeten worden. We gebruiken de CallMeBot API. 
-                      Vergeet niet dat elk contact éénmalig toestemming moet geven aan de bot via de WhatsApp-knop!
-                    </p>
-                  </div>
-
                   <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl space-y-3">
                     <div className="flex items-center gap-2 text-emerald-900 font-bold">
-                      <Zap size={18} className="text-emerald-600" /> Jouw Dagelijkse Rol
+                      <Zap size={18} className="text-emerald-600" /> Belangrijke Gebruiksregel
                     </div>
                     <p className="text-xs text-emerald-800 leading-normal font-medium">
                       Vooralsnog is de techniek zo dat je de applicatie <strong>altijd éénmaal per dag moet openen</strong> binnen je gekozen tijdsvenster. 
-                      Zodra je de app opent en de groene status ziet, is je veiligheid voor die dag bevestigd. Verder hoef je niets te doen!
+                      Zodra je de app opent en de melding "Barkr is waakzaam" ziet, is je veiligheid voor die dag bevestigd. Verder hoef je niets te doen!
                     </p>
                   </div>
                 </div>
@@ -557,17 +522,20 @@ export default function App() {
                   <RefreshCw size={16} /> De Toekomst
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed italic">
-                  We werken continu aan verbetering. In de nabije toekomst zal Barkr zo intelligent worden dat het volledig op de achtergrond draait. 
-                  Je hoeft de app dan niet meer handmatig te openen; Barkr zal zelfstandig detecteren of alles in orde is.
+                  In de nabije toekomst zal Barkr zo intelligent worden dat het volledig op de achtergrond draait. 
+                  Je hoeft de app dan niet meer handmatig te openen; Barkr zal zelfstandig detecteren of je actief bent geweest op je telefoon.
                 </p>
               </section>
 
               <section className="space-y-4">
                 <h3 className="text-xs font-black uppercase text-slate-400 px-1 tracking-widest flex items-center gap-2">
-                  <Mail size={16} /> Support & Contact
+                  <Mail size={16} /> Meer informatie & Support
                 </h3>
+                <p className="text-xs text-slate-500 px-1 leading-relaxed">
+                  Heb je vragen of wil je meer weten over hoe Barkr jouw veiligheid waarborgt? Kijk op onze website of stuur ons een bericht.
+                </p>
                 <div className="grid grid-cols-1 gap-3">
-                  <a href="https://www.barkr.nl" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl group transition-all hover:bg-white hover:border-orange-200">
+                  <a href="https://barkr.nl" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl group transition-all hover:bg-white hover:border-orange-200">
                     <div className="flex items-center gap-3">
                       <Globe size={20} className="text-slate-400 group-hover:text-orange-500" />
                       <span className="text-xs font-bold text-slate-700">www.barkr.nl</span>
@@ -589,7 +557,7 @@ export default function App() {
                     <Dog size={14} className="text-slate-400" />
                     <p className="text-[10px] text-slate-400 font-mono font-bold tracking-tighter">Barkr SafeGuard v{VERSION}</p>
                  </div>
-                 <button onClick={() => setShowManual(false)} className="w-full py-5 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-200 active:scale-95 transition-transform">Begrepen</button>
+                 <button onClick={() => setShowManual(false)} className="w-full py-5 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-200 active:scale-95 transition-transform">Ik heb het begrepen</button>
               </div>
            </div>
         </div>
