@@ -33,10 +33,10 @@ import {
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog, DaySchedule } from './types';
 
-// NIEUW: We importeren het plaatje direct uit dezelfde map
-import logo from './logo.png';
+// AANGEPAST: Geen import meer nodig, we verwijzen direct naar de public folder
+const LOGO_PATH = '/logo.png';
 
-const VERSION = '10.1.0';
+const VERSION = '10.1.1'; // Versie iets opgehoogd zodat je ziet dat het nieuw is
 const DEFAULT_URL = 'https://barkr.nl';
 const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -265,8 +265,8 @@ export default function App() {
       <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 overflow-hidden rounded-xl shadow-lg shadow-orange-100 flex items-center justify-center">
-            {/* AANGEPAST: Gebruik de geïmporteerde 'logo' variabele */}
-            <img src={logo} alt="Barkr Logo" className="w-full h-full object-cover" />
+            {/* AANGEPAST: Direct verwijzing naar public path */}
+            <img src={LOGO_PATH} alt="Barkr Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-sm font-black uppercase tracking-widest text-slate-900">Barkr</h1>
@@ -378,8 +378,8 @@ export default function App() {
           <div className="flex items-center justify-between mb-8">
              <div className="flex items-center gap-3">
                <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
-                 {/* AANGEPAST: Gebruik de geïmporteerde 'logo' variabele */}
-                 <img src={logo} alt="Barkr Logo" className="w-full h-full object-cover" />
+                 {/* AANGEPAST: Direct verwijzing naar public path */}
+                 <img src={LOGO_PATH} alt="Barkr Logo" className="w-full h-full object-cover" />
                </div>
                <h3 className="text-xl font-black uppercase italic text-slate-900">Configuratie</h3>
              </div>
@@ -494,4 +494,154 @@ export default function App() {
                     <div className="flex gap-3">
                       <div className="relative flex-1">
                         <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" />
-                        <input type="text" placeholder="Mobiel nummer" value={c.phone} onChange={e => handleSettingsUpdate({...settings, contacts: settings.contacts.
+                        <input type="text" placeholder="Mobiel nummer" value={c.phone} onChange={e => handleSettingsUpdate({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-10 text-sm font-medium outline-none" />
+                      </div>
+                      <button 
+                        onClick={() => window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("I allow callmebot to send me messages")}`, '_blank')} 
+                        className="p-3.5 bg-emerald-500 text-white rounded-2xl shadow-md shadow-emerald-100 hover:bg-emerald-600 active:scale-95 transition-all"
+                        title="Stuur activatiebericht"
+                      >
+                        <MessageCircle size={22} />
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <ShieldAlert size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" />
+                      <input type="password" placeholder="CallMeBot API Key" value={c.apiKey} onChange={e => handleSettingsUpdate({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-10 text-sm outline-none" />
+                    </div>
+                  </div>
+                ))}
+            </section>
+          </div>
+        </div>
+      )}
+
+      {showManual && (
+        <div className="fixed inset-0 z-[120] bg-white flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom-4">
+           <div className="flex justify-between items-center mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-lg shadow-orange-100">
+                  {/* AANGEPAST: Direct verwijzing naar public path */}
+                  <img src={LOGO_PATH} alt="Barkr Logo" className="w-full h-full object-cover" />
+                </div>
+                <h2 className="text-xl font-black uppercase italic text-slate-900">Over Barkr – Jouw Digitale Waakhond</h2>
+              </div>
+              <button onClick={() => setShowManual(false)} className="p-3 bg-slate-100 rounded-2xl text-slate-900 hover:bg-slate-200 transition-colors"><X size={24}/></button>
+           </div>
+
+           <div className="space-y-10 pb-20">
+              <section className="bg-orange-50 p-6 rounded-[2rem] border border-orange-100 relative overflow-hidden">
+                {/* AANGEPAST: Direct verwijzing naar public path */}
+                <img src={LOGO_PATH} alt="Barkr Background" className="absolute -bottom-8 -right-8 w-32 h-32 opacity-20 rotate-12 grayscale brightness-200" />
+                <p className="text-sm text-orange-950 leading-relaxed italic mb-4 font-medium">
+                  Welkom bij Barkr. Deze applicatie is ontworpen om een oogje in het zeil te houden wanneer jij dat zelf even niet kunt. 
+                </p>
+                <p className="text-xs text-orange-900 leading-relaxed">
+                  De naam Barkr is afgeleid van het Engelse "Barker" (blaffer) – zie het als een trouwe waakhond die alleen aanslaat ("blaft") als er iets mis lijkt te zijn.
+                </p>
+              </section>
+
+              <section className="space-y-6">
+                <h3 className="text-sm font-black uppercase text-orange-600 mb-3 flex items-center gap-2">
+                  🛡️ Hoe werkt Barkr?
+                </h3>
+                <div className="space-y-4">
+                  <div className="p-5 bg-white border border-slate-200 rounded-3xl space-y-3 shadow-sm">
+                    <p className="text-xs text-slate-700 leading-relaxed font-bold">
+                      Het principe is simpel maar effectief: Levensteken door activiteit.
+                    </p>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Barkr controleert of jij je telefoon hebt gebruikt binnen een door jou ingestelde tijdspanne (bijvoorbeeld tussen 07:00 en 08:30).
+                    </p>
+                    
+                    <div className="pt-2 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-6 h-6 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle2 size={14}/></div>
+                        <p className="text-xs text-slate-600 leading-relaxed"><span className="font-bold text-slate-900">Alles oké:</span> Als jij je telefoon ontgrendelt of gebruikt vóór de deadline, weet Barkr dat je wakker en actief bent. Het systeem reset zich voor de volgende dag.</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1 w-6 h-6 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0"><AlertTriangle size={14}/></div>
+                        <p className="text-xs text-slate-600 leading-relaxed"><span className="font-bold text-slate-900">Alarm:</span> Heb jij je telefoon ná de deadline nog steeds niet aangeraakt? Dan "blaft" Barkr: de applicatie stuurt automatisch een noodbericht via WhatsApp naar jouw ingestelde contactpersonen.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-6">
+                <h3 className="text-sm font-black uppercase text-orange-600 mb-3 flex items-center gap-2">
+                  ⚙️ Handleiding & Instellingen
+                </h3>
+                <p className="text-xs text-slate-500 px-1">
+                  Hieronder vind je uitleg over alle opties die je in het instellingenmenu (het tandwiel-icoon) en op het hoofdscherm vindt.
+                </p>
+                
+                <div className="space-y-4">
+                  {[
+                    {
+                      title: "1. Bewakingsdagen",
+                      desc: "Bovenin het menu zie je de dagen van de week (Ma t/m Zo). Selecteer hier de dagen waarop je wilt dat Barkr actief is. Dagen die oranje zijn, zijn actief. Op grijze dagen is de bewaking uitgeschakeld."
+                    },
+                    {
+                      title: "2. Planning: Standaard vs. Slim",
+                      desc: "Je kunt kiezen hoe strikt de tijden moeten zijn:\n\n• Standaard: Zet de schakelaar 'Slimme Planning' uit. Je stelt één Start Venster en één Deadline in die voor alle geselecteerde dagen geldt.\n\n• Slimme Planning: Zet de schakelaar aan. Er klapt nu een menu open per dag. Hiermee kun je bijvoorbeeld instellen dat je doordeweeks om 08:30 actief moet zijn, maar in het weekend pas om 10:00."
+                    },
+                    {
+                      title: "3. Jouw Gegevens",
+                      desc: "Vul bij Jouw Naam en Mijn Mobiel je eigen gegevens in. Het nummer wordt gebruikt om te verifiëren dat jij het bent."
+                    },
+                    {
+                      title: "4. Noodcontacten & WhatsApp Koppeling",
+                      desc: "Dit is een cruciale stap om de alarmering te laten werken.\n\n• Klik op de grote oranje plus (+) om een contact toe te voegen.\n• Vul de naam en het mobiele nummer van je contactpersoon in (bijv. partner, kind of buurman).\n• API Key (CallMeBot): Om berichten via WhatsApp te kunnen versturen, maakt Barkr gebruik van een veilige gateway.\n\nInstructie: Jouw noodcontact moet eenmalig een pincode (API Key) aanvragen. Vraag je contactpersoon deze code naar jou te sturen. Vul deze code in het veld CallMeBot API Key in. Klik op het groene WhatsApp-icoontje om te testen of de verbinding werkt."
+                    },
+                    {
+                      title: "5. Vakantie Modus",
+                      desc: "Ga je op vakantie of wilt je even geen bewaking? Op het hoofdscherm vind je de knop Vakantie Modus. Zet de schakelaar om en Barkr pauzeert alle activiteiten totdat jij hem weer uitzet. Je hoeft je instellingen dus niet te wissen."
+                    },
+                    {
+                      title: "6. Status & Activiteit",
+                      desc: "Op het dashboard zie je direct de status:\n\n• Systeem Status: Geeft aan of de monitoring actief is ('Wachten' of 'Gedetecteerd').\n• Vandaag Deadline: De tijd waarop je uiterlijk je telefoon gebruikt moet hebben.\n• Activiteit: Onderaan zie je een logboek van de laatste detecties, zodat je kunt terugzien wanneer Barkr activiteit heeft waargenomen."
+                    }
+                  ].map((item, i) => (
+                    <div key={i} className="p-5 bg-slate-50 border border-slate-200 rounded-3xl space-y-2">
+                      <p className="text-xs font-black text-slate-900 uppercase italic">{item.title}</p>
+                      <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-4">
+                <h3 className="text-sm font-black uppercase text-orange-600 mb-3 flex items-center gap-2">
+                  ℹ️ Meer informatie
+                </h3>
+                <p className="text-xs text-slate-500 px-1 leading-relaxed">
+                  Heb je vragen, lukt het instellen niet of wil je meer weten over de privacy?
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                  <a href="https://barkr.nl" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-5 bg-white border border-slate-200 rounded-2xl group hover:border-orange-200 transition-all">
+                    <div className="flex items-center gap-3">
+                      <Globe size={20} className="text-slate-400 group-hover:text-orange-500" />
+                      <span className="text-xs font-bold text-slate-700">Bezoek onze website: www.barkr.nl</span>
+                    </div>
+                    <ExternalLink size={16} className="text-slate-300" />
+                  </a>
+                  <a href="mailto:info@barkr.nl" className="flex items-center justify-between p-5 bg-white border border-slate-200 rounded-2xl group hover:border-orange-200 transition-all">
+                    <div className="flex items-center gap-3">
+                      <Mail size={20} className="text-slate-400 group-hover:text-orange-500" />
+                      <span className="text-xs font-bold text-slate-700">Stuur ons een e-mail: info@barkr.nl</span>
+                    </div>
+                    <ExternalLink size={16} className="text-slate-300" />
+                  </a>
+                </div>
+              </section>
+
+              <div className="pt-4 flex flex-col items-center gap-4">
+                 <button onClick={() => setShowManual(false)} className="w-full py-5 bg-slate-900 text-white rounded-[1.5rem] text-xs font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all">Ik heb het begrepen</button>
+                 <p className="text-[10px] text-slate-400 font-mono font-bold">SafeGuard Protocol v{VERSION}</p>
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+}
