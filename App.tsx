@@ -38,6 +38,7 @@ const VERSION = '10.1.0';
 const DEFAULT_URL = 'https://barkr.nl';
 const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+const LOGO_PATH = '/logo.png';
 
 export default function App() {
   const [showSettings, setShowSettings] = useState(false);
@@ -56,7 +57,6 @@ export default function App() {
   const initialFetchDone = useRef(false);
   
   const [settings, setSettings] = useState<UserSettings>(() => {
-    // Fallback naar localStorage bij eerste render, maar server überschrijft dit direct
     const saved = localStorage.getItem('safeguard_settings');
     const parsed = saved ? JSON.parse(saved) : null;
     
@@ -78,7 +78,6 @@ export default function App() {
     };
   });
 
-  // --- SERVER SYNC LOGIC ---
   const fetchSettingsFromServer = useCallback(async () => {
     try {
       const phone = settings.myPhone || localStorage.getItem('last_known_phone');
@@ -90,7 +89,6 @@ export default function App() {
           setSettings(prev => ({
             ...prev,
             ...serverData,
-            // Zorg dat we types respecteren
             activeDays: Array.isArray(serverData.activeDays) ? serverData.activeDays : prev.activeDays,
             contacts: Array.isArray(serverData.contacts) ? serverData.contacts : prev.contacts,
             schedules: serverData.schedules || prev.schedules
@@ -187,7 +185,7 @@ export default function App() {
         ...settings,
         user: settings.email.trim(),
         battery: batt,
-        phone: settings.myPhone // Consistent met backend verwachting
+        phone: settings.myPhone
     };
 
     try {
@@ -232,7 +230,6 @@ export default function App() {
     }
   }, [serverUrl, settings.email]);
 
-  // Initial load van server
   useEffect(() => {
     fetchSettingsFromServer();
   }, [fetchSettingsFromServer]);
@@ -266,8 +263,8 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
       <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-600 text-white rounded-xl shadow-lg shadow-orange-100">
-            <Dog size={22} strokeWidth={2.5} />
+          <div className="w-10 h-10 overflow-hidden rounded-xl shadow-lg shadow-orange-100 flex items-center justify-center">
+            <img src={LOGO_PATH} alt="Barkr Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-sm font-black uppercase tracking-widest text-slate-900">Barkr</h1>
@@ -378,7 +375,9 @@ export default function App() {
         <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
              <div className="flex items-center gap-3">
-               <div className="p-2 bg-orange-600 text-white rounded-lg"><Dog size={18}/></div>
+               <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
+                 <img src={LOGO_PATH} alt="Barkr Logo" className="w-full h-full object-cover" />
+               </div>
                <h3 className="text-xl font-black uppercase italic text-slate-900">Configuratie</h3>
              </div>
              <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="p-3 bg-slate-100 rounded-2xl"><X size={24}/></button>
@@ -517,8 +516,8 @@ export default function App() {
         <div className="fixed inset-0 z-[120] bg-white flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom-4">
            <div className="flex justify-between items-center mb-8">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-600 text-white rounded-lg shadow-lg shadow-orange-100">
-                  <Dog size={20} />
+                <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-lg shadow-orange-100">
+                  <img src={LOGO_PATH} alt="Barkr Logo" className="w-full h-full object-cover" />
                 </div>
                 <h2 className="text-xl font-black uppercase italic text-slate-900">Over Barkr – Jouw Digitale Waakhond</h2>
               </div>
@@ -527,7 +526,7 @@ export default function App() {
 
            <div className="space-y-10 pb-20">
               <section className="bg-orange-50 p-6 rounded-[2rem] border border-orange-100 relative overflow-hidden">
-                <Dog size={120} className="absolute -bottom-8 -right-8 text-orange-200 opacity-20 rotate-12" />
+                <img src={LOGO_PATH} alt="Barkr Background" className="absolute -bottom-8 -right-8 w-32 h-32 opacity-20 rotate-12 grayscale brightness-200" />
                 <p className="text-sm text-orange-950 leading-relaxed italic mb-4 font-medium">
                   Welkom bij Barkr. Deze applicatie is ontworpen om een oogje in het zeil te houden wanneer jij dat zelf even niet kunt. 
                 </p>
