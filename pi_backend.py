@@ -13,6 +13,7 @@ CORS(app)
 
 # --- CONFIGURATIE ---
 DATA_FILE = "safeguard_users.json"
+SETTINGS_FILE = "barkr_settings.json"
 CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
 
 # Logging stil houden voor schoon dashboard, behalve echte fouten
@@ -86,6 +87,61 @@ def print_row(icon, name, status, width=BOX_WIDTH):
 def get_status():
     """Simpele check of de server leeft"""
     return jsonify({"status": "online", "server_time": datetime.now().strftime("%H:%M:%S")})
+
+@app.route('/get_settings', methods=['GET'])
+def get_settings():
+    """Haalt de opgeslagen instellingen op voor de client"""
+    phone = request.args.get('phone')
+    db = load_db()
+    
+    # Als er een specifiek nummer wordt gevraagd, zoek die
+    if phone:
+        formatted_phone = format_phone(phone)
+        for name, info in db.items():
+            if format_phone(info.get('phone')) == formatted_phone:
+                return jsonify(info)
+    
+    # Geen nummer of niet gevonden? Geef de meest recente gebruiker terug (voor stabiliteit bij cache clear)
+    if db:
+        # Sorteer op last_ping om de meest actieve te pakken
+        latest_user = max(db.values(), key=lambda x: x.get('last_ping', 0))
+        return jsonify(latest_user)
+        
+    return jsonify({}), 404
+
+@app.route('/save_settings', methods=['POST'])
+def save_settings():
+    """Slaat instellingen expliciet op in de database"""
+    data = request.json
+    name = data.get('email', 'Onbekend').strip()
+    phone = format_phone(data.get('myPhone', ''))
+    
+    if not phone:
+        return jsonify({"status": "error", "message": "Telefoonnummer verplicht"}), 400
+        
+    db = load_db()
+    target_key = None
+    for db_name, db_info in db.items():
+        if format_phone(db_info.get('phone')) == phone:
+            target_key = db_name
+            break
+    
+    if not target_key:
+        target_key = name
+        
+    user_data = db.get(target_key, {})
+    # Update velden
+    keys_to_save = ['email', 'myPhone', 'startTime', 'endTime', 'contacts', 'vacationMode', 'activeDays', 'useCustomSchedule', 'schedules']
+    for k in keys_to_save:
+        if k in data:
+            user_data[k] = data[k]
+    
+    # Ook even de 'phone' key consistent houden met de ping logic
+    user_data['phone'] = phone
+            
+    db[target_key] = user_data
+    save_db(db)
+    return jsonify({"status": "success", "message": "Settings opgeslagen op Pi"})
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():

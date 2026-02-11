@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { UserSettings, EmergencyContact, ActivityLog, DaySchedule } from './types';
 
-const VERSION = '10.0.0';
+const VERSION = '10.1.0';
 const DEFAULT_URL = 'https://barkr.nl';
 const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -53,8 +53,10 @@ export default function App() {
   
   const serverUrl = DEFAULT_URL;
   const lastTriggerRef = useRef<number>(0);
+  const initialFetchDone = useRef(false);
   
   const [settings, setSettings] = useState<UserSettings>(() => {
+    // Fallback naar localStorage bij eerste render, maar server überschrijft dit direct
     const saved = localStorage.getItem('safeguard_settings');
     const parsed = saved ? JSON.parse(saved) : null;
     
@@ -76,26 +78,73 @@ export default function App() {
     };
   });
 
+  // --- SERVER SYNC LOGIC ---
+  const fetchSettingsFromServer = useCallback(async () => {
+    try {
+      const phone = settings.myPhone || localStorage.getItem('last_known_phone');
+      const url = `${serverUrl}/get_settings${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const serverData = await res.json();
+        if (serverData && serverData.myPhone) {
+          setSettings(prev => ({
+            ...prev,
+            ...serverData,
+            // Zorg dat we types respecteren
+            activeDays: Array.isArray(serverData.activeDays) ? serverData.activeDays : prev.activeDays,
+            contacts: Array.isArray(serverData.contacts) ? serverData.contacts : prev.contacts,
+            schedules: serverData.schedules || prev.schedules
+          }));
+          initialFetchDone.current = true;
+          setPiStatus('online');
+        }
+      }
+    } catch (e) {
+      console.error("Kon settings niet ophalen:", e);
+      setPiStatus('offline');
+    }
+  }, [serverUrl, settings.myPhone]);
+
+  const saveSettingsToServer = useCallback(async (currentSettings: UserSettings) => {
+    if (!currentSettings.myPhone) return;
+    try {
+      await fetch(`${serverUrl}/save_settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentSettings)
+      });
+      localStorage.setItem('last_known_phone', currentSettings.myPhone);
+    } catch (e) {
+      console.error("Kon settings niet opslaan op server:", e);
+    }
+  }, [serverUrl]);
+
   const toggleDay = (dayIndex: number) => {
     setSettings(prev => {
       const activeDays = prev.activeDays.includes(dayIndex)
         ? prev.activeDays.filter(d => d !== dayIndex)
         : [...prev.activeDays, dayIndex].sort((a, b) => a - b);
-      return { ...prev, activeDays };
+      const newSettings = { ...prev, activeDays };
+      saveSettingsToServer(newSettings);
+      return newSettings;
     });
   };
 
   const updateDaySchedule = (dayIndex: number, field: keyof DaySchedule, value: string) => {
-    setSettings(prev => ({
-      ...prev,
-      schedules: {
-        ...prev.schedules,
-        [dayIndex]: {
-          ...prev.schedules[dayIndex],
-          [field]: value
+    setSettings(prev => {
+      const newSettings = {
+        ...prev,
+        schedules: {
+          ...prev.schedules,
+          [dayIndex]: {
+            ...prev.schedules[dayIndex],
+            [field]: value
+          }
         }
-      }
-    }));
+      };
+      saveSettingsToServer(newSettings);
+      return newSettings;
+    });
   };
 
   const getDaySummary = () => {
@@ -137,7 +186,8 @@ export default function App() {
     const payload = {
         ...settings,
         user: settings.email.trim(),
-        battery: batt
+        battery: batt,
+        phone: settings.myPhone // Consistent met backend verwachting
     };
 
     try {
@@ -169,7 +219,7 @@ export default function App() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       
-      const res = await fetch(`${serverUrl}/status?user=${encodeURIComponent(settings.email.trim())}`, { 
+      const res = await fetch(`${serverUrl}/status?user=${encodeURIComponent(settings.email.trim() || 'check')}`, { 
         method: 'GET',
         mode: 'cors',
         signal: controller.signal
@@ -181,6 +231,11 @@ export default function App() {
       setPiStatus('offline'); 
     }
   }, [serverUrl, settings.email]);
+
+  // Initial load van server
+  useEffect(() => {
+    fetchSettingsFromServer();
+  }, [fetchSettingsFromServer]);
 
   useEffect(() => {
     checkPiStatus();
@@ -198,6 +253,7 @@ export default function App() {
 
   const handleSettingsUpdate = (newSettings: UserSettings) => {
     setSettings(newSettings);
+    saveSettingsToServer(newSettings);
     setTimeout(() => triggerCheckin(true), 200);
   };
 
@@ -357,7 +413,7 @@ export default function App() {
                     <p className="text-[10px] text-slate-400">Instellingen per dag variëren</p>
                   </div>
                   <button 
-                    onClick={() => setSettings(prev => ({ ...prev, useCustomSchedule: !prev.useCustomSchedule }))}
+                    onClick={() => handleSettingsUpdate({ ...settings, useCustomSchedule: !settings.useCustomSchedule })}
                     className={`w-12 h-6 rounded-full p-1 transition-colors ${settings.useCustomSchedule ? 'bg-orange-500' : 'bg-slate-200'}`}
                   >
                     <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${settings.useCustomSchedule ? 'translate-x-6' : 'translate-x-0'}`} />
@@ -368,11 +424,11 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1">
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase text-slate-400 px-1 italic">Start Venster</label>
-                      <input type="time" value={settings.startTime} onChange={e => setSettings({...settings, startTime: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:border-orange-500 transition-colors" />
+                      <input type="time" value={settings.startTime} onChange={e => handleSettingsUpdate({...settings, startTime: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm outline-none focus:border-orange-500 transition-colors" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black uppercase text-rose-500 px-1 italic">Deadline</label>
-                      <input type="time" value={settings.endTime} onChange={e => setSettings({...settings, endTime: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm text-rose-600 outline-none focus:border-rose-500 transition-colors" />
+                      <input type="time" value={settings.endTime} onChange={e => handleSettingsUpdate({...settings, endTime: e.target.value})} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm text-rose-600 outline-none focus:border-rose-500 transition-colors" />
                     </div>
                   </div>
                 ) : (
@@ -411,32 +467,32 @@ export default function App() {
             <div className="space-y-5">
               <section className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Jouw Naam</label>
-                <input type="text" placeholder="Naam voor meldingen" value={settings.email} onChange={e => setSettings({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:border-orange-500 transition-colors" />
+                <input type="text" placeholder="Naam voor meldingen" value={settings.email} onChange={e => handleSettingsUpdate({...settings, email: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:border-orange-500 transition-colors" />
               </section>
               <section className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Mijn Mobiel (Bewaakt Nummer)</label>
-                <input type="text" placeholder="Bijv. 0612345678" value={settings.myPhone} onChange={e => setSettings({...settings, myPhone: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-sm outline-none focus:border-orange-500 transition-colors" />
+                <input type="text" placeholder="Bijv. 0612345678" value={settings.myPhone} onChange={e => handleSettingsUpdate({...settings, myPhone: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-mono text-sm outline-none focus:border-orange-500 transition-colors" />
               </section>
             </div>
 
             <section className="space-y-5 pt-6 border-t border-slate-100">
                <div className="flex items-center justify-between px-1">
                   <h4 className="text-[10px] font-black uppercase text-orange-600 tracking-widest italic">Noodcontacten</h4>
-                  <button onClick={() => setSettings(prev => ({ ...prev, contacts: [...prev.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] }))} className="w-11 h-11 bg-orange-600 rounded-2xl text-white flex items-center justify-center shadow-lg shadow-orange-100 active:scale-90 transition-transform"><Plus size={22} /></button>
+                  <button onClick={() => handleSettingsUpdate({ ...settings, contacts: [...settings.contacts, { id: Math.random().toString(36).substr(2, 9), name: '', phone: '', apiKey: '' }] })} className="w-11 h-11 bg-orange-600 rounded-2xl text-white flex items-center justify-center shadow-lg shadow-orange-100 active:scale-90 transition-transform"><Plus size={22} /></button>
                </div>
                {settings.contacts.map((c) => (
                   <div key={c.id} className="p-6 bg-slate-50 rounded-[2.5rem] border border-slate-200 space-y-4 animate-in zoom-in-95 duration-200">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <Fingerprint size={16} className="text-slate-300" />
-                        <input type="text" placeholder="Naam contact" value={c.name} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
+                        <input type="text" placeholder="Naam contact" value={c.name} onChange={e => handleSettingsUpdate({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, name: e.target.value} : x)})} className="bg-transparent font-bold text-slate-900 outline-none w-full" />
                       </div>
-                      <button onClick={() => setSettings(prev => ({ ...prev, contacts: prev.contacts.filter(x => x.id !== c.id) }))} className="text-rose-400 p-2 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={20} /></button>
+                      <button onClick={() => handleSettingsUpdate({ ...settings, contacts: settings.contacts.filter(x => x.id !== c.id) })} className="text-rose-400 p-2 hover:bg-rose-50 rounded-xl transition-colors"><Trash2 size={20} /></button>
                     </div>
                     <div className="flex gap-3">
                       <div className="relative flex-1">
                         <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" />
-                        <input type="text" placeholder="Mobiel nummer" value={c.phone} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-10 text-sm font-medium outline-none" />
+                        <input type="text" placeholder="Mobiel nummer" value={c.phone} onChange={e => handleSettingsUpdate({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, phone: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-10 text-sm font-medium outline-none" />
                       </div>
                       <button 
                         onClick={() => window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("I allow callmebot to send me messages")}`, '_blank')} 
@@ -448,7 +504,7 @@ export default function App() {
                     </div>
                     <div className="relative">
                       <ShieldAlert size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-300" />
-                      <input type="password" placeholder="CallMeBot API Key" value={c.apiKey} onChange={e => setSettings({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-10 text-sm outline-none" />
+                      <input type="password" placeholder="CallMeBot API Key" value={c.apiKey} onChange={e => handleSettingsUpdate({...settings, contacts: settings.contacts.map(x => x.id === c.id ? {...x, apiKey: e.target.value} : x)})} className="w-full bg-white border border-slate-200 rounded-2xl p-3.5 pl-10 text-sm outline-none" />
                     </div>
                   </div>
                 ))}
