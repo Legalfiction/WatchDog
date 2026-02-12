@@ -14,25 +14,18 @@ CORS(app)
 # --- CONFIGURATIE ---
 DATA_FILE = "safeguard_users.json"
 TEXTMEBOT_URL = "http://api.textmebot.com/send.php"
-
-# De gevraagde placeholder API-key
 TEXTMEBOT_APIKEY = "ojtHErzSmwgW" 
 
-# Logging stil houden voor een schoon dashboard
+# Logging stil houden
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
-
-# Vaste breedte voor de visualisatie kaders in de terminal
-BOX_WIDTH = 65
-
-# --- HELPER FUNCTIES ---
 
 def load_db():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r') as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except:
             return {}
     return {}
 
@@ -40,199 +33,125 @@ def save_db(db):
     try:
         with open(DATA_FILE, 'w') as f:
             json.dump(db, f, indent=4)
-    except IOError:
+    except:
         pass
 
 def format_phone(phone):
-    """Zorgt voor een consistent 00316... formaat voor TextMeBot."""
+    """
+    Normaliseert telefoonnummers streng naar het +316... formaat
+    """
     if not phone: return ""
-    p = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '').strip()
+    p = str(phone).replace(' ', '').replace('-', '').strip()
     
-    # Als het start met 06... (NL standaard)
-    if p.startswith('06') and len(p) == 10:
-        return '0031' + p[1:]
+    # 0031 -> +31
+    if p.startswith('0031'): p = '+' + p[2:]
     
-    # Als het al 316... is
-    if p.startswith('316') and len(p) == 11:
-        return '00' + p
-        
-    # Als het al correct is
-    if p.startswith('00316') and len(p) == 13:
-        return p
-        
+    # Als het al met + begint, aannemen dat het goed is
+    if p.startswith('+'): return p
+    
+    # 06 -> +316
+    if p.startswith('06') and len(p) == 10: return '+316' + p[2:]
+    
+    # 316 -> +316
+    if p.startswith('316') and len(p) == 11: return '+' + p
+    
     return p
 
-def find_user_key_by_phone(db, phone):
-    """Zoekt een bestaande entry op basis van telefoonnummer (myPhone)."""
-    target = format_phone(phone)
-    if not target: return None
-    for key, info in db.items():
-        if format_phone(info.get('myPhone')) == target or format_phone(info.get('phone')) == target:
-            return key
-    return None
-
 def send_whatsapp(phone, text):
-    """
-    Verstuurt WhatsApp via TextMeBot. 
-    """
     p = format_phone(phone)
     if not p: return False
-        
-    params = {
-        "recipient": p,
-        "apikey": TEXTMEBOT_APIKEY,
-        "text": text
-    }
-    
+    params = {"recipient": p, "apikey": TEXTMEBOT_APIKEY, "text": text}
     try:
-        r = requests.get(TEXTMEBOT_URL, params=params, timeout=15)
+        r = requests.get(TEXTMEBOT_URL, params=params, timeout=10)
         return r.status_code == 200
     except Exception as e:
-        print(f"   >>> FOUT BIJ VERZENDEN: {e}")
+        print(f"WhatsApp Fout: {e}")
         return False
-
-def print_row(icon, name, status, width=BOX_WIDTH):
-    display_name = (name[:18] + '..') if len(name) > 18 else name
-    left_part = f"{icon} {display_name}"
-    right_part = f"| {status}"
-    inner_text = f"{left_part:<24} {right_part}"
-    target_len = width - 4
-    if len(inner_text) > target_len: inner_text = inner_text[:target_len]
-    print(f"║ {inner_text:<{target_len}} ║")
-
-# --- API ENDPOINTS ---
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    return jsonify({"status": "online", "version": "11.0.1"})
+    return jsonify({"status": "online", "version": "11.3.0"})
+
+@app.route('/test_contact', methods=['POST'])
+def test_contact():
+    data = request.json
+    phone = format_phone(data.get('phone'))
+    name = data.get('name', 'Contact')
+    if not phone: return jsonify({"status": "error"}), 400
+    msg = f"🔔 *BARKR TESTBERICHT*\n\nDit is een test voor *{name}*. Uw Barkr waakhond is correct gekoppeld op dit nummer: {phone}"
+    if send_whatsapp(phone, msg):
+        return jsonify({"status": "success"})
+    return jsonify({"status": "error"}), 500
 
 @app.route('/save_settings', methods=['POST'])
 def save_settings():
-    """Slaat instellingen op en gebruikt telefoonnummer als unieke ID."""
     data = request.json
     phone = format_phone(data.get('myPhone', ''))
-    name = data.get('email', 'Onbekend').strip()
-    
-    if not phone:
-        return jsonify({"status": "error", "message": "Telefoonnummer verplicht"}), 400
-        
+    if not phone: return jsonify({"status": "error"}), 400
     db = load_db()
-    user_key = find_user_key_by_phone(db, phone)
-    
-    if not user_key:
-        user_key = name if name and name not in db else f"User_{phone[-4:]}"
-        db[user_key] = {}
-        print(f"🆕 Nieuwe registratie: {user_key} ({phone})")
-
-    keys_to_sync = ['email', 'myPhone', 'startTime', 'endTime', 'contacts', 'vacationMode', 'activeDays', 'useCustomSchedule', 'schedules']
-    for k in keys_to_sync:
-        if k in data:
-            if k == 'myPhone':
-                db[user_key][k] = format_phone(data[k])
-            elif k == 'contacts':
-                db[user_key][k] = [{**c, 'phone': format_phone(c['phone'])} for c in data[k]]
-            else:
-                db[user_key][k] = data[k]
-    
-    db[user_key]['myPhone'] = phone
-    db[user_key]['phone'] = phone 
+    data['myPhone'] = phone
+    db[phone] = data
     save_db(db)
-    return jsonify({"status": "success", "message": "Instellingen bijgewerkt"})
+    return jsonify({"status": "success"})
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():
     data = request.json
     phone = format_phone(data.get('phone', ''))
     if not phone: return jsonify({"status": "error"}), 400
-    
     db = load_db()
-    user_key = find_user_key_by_phone(db, phone)
-    
-    if not user_key:
-        user_key = data.get('user', f"User_{phone[-4:]}").strip()
-        db[user_key] = {"myPhone": phone}
-
-    db[user_key]["last_ping"] = time.time()
-    db[user_key]["last_battery"] = data.get('battery', '?')
-    db[user_key]["alarm_sent_today"] = False 
-    
-    for k in ['startTime', 'endTime', 'vacationMode', 'activeDays', 'contacts', 'useCustomSchedule', 'schedules']:
-        if k in data: 
-            if k == 'contacts':
-                db[user_key][k] = [{**c, 'phone': format_phone(c['phone'])} for c in data[k]]
-            else:
-                db[user_key][k] = data[k]
-
+    if phone not in db: db[phone] = {}
+    db[phone]["last_ping"] = time.time()
+    db[phone]["last_battery"] = data.get('battery', '?')
+    db[phone]["alarm_sent_today"] = False 
     save_db(db)
     return jsonify({"status": "success"})
 
 @app.route('/get_settings', methods=['GET'])
 def get_settings():
-    phone = request.args.get('phone')
+    phone = format_phone(request.args.get('phone'))
     db = load_db()
-    if phone:
-        key = find_user_key_by_phone(db, phone)
-        if key: return jsonify(db[key])
-    if db:
-        latest = max(db.values(), key=lambda x: x.get('last_ping', 0))
-        return jsonify(latest)
+    if phone and phone in db: return jsonify(db[phone])
     return jsonify({}), 404
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
     db = load_db()
     now = datetime.now()
-    today_str = now.strftime("%Y-%m-%d")
     current_weekday = now.weekday()
     
-    print(f"\n╔{'═'*15} [ MONITOR {now.strftime('%H:%M:%S')} ] {'═'*15}╗")
-    if not db: print(f"║ {'(Leeg)':<{BOX_WIDTH-4}} ║")
-
-    for name, info in db.items():
-        if info.get("last_check_date") != today_str:
-            info["alarm_sent_today"] = False
-            info["last_check_date"] = today_str
-
-        if info.get("vacationMode"):
-            print_row("🌴", name, "Vakantie")
+    for phone, info in db.items():
+        if info.get("vacationMode") or current_weekday not in info.get("activeDays", [0,1,2,3,4,5,6]):
             continue
-            
-        if current_weekday not in info.get("activeDays", [0,1,2,3,4,5,6]):
-            print_row("💤", name, "Uitgeschakeld")
-            continue
-
-        st, et = info.get("startTime", "07:00"), info.get("endTime", "08:30")
+        
+        et = info.get("endTime", "08:30")
         if info.get("useCustomSchedule"):
             sched = info.get("schedules", {}).get(str(current_weekday))
-            if sched: st, et = sched.get("startTime", st), sched.get("endTime", et)
+            if sched: et = sched.get("endTime", et)
 
         try:
-            sh, sm = map(int, st.split(':'))
             eh, em = map(int, et.split(':'))
-            start_ts = now.replace(hour=sh, minute=sm, second=0).timestamp()
             deadline_ts = now.replace(hour=eh, minute=em, second=0).timestamp()
-        except: continue
-
-        safe = info.get("last_ping", 0) >= start_ts
-
-        if now.timestamp() < deadline_ts:
-            print_row("✅" if safe else "⏳", name, "Veilig" if safe else "Wachten")
-        else:
-            if safe:
-                print_row("✅", name, "Veilig")
-            elif not info.get("alarm_sent_today"):
-                print_row("🚨", name, "ALARM!")
-                msg = f"🚨 *BARKR NOODGEVAL* 🚨\n\nGebruiker: *{name}*\nStatus: Geen activiteit voor {et}."
-                sent = 0
-                for c in info.get("contacts", []):
-                    if send_whatsapp(c.get('phone'), msg): sent += 1
-                if sent > 0: info["alarm_sent_today"] = True
-            else:
-                print_row("⚠️", name, "Gemeld")
-
-    print(f"╚{'═' * (BOX_WIDTH - 2)}╝")
+            
+            if now.timestamp() > deadline_ts:
+                last_ping = info.get("last_ping", 0)
+                if last_ping < deadline_ts and not info.get("alarm_sent_today"):
+                    name = info.get('email', 'Gebruiker')
+                    msg = f"🚨 *BARKR NOODGEVAL* 🚨\n\nGebruiker: *{name}*\nGeen levensteken gedetecteerd voor de deadline van {et}.\n\nNeem direct contact op met de gebruiker op {phone}."
+                    
+                    success = False
+                    for c in info.get("contacts", []):
+                        if send_whatsapp(c.get('phone'), msg):
+                            success = True
+                    
+                    if success:
+                        info["alarm_sent_today"] = True
+        except Exception as e:
+            pass
+    
     save_db(db)
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "processed_at": now.isoformat()})
 
 if __name__ == '__main__':
+    print("Barkr Backend v11.3.0 gestart...")
     app.run(host='0.0.0.0', port=5000)
