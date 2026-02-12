@@ -13,17 +13,21 @@ CORS(app)
 
 # --- CONFIGURATIE ---
 DATA_FILE = "safeguard_users.json"
-SETTINGS_FILE = "barkr_settings.json"
-CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
+TEXTMEBOT_URL = "http://api.textmebot.com/send.php"
 
-# Logging stil houden voor schoon dashboard, behalve echte fouten
+# LET OP: Vul hieronder je eigen API-key in die je hebt gekregen via @TextMeBot.
+# De onderstaande waarde dient als placeholder.
+TEXTMEBOT_APIKEY = "ojtHErzSmwgW" 
+
+# Logging stil houden voor een schoon dashboard
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-# Vaste breedte voor de visualisatie kaders
+# Vaste breedte voor de visualisatie kaders in de terminal
 BOX_WIDTH = 65
 
-# --- DATABASE FUNCTIES ---
+# --- HELPER FUNCTIES ---
+
 def load_db():
     if os.path.exists(DATA_FILE):
         try:
@@ -41,256 +45,179 @@ def save_db(db):
         pass
 
 def format_phone(phone):
-    """Maakt van elk nummer een strak +316... formaat"""
+    """Zorgt voor een consistent +316... formaat voor TextMeBot."""
     if not phone: return ""
-    p = str(phone).replace(' ', '').replace('-', '').strip()
+    p = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '').strip()
     if p.startswith('00'): p = '+' + p[2:]
     elif p.startswith('06'): p = '+31' + p[1:]
+    elif p.startswith('0'): p = '+31' + p[1:]
     elif not p.startswith('+'): p = '+' + p
     return p
 
-def send_whatsapp(phone, apikey, text):
-    """Verstuurt WhatsApp en logt de EXACTE fout als het mislukt"""
+def find_user_key_by_phone(db, phone):
+    """Zoekt een bestaande entry op basis van telefoonnummer (myPhone)."""
+    target = format_phone(phone)
+    if not target: return None
+    for key, info in db.items():
+        if format_phone(info.get('myPhone')) == target or format_phone(info.get('phone')) == target:
+            return key
+    return None
+
+def send_whatsapp(phone, text):
+    """
+    Verstuurt WhatsApp via TextMeBot. 
+    Het '+' teken wordt automatisch URL-encoded door de params dict in requests.
+    """
     p = format_phone(phone)
-    if not p or not apikey:
-        print(f"   >>> FOUT: Ontbrekende gegevens. Tel: {p}, Key: {'JA' if apikey else 'NEE'}")
-        return False
+    if not p: return False
         
-    params = {"phone": p, "apikey": str(apikey).strip(), "text": text}
+    params = {
+        "recipient": p,
+        "apikey": TEXTMEBOT_APIKEY,
+        "text": text
+    }
     
     try:
-        r = requests.get(CALLMEBOT_URL, params=params, timeout=20)
-        if r.status_code == 200 and "error" not in r.text.lower():
-            return True
-        else:
-            print(f"   >>> CALLMEBOT SERVER FOUT: {r.text.strip()}")
-            return False
+        r = requests.get(TEXTMEBOT_URL, params=params, timeout=15)
+        return r.status_code == 200
     except Exception as e:
-        print(f"   >>> VERBINDINGSFOUT: {e}")
+        print(f"   >>> FOUT BIJ VERZENDEN: {e}")
         return False
 
-# --- Hulpfunctie voor de Layout (Visualisatie) ---
 def print_row(icon, name, status, width=BOX_WIDTH):
     display_name = (name[:18] + '..') if len(name) > 18 else name
     left_part = f"{icon} {display_name}"
     right_part = f"| {status}"
-    
     inner_text = f"{left_part:<24} {right_part}"
     target_len = width - 4
     if len(inner_text) > target_len: inner_text = inner_text[:target_len]
-    
     print(f"║ {inner_text:<{target_len}} ║")
 
 # --- API ENDPOINTS ---
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    """Simpele check of de server leeft"""
-    return jsonify({"status": "online", "server_time": datetime.now().strftime("%H:%M:%S")})
-
-@app.route('/get_settings', methods=['GET'])
-def get_settings():
-    """Haalt de opgeslagen instellingen op voor de client"""
-    phone = request.args.get('phone')
-    db = load_db()
-    
-    # Als er een specifiek nummer wordt gevraagd, zoek die
-    if phone:
-        formatted_phone = format_phone(phone)
-        for name, info in db.items():
-            if format_phone(info.get('phone')) == formatted_phone:
-                return jsonify(info)
-    
-    # Geen nummer of niet gevonden? Geef de meest recente gebruiker terug (voor stabiliteit bij cache clear)
-    if db:
-        # Sorteer op last_ping om de meest actieve te pakken
-        latest_user = max(db.values(), key=lambda x: x.get('last_ping', 0))
-        return jsonify(latest_user)
-        
-    return jsonify({}), 404
+    return jsonify({"status": "online", "version": "10.4.0"})
 
 @app.route('/save_settings', methods=['POST'])
 def save_settings():
-    """Slaat instellingen expliciet op in de database"""
+    """Slaat instellingen op en gebruikt telefoonnummer als unieke ID."""
     data = request.json
-    name = data.get('email', 'Onbekend').strip()
     phone = format_phone(data.get('myPhone', ''))
+    name = data.get('email', 'Onbekend').strip()
     
     if not phone:
         return jsonify({"status": "error", "message": "Telefoonnummer verplicht"}), 400
         
     db = load_db()
-    target_key = None
-    for db_name, db_info in db.items():
-        if format_phone(db_info.get('phone')) == phone:
-            target_key = db_name
-            break
+    user_key = find_user_key_by_phone(db, phone)
     
-    if not target_key:
-        target_key = name
-        
-    user_data = db.get(target_key, {})
-    # Update velden
-    keys_to_save = ['email', 'myPhone', 'startTime', 'endTime', 'contacts', 'vacationMode', 'activeDays', 'useCustomSchedule', 'schedules']
-    for k in keys_to_save:
+    if not user_key:
+        user_key = name if name and name not in db else f"User_{phone[-4:]}"
+        db[user_key] = {}
+        print(f"🆕 Nieuwe registratie: {user_key} ({phone})")
+
+    keys_to_sync = ['email', 'myPhone', 'startTime', 'endTime', 'contacts', 'vacationMode', 'activeDays', 'useCustomSchedule', 'schedules']
+    for k in keys_to_sync:
         if k in data:
-            user_data[k] = data[k]
+            db[user_key][k] = data[k]
     
-    # Ook even de 'phone' key consistent houden met de ping logic
-    user_data['phone'] = phone
-            
-    db[target_key] = user_data
+    db[user_key]['myPhone'] = phone
+    db[user_key]['phone'] = phone 
     save_db(db)
-    return jsonify({"status": "success", "message": "Settings opgeslagen op Pi"})
+    return jsonify({"status": "success", "message": "Instellingen bijgewerkt"})
 
 @app.route('/ping', methods=['POST'])
 def handle_ping():
-    """
-    Ontvangt hartslag van telefoon.
-    """
     data = request.json
-    incoming_name = data.get('user', 'Onbekend').strip()
-    incoming_phone = format_phone(data.get('phone', ''))
-
-    if not incoming_phone:
-        return jsonify({"status": "error", "message": "Geen telefoonnummer meegestuurd"}), 400
+    phone = format_phone(data.get('phone', ''))
+    if not phone: return jsonify({"status": "error"}), 400
     
     db = load_db()
-    target_key = None
+    user_key = find_user_key_by_phone(db, phone)
+    
+    if not user_key:
+        user_key = data.get('user', f"User_{phone[-4:]}").strip()
+        db[user_key] = {"myPhone": phone}
 
-    for db_name, db_info in db.items():
-        if format_phone(db_info.get('phone')) == incoming_phone:
-            target_key = db_name
-            break
+    db[user_key]["last_ping"] = time.time()
+    db[user_key]["last_battery"] = data.get('battery', '?')
+    db[user_key]["alarm_sent_today"] = False 
     
-    if not target_key:
-        target_key = incoming_name if incoming_name else f"User_{incoming_phone[-4:]}"
-        print(f"🆕 Nieuwe gebruiker geregistreerd: {target_key}")
+    # Sync settings als ze meegestuurd worden
+    for k in ['startTime', 'endTime', 'vacationMode', 'activeDays', 'contacts', 'useCustomSchedule', 'schedules']:
+        if k in data: db[user_key][k] = data[k]
 
-    user_data = db.get(target_key, {})
-    
-    # Update alle gegevens van de ping
-    user_data["last_ping"] = time.time()
-    user_data["last_battery"] = data.get('battery', '?')
-    user_data["phone"] = incoming_phone
-    
-    # Bewaar de volledige instellingen inclusief de nieuwe 'schedules' en 'useCustomSchedule'
-    for key in ['startTime', 'endTime', 'vacationMode', 'activeDays', 'contacts', 'useCustomSchedule', 'schedules']:
-        if key in data:
-            user_data[key] = data[key]
-
-    # Reset alarm bij succesvolle ping
-    user_data["alarm_sent_today"] = False 
-    
-    db[target_key] = user_data
     save_db(db)
-    
-    return jsonify({"status": "success", "linked_to": target_key})
+    return jsonify({"status": "success"})
+
+@app.route('/get_settings', methods=['GET'])
+def get_settings():
+    phone = request.args.get('phone')
+    db = load_db()
+    if phone:
+        key = find_user_key_by_phone(db, phone)
+        if key: return jsonify(db[key])
+    if db:
+        latest = max(db.values(), key=lambda x: x.get('last_ping', 0))
+        return jsonify(latest)
+    return jsonify({}), 404
 
 @app.route('/check_all', methods=['POST', 'GET'])
 def run_security_check():
-    """Het Watchdog proces: controleert deadlines en stuurt alarmen"""
     db = load_db()
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
-    current_weekday = str(now.weekday()) # 0=Ma, 1=Di ...
+    current_weekday = now.weekday()
     
-    time_str = f"[ CONTROLE {now.strftime('%H:%M:%S')} ]"
-    dash_count = (BOX_WIDTH - len(time_str) - 2) // 2
-    header = f"╔{'═'*dash_count}{time_str}{'═'*dash_count}╗"
-    if len(header) < BOX_WIDTH: header = header[:-1] + "═╗"
-    
-    print(f"\n{header}")
-
-    if not db:
-        print(f"║ {'(Geen gebruikers in database)':<{BOX_WIDTH-4}} ║")
+    print(f"\n╔{'═'*15} [ MONITOR {now.strftime('%H:%M:%S')} ] {'═'*15}╗")
+    if not db: print(f"║ {'(Leeg)':<{BOX_WIDTH-4}} ║")
 
     for name, info in db.items():
-        phone_display = info.get('phone', 'Geen nummer')
-        last_ping = info.get("last_ping", 0)
-        
         if info.get("last_check_date") != today_str:
             info["alarm_sent_today"] = False
             info["last_check_date"] = today_str
 
-        # 1. Vakantie check
         if info.get("vacationMode"):
-            print_row("🌴", name, "Vakantiemodus")
+            print_row("🌴", name, "Vakantie")
             continue
             
-        # 2. Actieve dag check
-        active_days = info.get("activeDays", [0,1,2,3,4,5,6])
-        if int(current_weekday) not in active_days:
-            print_row("💤", name, "Vandaag geen bewaking")
+        if current_weekday not in info.get("activeDays", [0,1,2,3,4,5,6]):
+            print_row("💤", name, "Uitgeschakeld")
             continue
 
-        # 3. Slimme Tijdslot bepalen
-        start_time_str = info.get("startTime", "07:00")
-        end_time_str = info.get("endTime", "09:00")
-
-        # Check voor dagspecifieke override
+        st, et = info.get("startTime", "07:00"), info.get("endTime", "08:30")
         if info.get("useCustomSchedule"):
-            schedules = info.get("schedules", {})
-            # Flask JSON keys worden soms strings ("0", "1"...)
-            day_sched = schedules.get(current_weekday) or schedules.get(int(current_weekday))
-            if day_sched:
-                start_time_str = day_sched.get("startTime", start_time_str)
-                end_time_str = day_sched.get("endTime", end_time_str)
+            sched = info.get("schedules", {}).get(str(current_weekday))
+            if sched: st, et = sched.get("startTime", st), sched.get("endTime", et)
 
         try:
-            s_h, s_m = map(int, start_time_str.split(':'))
-            e_h, e_m = map(int, end_time_str.split(':'))
-            start_dt = now.replace(hour=s_h, minute=s_m, second=0, microsecond=0)
-            deadline_dt = now.replace(hour=e_h, minute=e_m, second=0, microsecond=0)
-        except:
-            print_row("⚠️", name, "Foute tijdinstelling")
-            continue
+            sh, sm = map(int, st.split(':'))
+            eh, em = map(int, et.split(':'))
+            start_ts = now.replace(hour=sh, minute=sm, second=0).timestamp()
+            deadline_ts = now.replace(hour=eh, minute=em, second=0).timestamp()
+        except: continue
 
-        has_valid_ping = last_ping >= start_dt.timestamp()
+        safe = info.get("last_ping", 0) >= start_ts
 
-        # SITUATIE A: We zitten nog IN het tijdslot
-        if now < deadline_dt:
-            if has_valid_ping:
-                print_row("✅", name, f"Veilig ({start_time_str}-{end_time_str})")
-            else:
-                time_left = int((deadline_dt - now).total_seconds() / 60)
-                print_row("⏳", name, f"Wachten ({time_left} min)")
-        
-        # SITUATIE B: Deadline is voorbij!
+        if now.timestamp() < deadline_ts:
+            print_row("✅" if safe else "⏳", name, "Veilig" if safe else "Wachten")
         else:
-            if has_valid_ping:
-                print_row("✅", name, "Veilig (Was op tijd)")
+            if safe:
+                print_row("✅", name, "Veilig")
+            elif not info.get("alarm_sent_today"):
+                print_row("🚨", name, "ALARM!")
+                msg = f"🚨 *BARKR NOODGEVAL* 🚨\n\nGebruiker: *{name}*\nStatus: Geen activiteit voor {et}."
+                sent = 0
+                for c in info.get("contacts", []):
+                    if send_whatsapp(c.get('phone'), msg): sent += 1
+                if sent > 0: info["alarm_sent_today"] = True
             else:
-                if not info.get("alarm_sent_today"):
-                    print_row("🔔", name, "ALARM VERSTUREN...")
-                    
-                    contacts = info.get("contacts", [])
-                    if not contacts:
-                         print_row("❌", name, "Geen contacten!")
-                         continue
-
-                    msg = (f"🔔 *WATCHDOG MELDING* 🔔\n\n"
-                           f"Gebruiker: *{name}*\n"
-                           f"Nummer: {phone_display}\n\n"
-                           f"Heeft zijn mobiel vandaag tussen {start_time_str} en {end_time_str} NIET gebruikt.\n\n"
-                           f"Wil jij even controleren?")
-                    
-                    sent_count = 0
-                    for c in contacts:
-                        c_apikey = c.get('apiKey') or c.get('apikey')
-                        c_phone = c.get('phone')
-                        if send_whatsapp(c_phone, c_apikey, msg):
-                            sent_count += 1
-                    
-                    if sent_count > 0:
-                        info["alarm_sent_today"] = True
-                        print_row("->", "Verzonden", f"naar {sent_count} contact(en)")
-                else:
-                    print_row("⚠️", name, "Reeds gemeld")
+                print_row("⚠️", name, "Gemeld")
 
     print(f"╚{'═' * (BOX_WIDTH - 2)}╝")
     save_db(db)
-    return jsonify({"status": "checked"})
+    return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

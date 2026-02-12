@@ -8,7 +8,6 @@ export interface EmergencyContact {
   id: string;
   name: string;
   phone: string;
-  apiKey: string;
 }
 
 export interface UserSettings {
@@ -21,6 +20,7 @@ export interface UserSettings {
   activeDays: number[]; // 0=Ma, 1=Di, ..., 6=Zo
   useCustomSchedule: boolean;
   schedules: Record<number, DaySchedule>;
+  serverUrl?: string;
 }
 
 export interface ActivityLog {
