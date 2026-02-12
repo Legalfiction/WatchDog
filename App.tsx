@@ -3,13 +3,14 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Settings as SettingsIcon, X, Trash2, Plus, User, Battery, Plane, Clock, 
   Info, RefreshCw, ShieldCheck, Phone, CalendarDays, Shield, BellRing, 
-  ChevronRight, Activity
+  ChevronRight, Activity, Wifi, Signal
 } from 'lucide-react';
 import { UserSettings, ActivityLog, DaySchedule, EmergencyContact } from './types';
 
-const VERSION = '11.2.2'; 
-// JOUW PUBLIEKE IP VOOR 4G TOEGANG
-const DEFAULT_URL = 'http://94.157.47.162:5000'; 
+const VERSION = '11.2.3'; 
+const PUBLIC_IP = '94.157.47.162';
+const LOCAL_IP = '192.168.1.38';
+const PORT = '5000';
 
 const LOGO_SVG = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iOTYiIGZpbGw9IiNFQTU4MEMiLz4KPHBhdGggZD0iTTM2OCAxNjBDMzM2IDE2MCAzMDQgMTkyIDI4OCAyMjRMMjQwIDE5MkwxNjAgMTYwQzEyOCAxNjAgOTYgMTkyIDk2IDIyNEM5NiAyNTYgMTI4IDI4OCAxNjAgMjg4TDI0MCAzMjBMMjg4IDM4NEMzMDQgNDE2IDMzNiA0NDggMzY4IDQ0OEM0MDAgNDQ4IDQzMiA0MTYgNDMyIDM4NEM0MzIgMzUyIDQwMCAzMjAgMzY4IDMyMEgyODhMMzY4IDE2MFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xNjAgMjI0QzE0OS40IDIyNCAxNDAgMjE0LjYgMTQwIDIwNEMxNDAgMTkzLjQgMTQ5LjQgMTg0IDE2MCAxODRDMTcwLjYgMTg0IDE4MCAxOTMuNCAxODAgMjA0QzE4MCAyMTQuNiAxNzAuNiAyMjQgMTYwIDIyNFoiIGZpbGw9IiNFQTU4MEMiLz4KPCEtLSBCYXJraW5nIExpbmVzIC0tPgo8cGF0aCBkPSJNNDUwIDIyMEM0NjAgMjQwIDQ2MCAyNzIgNDUwIDI5MiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik00ODAgMTkwQzQ5NSAyMjAgNDk1IDI5MiA0ODAgMzIyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIwIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+`;
 
@@ -27,7 +28,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [lastSuccessTime, setLastSuccessTime] = useState<string | null>(localStorage.getItem('safeguard_last_success'));
-  const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking' | 'error'>('checking');
+  const [piStatus, setPiStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [activeUrl, setActiveUrl] = useState(`http://${PUBLIC_IP}:${PORT}`);
   const [isProcessing, setIsProcessing] = useState(false);
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
   const [history, setHistory] = useState<ActivityLog[]>(() => {
@@ -35,7 +37,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
   
-  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('barkr_server_url') || DEFAULT_URL);
   const lastTriggerRef = useRef<number>(0);
   
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -56,19 +57,33 @@ export default function App() {
       activeDays: parsed?.activeDays || [0, 1, 2, 3, 4, 5, 6],
       useCustomSchedule: parsed?.useCustomSchedule || false,
       schedules: parsed?.schedules || defaultSchedules,
-      serverUrl: serverUrl
+      serverUrl: activeUrl
     };
   });
 
-  const checkPiStatus = useCallback(async (silent = false) => {
-    if (!serverUrl) return;
-    if (!silent) setPiStatus('checking');
+  const checkConnection = useCallback(async () => {
+    // We proberen eerst het publieke IP (voor 4G)
     try {
-      const res = await fetch(`${serverUrl}/status`, { method: 'GET', mode: 'cors' });
-      if (res.ok) setPiStatus('online');
-      else setPiStatus('error');
-    } catch (err) { setPiStatus('offline'); }
-  }, [serverUrl]);
+      const res = await fetch(`http://${PUBLIC_IP}:${PORT}/status`, { mode: 'cors', signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        setActiveUrl(`http://${PUBLIC_IP}:${PORT}`);
+        setPiStatus('online');
+        return;
+      }
+    } catch (e) {
+      // Als publiek faalt, probeer lokaal (voor Wi-Fi)
+      try {
+        const res = await fetch(`http://${LOCAL_IP}:${PORT}/status`, { mode: 'cors', signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+          setActiveUrl(`http://${LOCAL_IP}:${PORT}`);
+          setPiStatus('online');
+          return;
+        }
+      } catch (err) {
+        setPiStatus('offline');
+      }
+    }
+  }, []);
 
   const getBattery = async () => {
     try {
@@ -94,11 +109,12 @@ export default function App() {
   const triggerCheckin = useCallback(async (force = false) => {
     const now = Date.now();
     if (!force && now - lastTriggerRef.current < 30000) return; 
-    if (!settings.myPhone) return;
+    if (!settings.myPhone || piStatus !== 'online') return;
+    
     setIsProcessing(true);
     const batt = await getBattery(); 
     try {
-      const response = await fetch(`${serverUrl}/ping`, {
+      const response = await fetch(`${activeUrl}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -109,18 +125,21 @@ export default function App() {
         mode: 'cors'
       });
       if (response.ok) {
-        setPiStatus('online');
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         updateHistory(timeStr, batt);
         lastTriggerRef.current = Date.now();
       }
-    } catch (err) { setPiStatus('offline'); } finally { setIsProcessing(false); }
-  }, [settings, serverUrl, history]);
+    } catch (err) {
+      console.error("Ping failed", err);
+    } finally { 
+      setIsProcessing(false); 
+    }
+  }, [settings, activeUrl, piStatus, history]);
 
   const testContact = async (contact: EmergencyContact) => {
     if (!contact.phone) return alert('Vul eerst een telefoonnummer in.');
     try {
-      const res = await fetch(`${serverUrl}/test_contact`, {
+      const res = await fetch(`${activeUrl}/test_contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: formatToBarkrPhone(contact.phone), name: contact.name }),
@@ -132,14 +151,18 @@ export default function App() {
   };
 
   useEffect(() => {
-    checkPiStatus();
-    triggerCheckin(true);
-    const interval = setInterval(() => {
-      checkPiStatus(true);
-      triggerCheckin();
-    }, 60000); 
-    return () => clearInterval(interval);
-  }, [checkPiStatus, triggerCheckin]);
+    checkConnection();
+    const connInterval = setInterval(checkConnection, 10000);
+    const pingInterval = setInterval(() => triggerCheckin(), 60000);
+    
+    // Direct checkin on startup if online
+    if (piStatus === 'online') triggerCheckin(true);
+
+    return () => {
+      clearInterval(connInterval);
+      clearInterval(pingInterval);
+    };
+  }, [checkConnection, triggerCheckin, piStatus]);
 
   const handleSettingsUpdate = (newSettings: UserSettings) => {
     setSettings(newSettings);
@@ -162,7 +185,7 @@ export default function App() {
             <div className="flex items-center gap-1.5 mt-1">
               <div className={`w-2 h-2 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {piStatus === 'online' ? 'Status: 4G/Wi-Fi' : 'Verbinden...'}
+                {piStatus === 'online' ? 'Status: Verbonden' : 'Verbinden...'}
               </span>
             </div>
           </div>
@@ -192,8 +215,8 @@ export default function App() {
         )}
 
         <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col items-center text-center space-y-4 shadow-sm">
-          <div className={`w-24 h-24 rounded-full flex items-center justify-center ${lastSuccessTime ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-300 border border-slate-100'}`}>
-            {lastSuccessTime ? <ShieldCheck size={48} strokeWidth={1.2} /> : <Activity size={48} strokeWidth={1.2} className="animate-pulse" />}
+          <div className={`w-24 h-24 rounded-full flex items-center justify-center border-4 ${piStatus === 'online' ? 'bg-emerald-50 text-emerald-600 border-emerald-500' : 'bg-slate-50 text-slate-300 border-slate-300'}`}>
+            {piStatus === 'online' ? <ShieldCheck size={48} strokeWidth={1.5} /> : <Activity size={48} strokeWidth={1.5} className="animate-pulse" />}
           </div>
           <div>
             <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Actief Levensteken</h2>
@@ -210,13 +233,18 @@ export default function App() {
           </div>
         </div>
 
-        {/* IP INDICATOR */}
-        <div className="bg-slate-900 text-white rounded-2xl p-5 flex items-center justify-between shadow-lg">
+        {/* CONNECTION MODE INDICATOR */}
+        <div className={`rounded-2xl p-5 flex items-center justify-between shadow-lg transition-colors ${piStatus === 'online' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
            <div className="flex items-center gap-3">
-             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-             <p className="text-[10px] font-black uppercase tracking-widest">Public Link Active</p>
+             <div className={`w-2 h-2 rounded-full ${piStatus === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+             <p className="text-[10px] font-black uppercase tracking-widest">
+               {piStatus === 'online' ? 'Verbinding Actief' : 'Zoeken naar Pi...'}
+             </p>
            </div>
-           <p className="text-xs font-mono text-slate-400 font-bold">{serverUrl.replace('http://', '').split(':')[0]}</p>
+           <div className={`px-4 py-1.5 rounded-lg flex items-center gap-2 text-[9px] font-black uppercase ${piStatus === 'online' ? 'bg-white/10' : 'bg-slate-300/50'}`}>
+              {activeUrl.includes(PUBLIC_IP) ? <Signal size={12} /> : <Wifi size={12} />}
+              {activeUrl.includes(PUBLIC_IP) ? '4G Mode' : 'Wi-Fi Mode'}
+           </div>
         </div>
 
         {/* METRICS GRID */}
@@ -263,25 +291,22 @@ export default function App() {
                <img src={LOGO_SVG} alt="Barkr" className="w-10 h-10 rounded-xl" />
                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Instellingen</h3>
              </div>
-             <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"><X size={28}/></button>
+             <button onClick={() => { setShowSettings(false); checkConnection(); }} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"><X size={28}/></button>
           </div>
           <div className="space-y-8 pb-24">
-            <div className="space-y-4">
+            <section className="space-y-4">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Verbinding</label>
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Server URL (Publiek IP)</p>
-                <input 
-                  type="text" 
-                  value={serverUrl} 
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setServerUrl(val);
-                    localStorage.setItem('barkr_server_url', val);
-                  }} 
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" 
-                />
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <div className="flex justify-between text-[10px] font-bold uppercase">
+                  <span className="text-slate-400 tracking-wider">Huidige URL:</span>
+                  <span className="text-emerald-600">{activeUrl}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-bold uppercase">
+                  <span className="text-slate-400 tracking-wider">Status:</span>
+                  <span className={piStatus === 'online' ? 'text-emerald-600' : 'text-rose-600'}>{piStatus}</span>
+                </div>
               </div>
-            </div>
+            </section>
 
             <section className="space-y-4">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Mijn Gegevens</label>

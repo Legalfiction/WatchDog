@@ -70,7 +70,7 @@ def send_whatsapp(phone, text):
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    return jsonify({"status": "online", "version": "11.2.2"})
+    return jsonify({"status": "online", "version": "11.2.3"})
 
 @app.route('/test_contact', methods=['POST'])
 def test_contact():
@@ -153,5 +153,5 @@ def run_security_check():
     return jsonify({"status": "ok", "processed_at": now.isoformat()})
 
 if __name__ == '__main__':
-    print("Barkr Backend v11.2.2 gestart...")
+    print("Barkr Backend v11.2.3 gestart...")
     app.run(host='0.0.0.0', port=5000)
