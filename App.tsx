@@ -21,8 +21,8 @@ import {
 } from 'lucide-react';
 import { UserSettings, ActivityLog, DaySchedule, EmergencyContact } from './types';
 
-const VERSION = '11.3.0'; 
-const DEFAULT_URL = 'http://localhost:5000';
+const VERSION = '11.2.1'; 
+const DEFAULT_URL = 'http://192.168.1.38:5000'; // Bijgewerkt Pi adres
 
 // Updated BARKING DOG LOGO SVG
 const LOGO_SVG = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iOTYiIGZpbGw9IiNFQTU4MEMiLz4KPHBhdGggZD0iTTM2OCAxNjBDMzM2IDE2MCAzMDQgMTkyIDI4OCAyMjRMMjQwIDE5MkwxNjAgMTYwQzEyOCAxNjAgOTYgMTkyIDk2IDIyNEM5NiAyNTYgMTI4IDI4OCAxNjAgMjg4TDI0MCAzMjBMMjg4IDM4NEMzMDQgNDE2IDMzNiA0NDggMzY4IDQ0OEM0MDAgNDQ4IDQzMiA0MTYgNDMyIDM4NEM0MzIgMzUyIDQwMCAzMjAgMzY4IDMyMEgyODhMMzY4IDE2MFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xNjAgMjI0QzE0OS40IDIyNCAxNDAgMjE0LjYgMTQwIDIwNEMxNDAgMTkzLjQgMTQ5LjQgMTg0IDE2MCAxODRDMTcwLjYgMTg0IDE4MCAxOTMuNCAxODAgMjA0QzE4MCAyMTQuNiAxNzAuNiAyMjQgMTYwIDIyNFoiIGZpbGw9IiNFQTU4MEMiLz4KPCEtLSBCYXJraW5nIExpbmVzIC0tPgo8cGF0aCBkPSJNNDUwIDIyMEM0NjAgMjQwIDQ2MCAyNzIgNDUwIDI5MiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik00ODAgMTkwQzQ5NSAyMjAgNDk1IDI5MiA0ODAgMzIyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIwIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+`;
@@ -184,9 +184,11 @@ export default function App() {
   }, [serverUrl]);
 
   useEffect(() => {
-    fetchSettingsFromServer();
+    // Directe verbindingstest bij opstarten
     checkPiStatus();
+    fetchSettingsFromServer();
     triggerCheckin(true); 
+    
     const interval = setInterval(() => {
       checkPiStatus(true);
       triggerCheckin();
@@ -374,6 +376,14 @@ export default function App() {
                   <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
                   <input type="text" placeholder="+31 6 ..." value={settings.myPhone} onChange={e => handleSettingsUpdate({...settings, myPhone: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-black outline-none focus:border-orange-500" />
                   <p className="text-[9px] text-orange-600 mt-1 ml-1 font-black uppercase tracking-wide">Altijd in het formaat: +31 6 ...</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Server URL</p>
+                  <input type="text" placeholder="http://..." value={serverUrl} onChange={e => {
+                    const val = e.target.value;
+                    setServerUrl(val);
+                    localStorage.setItem('barkr_server_url', val);
+                  }} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
                 </div>
               </div>
             </section>
