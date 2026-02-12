@@ -1,37 +1,20 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  Settings as SettingsIcon, 
-  X,
-  Trash2,
-  Plus,
-  User,
-  Battery,
-  Plane,
-  Clock,
-  Info,
-  RefreshCw,
-  ShieldCheck,
-  Phone,
-  CalendarDays,
-  Shield,
-  BellRing,
-  ChevronRight,
-  Activity
+  Settings as SettingsIcon, X, Trash2, Plus, User, Battery, Plane, Clock, 
+  Info, RefreshCw, ShieldCheck, Phone, CalendarDays, Shield, BellRing, 
+  ChevronRight, Activity
 } from 'lucide-react';
 import { UserSettings, ActivityLog, DaySchedule, EmergencyContact } from './types';
 
-const VERSION = '11.2.1'; 
-const DEFAULT_URL = 'http://192.168.1.38:5000'; // Bijgewerkt Pi adres
+const VERSION = '11.2.2'; 
+// JOUW PUBLIEKE IP VOOR 4G TOEGANG
+const DEFAULT_URL = 'http://94.157.47.162:5000'; 
 
-// Updated BARKING DOG LOGO SVG
 const LOGO_SVG = `data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iOTYiIGZpbGw9IiNFQTU4MEMiLz4KPHBhdGggZD0iTTM2OCAxNjBDMzM2IDE2MCAzMDQgMTkyIDI4OCAyMjRMMjQwIDE5MkwxNjAgMTYwQzEyOCAxNjAgOTYgMTkyIDk2IDIyNEM5NiAyNTYgMTI4IDI4OCAxNjAgMjg4TDI0MCAzMjBMMjg4IDM4NEMzMDQgNDE2IDMzNiA0NDggMzY4IDQ0OEM0MDAgNDQ4IDQzMiA0MTYgNDMyIDM4NEM0MzIgMzUyIDQwMCAzMjAgMzY4IDMyMEgyODhMMzY4IDE2MFoiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0xNjAgMjI0QzE0OS40IDIyNCAxNDAgMjE0LjYgMTQwIDIwNEMxNDAgMTkzLjQgMTQ5LjQgMTg0IDE2MCAxODRDMTcwLjYgMTg0IDE4MCAxOTMuNCAxODAgMjA0QzE4MCAyMTQuNiAxNzAuNiAyMjQgMTYwIDIyNFoiIGZpbGw9IiNFQTU4MEMiLz4KPCEtLSBCYXJraW5nIExpbmVzIC0tPgo8cGF0aCBkPSJNNDUwIDIyMEM0NjAgMjQwIDQ2MCAyNzIgNDUwIDI5MiIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CjxwYXRoIGQ9Ik00ODAgMTkwQzQ5NSAyMjAgNDk1IDI5MiA0ODAgMzIyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIwIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4KPC9zdmc+`;
 
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
-/**
- * Normalizes phone numbers strictly to +31 format
- */
 const formatToBarkrPhone = (phone: string) => {
   let p = phone.replace(/\s/g, '').replace(/-/g, '');
   if (p.startsWith('06')) return '+316' + p.substring(2);
@@ -58,7 +41,6 @@ export default function App() {
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('safeguard_settings');
     const parsed = saved ? JSON.parse(saved) : null;
-    
     const defaultSchedules: Record<number, DaySchedule> = {};
     [0,1,2,3,4,5,6].forEach(d => {
       defaultSchedules[d] = { startTime: parsed?.startTime || '07:00', endTime: parsed?.endTime || '08:30' };
@@ -74,42 +56,66 @@ export default function App() {
       activeDays: parsed?.activeDays || [0, 1, 2, 3, 4, 5, 6],
       useCustomSchedule: parsed?.useCustomSchedule || false,
       schedules: parsed?.schedules || defaultSchedules,
-      serverUrl: localStorage.getItem('barkr_server_url') || DEFAULT_URL
+      serverUrl: serverUrl
     };
   });
 
-  const fetchSettingsFromServer = useCallback(async (customUrl?: string) => {
-    const targetUrl = customUrl || serverUrl;
-    if (!targetUrl) return;
+  const checkPiStatus = useCallback(async (silent = false) => {
+    if (!serverUrl) return;
+    if (!silent) setPiStatus('checking');
     try {
-      const phone = settings.myPhone || localStorage.getItem('last_known_phone');
-      const url = `${targetUrl}/get_settings${phone ? `?phone=${encodeURIComponent(formatToBarkrPhone(phone))}` : ''}`;
-      const res = await fetch(url, { mode: 'cors' });
-      if (res.ok) {
-        const serverData = await res.json();
-        setSettings(prev => ({ ...prev, ...serverData }));
-        setPiStatus('online');
-      }
-    } catch (e) { setPiStatus('offline'); }
-  }, [serverUrl, settings.myPhone]);
+      const res = await fetch(`${serverUrl}/status`, { method: 'GET', mode: 'cors' });
+      if (res.ok) setPiStatus('online');
+      else setPiStatus('error');
+    } catch (err) { setPiStatus('offline'); }
+  }, [serverUrl]);
 
-  const saveSettingsToServer = useCallback(async (currentSettings: UserSettings) => {
-    if (!currentSettings.myPhone) return;
-    const normalizedPhone = formatToBarkrPhone(currentSettings.myPhone);
+  const getBattery = async () => {
     try {
-      await fetch(`${serverUrl}/save_settings`, {
+      if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
+        const batt: any = await (navigator as any).getBattery();
+        const level = Math.round(batt.level * 100);
+        setBatteryLevel(level);
+        return level;
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const updateHistory = (timeStr: string, batt: number | null) => {
+    const newLog = { timestamp: Date.now(), timeStr, battery: batt || undefined };
+    const updated = [newLog, ...history].slice(0, 5);
+    setHistory(updated);
+    setLastSuccessTime(timeStr);
+    localStorage.setItem('safeguard_history', JSON.stringify(updated));
+    localStorage.setItem('safeguard_last_success', timeStr);
+  };
+
+  const triggerCheckin = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastTriggerRef.current < 30000) return; 
+    if (!settings.myPhone) return;
+    setIsProcessing(true);
+    const batt = await getBattery(); 
+    try {
+      const response = await fetch(`${serverUrl}/ping`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...currentSettings,
-          myPhone: normalizedPhone,
-          contacts: currentSettings.contacts.map(c => ({ ...c, phone: formatToBarkrPhone(c.phone) }))
+        body: JSON.stringify({ 
+          ...settings, 
+          phone: formatToBarkrPhone(settings.myPhone),
+          battery: batt 
         }),
         mode: 'cors'
       });
-      localStorage.setItem('last_known_phone', normalizedPhone);
-    } catch (e) {}
-  }, [serverUrl]);
+      if (response.ok) {
+        setPiStatus('online');
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        updateHistory(timeStr, batt);
+        lastTriggerRef.current = Date.now();
+      }
+    } catch (err) { setPiStatus('offline'); } finally { setIsProcessing(false); }
+  }, [settings, serverUrl, history]);
 
   const testContact = async (contact: EmergencyContact) => {
     if (!contact.phone) return alert('Vul eerst een telefoonnummer in.');
@@ -125,84 +131,19 @@ export default function App() {
     } catch (e) { alert('Pi niet bereikbaar.'); }
   };
 
-  const updateHistory = (timeStr: string, batt: number | null) => {
-    const newLog = { timestamp: Date.now(), timeStr, battery: batt || undefined };
-    const updated = [newLog, ...history].slice(0, 5);
-    setHistory(updated);
-    setLastSuccessTime(timeStr);
-    localStorage.setItem('safeguard_history', JSON.stringify(updated));
-    localStorage.setItem('safeguard_last_success', timeStr);
-  };
-
-  const getBattery = async () => {
-    try {
-      if (typeof navigator !== 'undefined' && 'getBattery' in navigator) {
-        const batt: any = await (navigator as any).getBattery();
-        const level = Math.round(batt.level * 100);
-        setBatteryLevel(level);
-        return level;
-      }
-    } catch (e) {}
-    return null;
-  };
-
-  const triggerCheckin = useCallback(async (force = false) => {
-    const now = Date.now();
-    if (!force && now - lastTriggerRef.current < 30000) return; 
-    if (!settings.myPhone) return;
-    setIsProcessing(true);
-    const batt = await getBattery();
-    try {
-      const response = await fetch(`${serverUrl}/ping`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...settings, 
-          user: settings.email.trim(), 
-          battery: batt, 
-          phone: formatToBarkrPhone(settings.myPhone) 
-        }),
-        mode: 'cors'
-      });
-      if (response.ok) {
-        setPiStatus('online');
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        updateHistory(timeStr, batt);
-        lastTriggerRef.current = Date.now();
-      }
-    } catch (err) { setPiStatus('offline'); } finally { setIsProcessing(false); }
-  }, [settings, serverUrl]);
-
-  const checkPiStatus = useCallback(async (silent = false) => {
-    if (!serverUrl) return;
-    if (!silent) setPiStatus('checking');
-    try {
-      const res = await fetch(`${serverUrl}/status`, { method: 'GET', mode: 'cors' });
-      if (res.ok) setPiStatus('online');
-      else setPiStatus('error');
-    } catch (err) { setPiStatus('offline'); }
-  }, [serverUrl]);
-
   useEffect(() => {
-    // Directe verbindingstest bij opstarten
     checkPiStatus();
-    fetchSettingsFromServer();
-    triggerCheckin(true); 
-    
+    triggerCheckin(true);
     const interval = setInterval(() => {
       checkPiStatus(true);
       triggerCheckin();
     }, 60000); 
     return () => clearInterval(interval);
-  }, [checkPiStatus, triggerCheckin, fetchSettingsFromServer]);
-
-  useEffect(() => {
-    localStorage.setItem('safeguard_settings', JSON.stringify(settings));
-  }, [settings]);
+  }, [checkPiStatus, triggerCheckin]);
 
   const handleSettingsUpdate = (newSettings: UserSettings) => {
     setSettings(newSettings);
-    saveSettingsToServer(newSettings);
+    localStorage.setItem('safeguard_settings', JSON.stringify(newSettings));
   };
 
   const isSetupIncomplete = !settings.myPhone || settings.contacts.length === 0;
@@ -213,33 +154,30 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A] font-sans antialiased">
-      
-      {/* HEADER WITH BARKING DOG LOGO */}
       <header className="px-6 py-5 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <img src={LOGO_SVG} alt="Barkr Logo" className="w-12 h-12 rounded-xl" />
+          <img src={LOGO_SVG} alt="Barkr" className="w-12 h-12 rounded-xl" />
           <div>
-            <h1 className="text-base font-black tracking-tight uppercase leading-none">Barkr</h1>
+            <h1 className="text-base font-black tracking-tight uppercase leading-none">Barkr <span className="text-slate-400 font-medium lowercase text-[10px]">v{VERSION}</span></h1>
             <div className="flex items-center gap-1.5 mt-1">
               <div className={`w-2 h-2 rounded-full ${piStatus === 'online' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {piStatus === 'online' ? 'Systeem Waakt' : 'Verbinden...'}
+                {piStatus === 'online' ? 'Status: 4G/Wi-Fi' : 'Verbinden...'}
               </span>
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 active:bg-slate-100">
-            <Info size={20} strokeWidth={1.5} />
+           <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 active:bg-slate-100">
+            <Info size={18} strokeWidth={1.5} />
           </button>
-          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 active:bg-slate-100">
-            <SettingsIcon size={20} strokeWidth={1.5} />
+           <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 active:bg-slate-100">
+            <SettingsIcon size={18} strokeWidth={1.5} />
           </button>
         </div>
       </header>
 
       <main className="flex-1 px-6 py-8 space-y-6">
-        
         {isSetupIncomplete && (
           <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 flex items-center gap-4">
             <Shield className="text-orange-600 shrink-0" size={24} strokeWidth={1.5} />
@@ -253,8 +191,7 @@ export default function App() {
           </div>
         )}
 
-        {/* STATUS CARD */}
-        <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col items-center text-center space-y-4">
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 flex flex-col items-center text-center space-y-4 shadow-sm">
           <div className={`w-24 h-24 rounded-full flex items-center justify-center ${lastSuccessTime ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-300 border border-slate-100'}`}>
             {lastSuccessTime ? <ShieldCheck size={48} strokeWidth={1.2} /> : <Activity size={48} strokeWidth={1.2} className="animate-pulse" />}
           </div>
@@ -267,10 +204,19 @@ export default function App() {
           <div className="flex items-center gap-3 pt-2">
             <div className="px-5 py-2.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center gap-2">
               <Clock size={14} className="text-[#EA580C]" />
-              <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Check: {currentDeadline}u</span>
+              <span className="text-xs font-black text-slate-600 uppercase tracking-wide">Deadline: {currentDeadline}u</span>
             </div>
             {isProcessing && <RefreshCw size={16} className="text-orange-600 animate-spin" />}
           </div>
+        </div>
+
+        {/* IP INDICATOR */}
+        <div className="bg-slate-900 text-white rounded-2xl p-5 flex items-center justify-between shadow-lg">
+           <div className="flex items-center gap-3">
+             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+             <p className="text-[10px] font-black uppercase tracking-widest">Public Link Active</p>
+           </div>
+           <p className="text-xs font-mono text-slate-400 font-bold">{serverUrl.replace('http://', '').split(':')[0]}</p>
         </div>
 
         {/* METRICS GRID */}
@@ -278,7 +224,7 @@ export default function App() {
           <div className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center gap-3">
             <User size={18} className="text-slate-400" />
             <div className="overflow-hidden">
-              <p className="text-[9px] font-black text-slate-400 uppercase">Mijn Nummer</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase">Nummer</p>
               <p className="text-xs font-bold truncate">{settings.myPhone || '--'}</p>
             </div>
           </div>
@@ -288,29 +234,6 @@ export default function App() {
               <p className="text-[9px] font-black text-slate-400 uppercase">Batterij</p>
               <p className="text-xs font-bold">{batteryLevel !== null ? `${batteryLevel}%` : '--%'}</p>
             </div>
-          </div>
-        </div>
-
-        {/* PLANNING GRID */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <CalendarDays size={16} className="text-slate-400" />
-            <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Actieve Dagen</h3>
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {DAYS_SHORT.map((day, idx) => {
-              const isActive = settings.activeDays.includes(idx);
-              const isCurrent = currentDayIndex === idx;
-              return (
-                <div key={day} className={`py-3 rounded-xl flex flex-col items-center justify-center transition-all ${
-                  isActive 
-                    ? (isCurrent ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-900 text-white') 
-                    : 'bg-slate-50 text-slate-300'
-                }`}>
-                  <span className="text-[10px] font-black tracking-tighter">{day}</span>
-                </div>
-              );
-            })}
           </div>
         </div>
 
@@ -330,27 +253,6 @@ export default function App() {
             <div className={`w-4 h-4 bg-white rounded-full transition-transform ${settings.vacationMode ? 'translate-x-6' : 'translate-x-0'}`} />
           </div>
         </button>
-
-        {/* LOGS PANEL */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Logboek</h3>
-            <button onClick={() => triggerCheckin(true)} className="text-[10px] font-black text-orange-600 uppercase">Nu Verversen</button>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {history.length === 0 ? (
-              <p className="p-8 text-center text-[10px] font-black text-slate-300 uppercase italic">Nog geen data beschikbaar</p>
-            ) : history.slice(0, 5).map((log, idx) => (
-              <div key={idx} className="px-5 py-4 flex items-center justify-between">
-                <p className="text-xs font-bold text-slate-900">{log.timeStr} <span className="text-slate-300 ml-2 font-medium">{new Date(log.timestamp).toLocaleDateString('nl-NL', {weekday: 'short'})}</span></p>
-                <div className="flex items-center gap-1.5 text-slate-400">
-                  <Battery size={10} />
-                  <span className="text-[10px] font-black">{log.battery}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </main>
 
       {/* SETTINGS MODAL */}
@@ -363,8 +265,24 @@ export default function App() {
              </div>
              <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"><X size={28}/></button>
           </div>
-          
           <div className="space-y-8 pb-24">
+            <div className="space-y-4">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Verbinding</label>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Server URL (Publiek IP)</p>
+                <input 
+                  type="text" 
+                  value={serverUrl} 
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setServerUrl(val);
+                    localStorage.setItem('barkr_server_url', val);
+                  }} 
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" 
+                />
+              </div>
+            </div>
+
             <section className="space-y-4">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Mijn Gegevens</label>
               <div className="space-y-3">
@@ -375,15 +293,6 @@ export default function App() {
                 <div className="relative">
                   <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
                   <input type="text" placeholder="+31 6 ..." value={settings.myPhone} onChange={e => handleSettingsUpdate({...settings, myPhone: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-black outline-none focus:border-orange-500" />
-                  <p className="text-[9px] text-orange-600 mt-1 ml-1 font-black uppercase tracking-wide">Altijd in het formaat: +31 6 ...</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest italic">Server URL</p>
-                  <input type="text" placeholder="http://..." value={serverUrl} onChange={e => {
-                    const val = e.target.value;
-                    setServerUrl(val);
-                    localStorage.setItem('barkr_server_url', val);
-                  }} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs outline-none focus:border-orange-500" />
                 </div>
               </div>
             </section>
@@ -449,14 +358,6 @@ export default function App() {
                   ))}
                </div>
             </section>
-
-            <footer className="pt-8 border-t border-slate-100">
-              <div className="flex items-center gap-3 text-emerald-600">
-                <Shield size={16} />
-                <p className="text-[10px] font-black uppercase tracking-widest">Privacy Garantie</p>
-              </div>
-              <p className="text-xs text-slate-400 font-medium italic mt-2 leading-relaxed">Uw gegevens blijven veilig op uw eigen Raspberry Pi. Wij verzamelen geen data in de cloud.</p>
-            </footer>
           </div>
         </div>
       )}
