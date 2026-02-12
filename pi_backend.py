@@ -44,13 +44,22 @@ def save_db(db):
         pass
 
 def format_phone(phone):
-    """Zorgt voor een consistent +316... formaat voor TextMeBot."""
+    """Zorgt voor een consistent 00316... formaat voor TextMeBot."""
     if not phone: return ""
-    p = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '').strip()
-    if p.startswith('00'): p = '+' + p[2:]
-    elif p.startswith('06'): p = '+31' + p[1:]
-    elif p.startswith('0'): p = '+31' + p[1:]
-    elif not p.startswith('+'): p = '+' + p
+    p = str(phone).replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '').strip()
+    
+    # Als het start met 06... (NL standaard)
+    if p.startswith('06') and len(p) == 10:
+        return '0031' + p[1:]
+    
+    # Als het al 316... is
+    if p.startswith('316') and len(p) == 11:
+        return '00' + p
+        
+    # Als het al correct is
+    if p.startswith('00316') and len(p) == 13:
+        return p
+        
     return p
 
 def find_user_key_by_phone(db, phone):
@@ -95,7 +104,7 @@ def print_row(icon, name, status, width=BOX_WIDTH):
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    return jsonify({"status": "online", "version": "10.5.2"})
+    return jsonify({"status": "online", "version": "11.0.1"})
 
 @app.route('/save_settings', methods=['POST'])
 def save_settings():
@@ -118,7 +127,12 @@ def save_settings():
     keys_to_sync = ['email', 'myPhone', 'startTime', 'endTime', 'contacts', 'vacationMode', 'activeDays', 'useCustomSchedule', 'schedules']
     for k in keys_to_sync:
         if k in data:
-            db[user_key][k] = data[k]
+            if k == 'myPhone':
+                db[user_key][k] = format_phone(data[k])
+            elif k == 'contacts':
+                db[user_key][k] = [{**c, 'phone': format_phone(c['phone'])} for c in data[k]]
+            else:
+                db[user_key][k] = data[k]
     
     db[user_key]['myPhone'] = phone
     db[user_key]['phone'] = phone 
@@ -143,7 +157,11 @@ def handle_ping():
     db[user_key]["alarm_sent_today"] = False 
     
     for k in ['startTime', 'endTime', 'vacationMode', 'activeDays', 'contacts', 'useCustomSchedule', 'schedules']:
-        if k in data: db[user_key][k] = data[k]
+        if k in data: 
+            if k == 'contacts':
+                db[user_key][k] = [{**c, 'phone': format_phone(c['phone'])} for c in data[k]]
+            else:
+                db[user_key][k] = data[k]
 
     save_db(db)
     return jsonify({"status": "success"})
