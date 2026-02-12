@@ -15,8 +15,7 @@ CORS(app)
 DATA_FILE = "safeguard_users.json"
 TEXTMEBOT_URL = "http://api.textmebot.com/send.php"
 
-# LET OP: Vul hieronder je eigen API-key in die je hebt gekregen via @TextMeBot.
-# De onderstaande waarde dient als placeholder.
+# De gevraagde placeholder API-key
 TEXTMEBOT_APIKEY = "ojtHErzSmwgW" 
 
 # Logging stil houden voor een schoon dashboard
@@ -66,7 +65,6 @@ def find_user_key_by_phone(db, phone):
 def send_whatsapp(phone, text):
     """
     Verstuurt WhatsApp via TextMeBot. 
-    Het '+' teken wordt automatisch URL-encoded door de params dict in requests.
     """
     p = format_phone(phone)
     if not p: return False
@@ -97,7 +95,7 @@ def print_row(icon, name, status, width=BOX_WIDTH):
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    return jsonify({"status": "online", "version": "10.4.0"})
+    return jsonify({"status": "online", "version": "10.5.2"})
 
 @app.route('/save_settings', methods=['POST'])
 def save_settings():
@@ -144,7 +142,6 @@ def handle_ping():
     db[user_key]["last_battery"] = data.get('battery', '?')
     db[user_key]["alarm_sent_today"] = False 
     
-    # Sync settings als ze meegestuurd worden
     for k in ['startTime', 'endTime', 'vacationMode', 'activeDays', 'contacts', 'useCustomSchedule', 'schedules']:
         if k in data: db[user_key][k] = data[k]
 

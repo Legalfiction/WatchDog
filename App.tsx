@@ -10,24 +10,24 @@ import {
   Plane,
   History,
   Clock,
-  Globe,
   Info,
   RefreshCw,
   CheckCircle2,
   ShieldCheck,
   Phone,
   CalendarDays,
-  Calendar,
   Fingerprint,
-  Link2
+  Link2,
+  Dog
 } from 'lucide-react';
-import { UserSettings, EmergencyContact, ActivityLog, DaySchedule } from './types';
+import { UserSettings, ActivityLog, DaySchedule } from './types';
 
-const VERSION = '10.5.0';
+// HIER IS DE FIX: Gebruik een vaste path string voor het logo
+const LOGO_PATH = '/logo.png';
+const VERSION = '10.5.2'; 
 const DEFAULT_URL = 'https://barkr.nl';
 const DAYS_FULL = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 const DAYS_SHORT = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
-const LOGO_PATH = '/logo.png';
 
 export default function App() {
   const [showSettings, setShowSettings] = useState(false);
@@ -90,7 +90,7 @@ export default function App() {
       }
     } catch (e) {
       console.warn("Server tijdelijk onbereikbaar:", e);
-      // We zetten status alleen op offline als de fetch écht mislukt, maar we tonen geen blokkerende fout
+      // We zetten status op offline maar tonen geen rode waarschuwingen meer
       setPiStatus('offline');
     }
   }, [serverUrl, settings.myPhone]);
@@ -229,8 +229,9 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans select-none overflow-x-hidden">
       <header className="flex items-center justify-between p-6 bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 overflow-hidden rounded-xl shadow-lg shadow-orange-100">
+          <div className="w-10 h-10 overflow-hidden rounded-xl shadow-lg shadow-orange-100 flex items-center justify-center bg-orange-600">
             <img src={LOGO_PATH} alt="Barkr" className="w-full h-full object-cover" />
+            <Dog className="text-white absolute opacity-0" size={24} />
           </div>
           <div>
             <h1 className="text-sm font-black uppercase tracking-widest text-slate-900">Barkr</h1>
@@ -249,7 +250,6 @@ export default function App() {
       </header>
 
       <main className="flex-1 px-6 flex flex-col space-y-5 py-6 pb-12">
-        {/* Status Section */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200 flex flex-col gap-6 shadow-sm">
            <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
@@ -292,7 +292,6 @@ export default function App() {
            </div>
         </div>
 
-        {/* Days Summary */}
         <div className="bg-orange-600 rounded-3xl p-6 text-white shadow-xl shadow-orange-100">
           <p className="text-[10px] font-black uppercase tracking-widest text-orange-100 mb-2 flex items-center gap-2">
             <CalendarDays size={12} /> Bewakingsdagen
@@ -301,7 +300,6 @@ export default function App() {
           <p className="text-xs text-orange-50 opacity-90 leading-relaxed italic">Barkr waakt over je op de geselecteerde dagen.</p>
         </div>
 
-        {/* Vacation Mode Toggle */}
         <button 
           onClick={() => handleSettingsUpdate({...settings, vacationMode: !settings.vacationMode})}
           className={`w-full p-5 rounded-3xl border transition-all flex items-center justify-between group ${settings.vacationMode ? 'bg-amber-50 border-amber-200 ring-4 ring-amber-50' : 'bg-white border-slate-200 hover:border-orange-200'}`}
@@ -318,7 +316,6 @@ export default function App() {
           </div>
         </button>
 
-        {/* History Log */}
         <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
             <History size={14} className="text-slate-400" />
@@ -345,13 +342,15 @@ export default function App() {
         <div className="fixed inset-0 z-[100] bg-white flex flex-col p-8 overflow-y-auto animate-in fade-in duration-200">
           <div className="flex items-center justify-between mb-8">
              <div className="flex items-center gap-3">
+               <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
+                 <img src={LOGO_PATH} alt="Barkr" className="w-full h-full object-cover" />
+               </div>
                <h3 className="text-xl font-black uppercase italic text-slate-900 tracking-tight">Configuratie</h3>
              </div>
              <button onClick={() => { setShowSettings(false); triggerCheckin(true); }} className="p-3 bg-slate-100 rounded-2xl text-slate-600"><X size={24}/></button>
           </div>
           
           <div className="space-y-8 pb-24">
-            {/* Days Selection */}
             <section className="space-y-3">
               <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic flex items-center gap-2">
                 <CalendarDays size={14}/> Bewakingsdagen
@@ -373,7 +372,6 @@ export default function App() {
               </div>
             </section>
 
-            {/* Timing Section */}
             <section className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
@@ -416,7 +414,6 @@ export default function App() {
                 )}
             </section>
 
-            {/* Personal Info */}
             <div className="space-y-5">
               <section className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 px-1 italic">Jouw Naam</label>
@@ -428,7 +425,6 @@ export default function App() {
               </section>
             </div>
 
-            {/* Simplified Emergency Contacts */}
             <section className="space-y-5 pt-6 border-t border-slate-100">
                <div className="flex items-center justify-between px-1">
                   <h4 className="text-[10px] font-black uppercase text-orange-600 tracking-widest italic">Noodcontacten</h4>
@@ -451,7 +447,6 @@ export default function App() {
                 ))}
             </section>
             
-            {/* Advanced Section */}
             <section className="pt-6 border-t border-slate-100 opacity-20 hover:opacity-100 transition-opacity">
                <div className="flex items-center gap-2 mb-2 px-1">
                   <Link2 size={12} className="text-slate-400" />
@@ -466,6 +461,9 @@ export default function App() {
       {showManual && (
         <div className="fixed inset-0 z-[120] bg-white flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom-4">
            <div className="flex justify-between items-center mb-8">
+              <div className="w-8 h-8 overflow-hidden rounded-lg mr-2">
+                <img src={LOGO_PATH} alt="Barkr" className="w-full h-full object-cover" />
+              </div>
               <h2 className="text-xl font-black uppercase italic text-slate-900">Over Barkr</h2>
               <button onClick={() => setShowManual(false)} className="p-3 bg-slate-100 rounded-2xl text-slate-900"><X size={24}/></button>
            </div>
