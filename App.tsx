@@ -22,11 +22,17 @@ import {
   BellRing,
   AlertCircle,
   ChevronRight,
-  Activity
+  Activity,
+  Check,
+  Mail,
+  Globe,
+  ExternalLink,
+  Smartphone,
+  MessageSquare
 } from 'lucide-react';
 import { UserSettings, ActivityLog, DaySchedule } from './types';
 
-const VERSION = '11.0.1'; 
+const VERSION = '11.0.2'; 
 const DEFAULT_URL = 'https://barkr.nl';
 
 // Gebruik het logo uit de root
@@ -520,60 +526,139 @@ export default function App() {
 
       {/* INFO / MANUAL MODAL */}
       {showManual && (
-        <div className="fixed inset-0 z-[120] bg-white flex flex-col p-8 overflow-y-auto animate-in slide-in-from-bottom-4 duration-500">
-           <div className="flex justify-between items-center mb-12">
-              <div className="w-10 h-10 bg-[#EA580C] rounded-xl flex items-center justify-center">
-                <img src={LOGO_PATH} alt="Barkr" className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
-              </div>
-              <h2 className="text-2xl font-bold italic tracking-tighter text-slate-900">Over Barkr</h2>
-              <button onClick={() => setShowManual(false)} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900"><X size={24}/></button>
-           </div>
-           
-           <div className="space-y-10 pb-20">
-              <section className="space-y-4">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-50 text-orange-600 rounded-full border border-orange-100">
-                  <Shield size={12} strokeWidth={3} />
-                  <span className="text-[10px] font-black uppercase tracking-wider">Onze Missie</span>
-                </div>
-                <p className="text-lg font-medium text-slate-900 leading-snug">
-                  Barkr is een intelligente monitor die uw welzijn bewaakt wanneer u dat zelf niet kunt. 
-                </p>
-                <p className="text-slate-500 text-sm leading-relaxed">
-                  Zie het als een trouwe waakhond: Barkr slaat alleen aan als u binnen de gestelde deadline geen activiteit vertoont op uw toestel.
-                </p>
-              </section>
+        <div className="fixed inset-0 z-[120] bg-[#F8FAFC] flex flex-col animate-in slide-in-from-bottom-4 duration-500">
+          {/* HEADER */}
+          <header className="px-6 py-5 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-[130]">
+             <div className="flex items-center gap-3">
+               <div className="w-8 h-8 bg-[#EA580C] rounded-lg flex items-center justify-center">
+                 <img src={LOGO_PATH} alt="Barkr" className="w-6 h-6 object-contain" onError={(e) => e.currentTarget.style.display = 'none'} />
+               </div>
+               <h3 className="text-sm font-bold uppercase tracking-tight text-slate-900 italic">OVER BARKR – JOUW DIGITALE WAAKHOND</h3>
+             </div>
+             <button onClick={() => setShowManual(false)} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900"><X size={20}/></button>
+          </header>
 
-              <div className="grid grid-cols-1 gap-6">
-                {[
-                  { icon: <Activity />, title: 'Monitor', text: 'Stel uw actieve tijden en een harde deadline in.' },
-                  { icon: <Fingerprint />, title: 'Activiteit', text: 'Open de app dagelijks binnen het venster.' },
-                  { icon: <AlertCircle />, title: 'Alarm', text: 'Geen activiteit? Barkr verstuurt direct WhatsApp alarmen.' }
-                ].map((item, i) => (
-                  <div key={i} className="flex gap-4 p-6 bg-slate-50 border border-slate-100 rounded-[2rem]">
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-900 shrink-0 border border-slate-200/50">
-                      {React.cloneElement(item.icon as React.ReactElement<any>, { size: 20, strokeWidth: 1.5 })}
+          <div className="flex-1 overflow-y-auto px-6 py-8 space-y-10 pb-32">
+            
+            {/* WELCOME BOX */}
+            <section className="bg-orange-50/50 border border-orange-100 rounded-3xl p-6 relative overflow-hidden">
+              <div className="relative z-10 space-y-4">
+                <p className="text-sm text-orange-900 leading-relaxed italic font-medium">
+                  Welkom bij Barkr. Deze applicatie is ontworpen om een oogje in het zeil te houden wanneer jij dat zelf even niet kunt.
+                </p>
+                <p className="text-[11px] text-orange-800/70 leading-relaxed font-medium">
+                  De naam Barkr is afgeleid van het Engelse "Barker" (blaffer) – zie het als een trouwe waakhond die alleen aanslaat ("blaft") als er iets mis lijkt te zijn.
+                </p>
+              </div>
+              <Dog className="absolute -bottom-6 -right-6 w-32 h-32 text-orange-200/40 rotate-12" strokeWidth={1} />
+            </section>
+
+            {/* HOW IT WORKS */}
+            <section className="space-y-6">
+              <div className="flex items-center gap-2 px-1">
+                <Shield size={16} className="text-blue-500" strokeWidth={2} />
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 italic">HOE WERKT BARKR?</h4>
+              </div>
+              
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-6">
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-slate-900 italic">Het principe is simpel maar effectief: Levensteken door activiteit.</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium italic">
+                    Barkr controleert of jij je telefoon hebt gebruikt binnen een door jou ingestelde tijdspanne (bijvoorbeeld tussen 07:00 en 08:30).
+                  </p>
+                </div>
+
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-start gap-4">
+                    <div className="w-6 h-6 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center shrink-0 border border-emerald-100">
+                      <Check size={14} strokeWidth={3} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900">{item.title}</h4>
-                      <p className="text-xs text-slate-500 leading-relaxed mt-1 font-medium">{item.text}</p>
+                      <p className="text-xs font-bold text-slate-900">Alles oké:</p>
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic mt-0.5">Als jij je telefoon ontgrendelt of gebruikt vóór de deadline, weet Barkr dat je wakker en actief bent. Het systeem reset zich voor de volgende dag.</p>
                     </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-6 h-6 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center shrink-0 border border-rose-100">
+                      <AlertCircle size={14} strokeWidth={3} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Alarm:</p>
+                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic mt-0.5">Heb jij je telefoon ná de deadline nog steeds niet aangeraakt? Dan "blaft" Barkr: de applicatie stuurt automatisch een noodbericht via WhatsApp naar jouw ingestelde contactpersonen.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* INSTRUCTIONS */}
+            <section className="space-y-6">
+              <div className="flex items-center gap-2 px-1">
+                <SettingsIcon size={16} className="text-[#EA580C]" strokeWidth={2} />
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-orange-600 italic">HANDLEIDING & INSTELLINGEN</h4>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium px-1 italic">Hieronder vind je uitleg over alle opties die je in het instellingenmenu (het tandwiel-icoon) en op het hoofdscherm vindt.</p>
+
+              <div className="space-y-4">
+                {[
+                  { id: 1, title: 'BEWAKINGSDAGEN', text: 'Bovenin het menu zie je de dagen van de week (Ma t/m Zo). Selecteer hier de dagen waarop je wilt dat Barkr actief is. Dagen die oranje zijn, zijn actief. Op grijze dagen is de bewaking uitgeschakeld.' },
+                  { id: 2, title: 'PLANNING: STANDAARD VS. SLIM', text: 'Je kunt kiezen hoe strikt de tijden moeten zijn:\n\n• Standaard: Zet de schakelaar \'Slimme Planning\' uit. Je stelt één Start Venster en één Deadline in die voor alle geselecteerde dagen geldt.\n\n• Slimme Planning: Zet de schakelaar aan. Er klapt nu een menu open per dag. Hiermee kun je bijvoorbeeld instellen dat je doordeweeks om 08:30 actief moet zijn, maar in het weekend pas om 10:00.' },
+                  { id: 3, title: 'JOUW GEGEVENS', text: 'Vul bij Jouw Naam en Mijn Mobiel je eigen gegevens in. Het nummer wordt gebruikt om te verifiëren dat jij het bent.' },
+                  { id: 4, title: 'NOODCONTACTEN & WHATSAPP KOPPELING', text: 'Dit is een cruciale stap om de alarmering te laten werken.\n\n• Klik op de grote oranje plus (+) om een contact toe te voegen.\n• Vul de naam en het mobiele nummer van je contactpersoon in (bijv. partner, kind of buurman).' },
+                  { id: 5, title: 'VAKANTIE MODUS', text: 'Ga je op vakantie of wilt je even geen bewaking? Op het hoofdscherm vind je de knop Vakantie Modus. Zet de schakelaar om en Barkr pauzeert alle activiteiten totdat jij hem weer uitzet. Je hoeft je instellingen dus niet te wissen.' },
+                  { id: 6, title: 'STATUS & ACTIVITEIT', text: 'Op het dashboard zie je direct de status:\n\n• Systeem Status: Geeft aan of de monitoring actief is (\'Wachten\' of \'Gedetecteerd\').\n• Vandaag Deadline: De tijd waarop je uiterlijk je telefoon gebruikt moet hebben.\n• Activiteit: Onderaan zie je een logboek van de laatste detecties, zodat je kunt terugzien wanneer Barkr activiteit heeft waargenomen.' }
+                ].map((item) => (
+                  <div key={item.id} className="bg-white border border-slate-200 rounded-3xl p-6 space-y-2">
+                    <h5 className="text-[11px] font-black text-slate-900 uppercase italic">{item.id}. {item.title}</h5>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-medium italic whitespace-pre-line">{item.text}</p>
                   </div>
                 ))}
               </div>
+            </section>
 
+            {/* MORE INFO */}
+            <section className="space-y-6">
+              <div className="flex items-center gap-2 px-1">
+                <Info size={16} className="text-blue-500" strokeWidth={2} />
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-600 italic">MEER INFORMATIE</h4>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium px-1 italic">Heb je vragen, lukt het instellen niet of wil je meer weten over de privacy?</p>
+
+              <div className="space-y-3">
+                <a href="https://www.barkr.nl" target="_blank" rel="noopener noreferrer" className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center justify-between group active:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-[#EA580C] transition-colors">
+                      <Globe size={18} strokeWidth={1.5} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-900">Bezoek onze website: www.barkr.nl</span>
+                  </div>
+                  <ExternalLink size={16} className="text-slate-300" />
+                </a>
+                <a href="mailto:info@barkr.nl" className="bg-white border border-slate-200 rounded-2xl p-5 flex items-center justify-between group active:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:text-[#EA580C] transition-colors">
+                      <Mail size={18} strokeWidth={1.5} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-900">Stuur ons een e-mail: info@barkr.nl</span>
+                  </div>
+                  <ExternalLink size={16} className="text-slate-300" />
+                </a>
+              </div>
+            </section>
+
+            {/* FINAL CTA */}
+            <div className="pt-6 space-y-4">
               <button 
                 onClick={() => setShowManual(false)} 
-                className="w-full py-5 bg-slate-900 text-white rounded-3xl text-xs font-black uppercase tracking-widest transition-transform active:scale-95"
+                className="w-full py-5 bg-[#0F172A] text-white rounded-3xl text-xs font-black uppercase tracking-[0.1em] shadow-xl shadow-slate-200 active:scale-95 transition-transform"
               >
-                Start de Monitor
+                IK HEB HET BEGREPEN
               </button>
-
-              <div className="flex flex-col items-center gap-2 opacity-20">
-                 <p className="text-[10px] font-black uppercase tracking-widest">SafeGuard Protocol</p>
-                 <div className="h-px w-8 bg-slate-900" />
-                 <p className="text-[10px] font-bold">Release v{VERSION}</p>
+              <div className="flex flex-col items-center gap-1 opacity-20 italic">
+                 <p className="text-[10px] font-black uppercase tracking-widest">SafeGuard Protocol v{VERSION}</p>
               </div>
-           </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
