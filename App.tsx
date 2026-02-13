@@ -4,7 +4,6 @@ import {
   Dog, Activity, Moon, ShieldCheck
 } from 'lucide-react';
 
-// HARDCODED: We dwingen de app via de tunnel te praten.
 const API_URL = 'https://barkr.nl';
 
 const autoFormatPhone = (input: string) => {
@@ -14,15 +13,14 @@ const autoFormatPhone = (input: string) => {
 };
 
 export default function App() {
-  // We beginnen standaard op 'connected' zodat je DIRECT de hond ziet.
-  // De status past zich vanzelf aan naar rood als het niet werkt.
-  const [status, setStatus] = useState<'connected' | 'offline'>('connected'); 
+  // We zetten de status op 'offline' zodat de UI er is, maar grijs.
+  const [status, setStatus] = useState<'connected' | 'offline'>('offline'); 
   const [showSettings, setShowSettings] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
 
   const [settings, setSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('barkr_conf_v3');
+      const saved = localStorage.getItem('barkr_conf_v4');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return {
@@ -32,28 +30,24 @@ export default function App() {
     };
   });
 
-  // Opslaan logic
   useEffect(() => {
-    localStorage.setItem('barkr_conf_v3', JSON.stringify(settings));
+    localStorage.setItem('barkr_conf_v4', JSON.stringify(settings));
     if (status === 'connected') {
         const timer = setTimeout(() => {
         fetch(`${API_URL}/save_settings`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(settings)
-        }).catch(() => {}); // Stil falen is prima
+        }).catch(() => {}); 
         }, 1000);
         return () => clearTimeout(timer);
     }
   }, [settings, status]);
 
-  // Verbinding checker
   const checkConnection = useCallback(async () => {
     try {
-      // 1. Check status
       const res = await fetch(`${API_URL}/status`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
         setStatus('connected');
-        // 2. Stuur Ping
         await fetch(`${API_URL}/ping`, { 
             method: 'POST', headers: {'Content-Type': 'application/json'}, 
             body: JSON.stringify(settings) 
@@ -73,12 +67,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [checkConnection]);
 
-  // Tekst helpers
-  const getStatusText = () => {
-    if (status === 'offline') return 'Geen verbinding';
-    return settings.vacationMode ? 'Systeem in rust' : 'Barkr is waakzaam';
-  };
-
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
       
@@ -93,7 +81,7 @@ export default function App() {
             <div className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
               <span className={`text-[10px] font-bold uppercase tracking-widest ${status === 'connected' ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600') : 'text-red-500'}`}>
-                {getStatusText()}
+                {status === 'connected' ? (settings.vacationMode ? 'Systeem in rust' : 'Barkr is waakzaam') : 'Geen verbinding'}
               </span>
             </div>
           </div>
@@ -103,26 +91,25 @@ export default function App() {
         </button>
       </header>
 
-      {/* DASHBOARD - NU ALTIJD ZICHTBAAR */}
+      {/* DASHBOARD - ALTIJD ZICHTBAAR */}
       {!showSettings && (
         <main className="flex-1 p-6 flex flex-col items-center justify-start pt-12 space-y-8">
           
           <button 
             onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
-            /* We disablen de knop NIET meer, zodat je altijd de hond ziet */
             className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center border-[8px] transition-all duration-500 shadow-xl active:scale-95 ${
-              status === 'offline' ? 'bg-slate-100 border-slate-200 opacity-80' :
+              status === 'offline' ? 'bg-slate-100 border-slate-200 opacity-100' : // Opacity 100 gezet zodat je hem goed ziet
               settings.vacationMode 
                 ? 'bg-slate-800 border-slate-600' 
                 : 'bg-orange-600 border-orange-400'
             }`}
           >
-            {/* Als Offline: Toon hond maar grijs */}
+            {/* LOGICA: Toon altijd de hond, maar verander de kleur/icoon */}
             {status === 'offline' ? (
                <>
                  <div className="relative">
                     <Dog size={100} className="text-slate-400" strokeWidth={2} />
-                    <X size={32} className="text-red-400 absolute -top-2 -right-6" strokeWidth={3}/>
+                    <X size={40} className="text-red-500 absolute -top-2 -right-6 drop-shadow-sm" strokeWidth={4}/>
                  </div>
                 <span className="text-xs font-black uppercase text-slate-400 tracking-widest mt-6">Geen Verbinding</span>
               </>
@@ -140,14 +127,6 @@ export default function App() {
                 <span className="text-sm font-black uppercase text-white tracking-widest mt-6">Tik om te pauzeren</span>
               </>
             )}
-
-            {/* Verbindings Label Onderaan */}
-            <div className={`absolute -bottom-6 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase flex items-center gap-2 shadow-lg border ${
-              status === 'connected' ? 'bg-white text-orange-600 border-orange-100' : 'bg-red-50 text-red-600 border-red-100'
-            }`}>
-               {status === 'connected' ? <Signal size={12}/> : <Wifi size={12}/>}
-               {status === 'connected' ? 'Verbonden' : 'Offline'}
-            </div>
           </button>
 
           <div className="bg-white p-6 rounded-2xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
@@ -176,7 +155,7 @@ export default function App() {
                     <label className="text-[10px] font-bold text-slate-400 uppercase">Jouw Nummer</label>
                     <input type="tel" value={settings.myPhone} onChange={e=>setSettings({...settings, myPhone:autoFormatPhone(e.target.value)})} className="w-full p-4 rounded-xl border border-slate-200 bg-white font-mono"/>
                 </div>
-                {/* Hier zouden de overige velden (Noodcontacten, Tijden etc.) moeten staan zoals in de eerdere versies */}
+                {/* Voeg hier de rest van de velden (Dagen, Tijd, Contacten) weer toe zoals je gewend bent */}
              </div>
           </div>
         </div>
