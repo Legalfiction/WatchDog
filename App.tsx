@@ -1,165 +1,65 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
-  Dog, Activity, Moon, ShieldCheck
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Dog, Wifi, AlertTriangle, ShieldAlert } from 'lucide-react';
 
 const API_URL = 'https://barkr.nl';
 
-const autoFormatPhone = (input: string) => {
-  let p = input.replace(/\s/g, '').replace(/-/g, '').replace(/\./g, '');
-  if (p.startsWith('06') && p.length === 10) return '+316' + p.substring(2);
-  return p;
-};
-
 export default function App() {
-  // We zetten de status op 'offline' zodat de UI er is, maar grijs.
-  const [status, setStatus] = useState<'connected' | 'offline'>('offline'); 
-  const [showSettings, setShowSettings] = useState(false);
-  const [lastPing, setLastPing] = useState('--:--');
+  const [errorInfo, setErrorInfo] = useState<string>("Nog geen test gedaan");
+  const [status, setStatus] = useState<'testing' | 'fail' | 'ok'>('testing');
 
-  const [settings, setSettings] = useState(() => {
+  const runDiagnostic = async () => {
+    setStatus('testing');
     try {
-      const saved = localStorage.getItem('barkr_conf_v4');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return {
-      myPhone: '', name: '', vacationMode: false, useCustomSchedule: false,
-      activeDays: [0, 1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '08:30',
-      contacts: [] as {name: string, phone: string}[], schedules: {} as any
-    };
-  });
-
-  useEffect(() => {
-    localStorage.setItem('barkr_conf_v4', JSON.stringify(settings));
-    if (status === 'connected') {
-        const timer = setTimeout(() => {
-        fetch(`${API_URL}/save_settings`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(settings)
-        }).catch(() => {}); 
-        }, 1000);
-        return () => clearTimeout(timer);
-    }
-  }, [settings, status]);
-
-  const checkConnection = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/status`, { signal: AbortSignal.timeout(3000) });
+      const res = await fetch(`${API_URL}/status`, { 
+        method: 'GET',
+        mode: 'cors',
+        headers: { 'Accept': 'application/json' }
+      });
+      
       if (res.ok) {
-        setStatus('connected');
-        await fetch(`${API_URL}/ping`, { 
-            method: 'POST', headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify(settings) 
-        });
-        setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+        setStatus('ok');
+        setErrorInfo("Verbinding met barkr.nl is perfect!");
       } else {
-        setStatus('offline');
+        setStatus('fail');
+        setErrorInfo(`Server reageert met foutcode: ${res.status}`);
       }
-    } catch (e) {
-      setStatus('offline');
+    } catch (err: any) {
+      setStatus('fail');
+      setErrorInfo(`Browser blokkeert verbinding: ${err.message}. Dit komt vaak door een HTTPS/SSL conflict.`);
     }
-  }, [settings]);
+  };
 
-  useEffect(() => {
-    checkConnection();
-    const interval = setInterval(checkConnection, 5000);
-    return () => clearInterval(interval);
-  }, [checkConnection]);
+  useEffect(() => { runDiagnostic(); }, []);
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+    <div className="max-w-md mx-auto min-h-screen bg-slate-900 text-white p-6 flex flex-col items-center justify-center font-sans">
+      <div className={`p-6 rounded-full mb-8 ${status === 'ok' ? 'bg-emerald-500' : status === 'fail' ? 'bg-red-500' : 'bg-slate-700 animate-pulse'}`}>
+        <Dog size={80} />
+      </div>
+
+      <h1 className="text-2xl font-black mb-2 italic">DIAGNOSE V3</h1>
       
-      {/* HEADER */}
-      <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-orange-600 p-1.5 rounded-lg">
-             <Dog size={20} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-black italic tracking-tighter text-slate-800">BARKR</h1>
-            <div className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${status === 'connected' ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600') : 'text-red-500'}`}>
-                {status === 'connected' ? (settings.vacationMode ? 'Systeem in rust' : 'Barkr is waakzaam') : 'Geen verbinding'}
-              </span>
-            </div>
-          </div>
+      <div className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl">
+        <div className="flex items-center gap-3 mb-4">
+          {status === 'ok' ? <Wifi className="text-emerald-400" /> : <ShieldAlert className="text-red-400" />}
+          <span className="font-bold uppercase tracking-widest text-xs">Status Rapport</span>
         </div>
-        <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
-          <Settings size={20} className="text-slate-600"/>
+        
+        <p className="text-slate-300 text-sm leading-relaxed mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 font-mono">
+          {errorInfo}
+        </p>
+
+        <button 
+          onClick={runDiagnostic}
+          className="w-full py-4 bg-orange-600 hover:bg-orange-500 rounded-xl font-bold transition-all active:scale-95"
+        >
+          TEST OPNIEUW
         </button>
-      </header>
+      </div>
 
-      {/* DASHBOARD - ALTIJD ZICHTBAAR */}
-      {!showSettings && (
-        <main className="flex-1 p-6 flex flex-col items-center justify-start pt-12 space-y-8">
-          
-          <button 
-            onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
-            className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center border-[8px] transition-all duration-500 shadow-xl active:scale-95 ${
-              status === 'offline' ? 'bg-slate-100 border-slate-200 opacity-100' : // Opacity 100 gezet zodat je hem goed ziet
-              settings.vacationMode 
-                ? 'bg-slate-800 border-slate-600' 
-                : 'bg-orange-600 border-orange-400'
-            }`}
-          >
-            {/* LOGICA: Toon altijd de hond, maar verander de kleur/icoon */}
-            {status === 'offline' ? (
-               <>
-                 <div className="relative">
-                    <Dog size={100} className="text-slate-400" strokeWidth={2} />
-                    <X size={40} className="text-red-500 absolute -top-2 -right-6 drop-shadow-sm" strokeWidth={4}/>
-                 </div>
-                <span className="text-xs font-black uppercase text-slate-400 tracking-widest mt-6">Geen Verbinding</span>
-              </>
-            ) : settings.vacationMode ? (
-              <>
-                <Moon size={80} className="text-blue-200 mb-2" strokeWidth={1.5} />
-                <span className="text-sm font-black uppercase text-blue-200 tracking-widest mt-2">Systeem Uit</span>
-              </>
-            ) : (
-              <>
-                 <div className="relative">
-                    <Dog size={100} className="text-white drop-shadow-md" strokeWidth={2} />
-                    <Signal size={32} className="text-white absolute -top-2 -right-6 animate-pulse" strokeWidth={3}/>
-                 </div>
-                <span className="text-sm font-black uppercase text-white tracking-widest mt-6">Tik om te pauzeren</span>
-              </>
-            )}
-          </button>
-
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
-             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center justify-center gap-1">
-               <Activity size={12}/> Laatste Controle
-             </p>
-             <p className="text-4xl font-black text-slate-800 tabular-nums tracking-tight">{lastPing}</p>
-          </div>
-        </main>
-      )}
-
-      {/* SETUP */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-in slide-in-from-bottom-5">
-            <header className="px-6 py-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center shadow-sm">
-            <h2 className="text-xl font-black text-slate-800 uppercase italic">Barkr Setup</h2>
-            <button onClick={() => setShowSettings(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X size={20}/></button>
-          </header>
-          <div className="p-6 space-y-6 max-w-md mx-auto">
-             <div className="space-y-4">
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Jouw Naam</label>
-                    <input type="text" value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full p-4 rounded-xl border border-slate-200 bg-white font-bold"/>
-                </div>
-                <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase">Jouw Nummer</label>
-                    <input type="tel" value={settings.myPhone} onChange={e=>setSettings({...settings, myPhone:autoFormatPhone(e.target.value)})} className="w-full p-4 rounded-xl border border-slate-200 bg-white font-mono"/>
-                </div>
-                {/* Voeg hier de rest van de velden (Dagen, Tijd, Contacten) weer toe zoals je gewend bent */}
-             </div>
-          </div>
-        </div>
-      )}
+      <p className="mt-8 text-slate-500 text-[10px] uppercase font-bold tracking-[0.2em]">
+        Gepusht om: {new Date().toLocaleTimeString()}
+      </p>
     </div>
   );
 }
