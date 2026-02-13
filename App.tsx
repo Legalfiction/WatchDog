@@ -1,17 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
-  Dog, Activity, Moon, ShieldCheck 
+  Activity, ShieldCheck, Dog 
 } from 'lucide-react';
-
-// --- JOUW AFBEELDINGEN (BASE64) ---
-const IMG_BARKING = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAw1BMVEX///8zMzM6Ojo0NDQ5OTk3Nzc1NTU+Pj47Ozs8PDw4ODg2NjZ/f3+EhIR7e3t5eXl3d3dYWFhRUVFSUlJPT09lZWVpaWlcXFxUVFRhYWFKSkpCQkJkZGRubm5gYGBiYmJ0dHRfX19LS0tMTExzc3NcXFxdXV1bW1tGRkZ9fX1aWlqCgoKAgICFhYWAgIB6enqDg4OBgYF+fn6EhISBgYGJiYmFhYWDg4OCgoKBgYF+fn6BgYGCgoKAgIBY/aWdAAAK4klEQVR4nO2ba3fiOg6GhZJAmhZIQ5t2oB0KpdDO9P//vS8kX7hXz5l9Zs7JdE71g9o2siVbtqS4XF5e/odv3779p29t/71c+N/Jbdu2r1+/fv2Xb+0L9X/Zbr/3rW1W3rZtW9n3V69fv3z58uXL6+vr75b/bdu2fXl9ff1y/er7t23bvmy2W73Wtl27qB78+vXz58+f397e3v7+/v6vtv0f8j+2239+e/v78+ePb6+vP1u92rZ12c5fX9/e3n58//5t2/73+5Vv27b94/u3798/v636+9W2277q2N/ev3//60P8V+k/v/2z1r//tt12q+H+evr78ePHf/rW5vJ/fvz9evq31YftYq11+v317e3X17+vX9pL/cfXtz//tT51l7a8u3q18dffL1+2l/jL9etP65e3a21Zl7Z8vHn7/v36t83pX3+3vr2tq8uqtOW/bL26/mXj9d8r2m39dG2zsrVvH1++bL24vn34/Gk60J+2Pr2u90352t7+1Wv7+q/95Vp/rX1Z6y63XF5v29qnt/W36/u2ffr67c7+n59+u1u9tZfS0u/X62279t3nL/Xp49tPf9p9t8U3n/+01/f08vH66VqfP33a+nT96W37+m/707c/f+rTx/r48fOnT729v9X3d2vr08frv67/2h6n75ev1/rr42e//dOn+nz6/F+L682/r/Xl9K3j16cvr9vL69eXb29v/7V13y+v9fe373/8/Pbt89ubr9+1u66f6tP3N63fPn75/fPLp89/fP/+y36/vL6/t7+2/f3zS3v79qnefrj+888vH79s//n7j5/a1r7769vHL9/q48eP77V9f/vX/v72j9evb3+3168f375/+2n7/mXrr2/bT9/r08f3n7Y+/fT9p53qj1cvr221b9vL783249c/n5xI6L36bds/vn//7d9frn34U1/+1Pr79av938e33+0W4/uvtX3/cO0P//rx+W19fv18/evbt2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+qW3/37d/+3j942e/vfn8f22fPv7155/a+vv1199a3+r7X9tPf259//Htz7X+23Z7/d7q4+v3t2/frr9b9sP291f/36/XPv5+/W71+n19/PT989u3H+ufP/7Y/vm3L3/+q";
-const IMG_SLEEPING = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAolBMVEX///8xMTFEQ0N+f391dXUmJib4+Pjs7Oz8/Pzd3d01Njbi4uJycXEuLy8/Pz86OjpTU1NKSkqBgYF5enpXV1dxcXE3NzdeX199fX0lJiYgICBJSklra2soKCgRERELCwuWlpZcXFxUVFQcHR0UFRWfn5+CgoJmZmaSkpIbGxskJCQREREvLy8zMzMAAAAAAAAAAAAAAAD39/ff39/v7++jo6N/j72yAAAIaUlEQVR4nO2ba3uqOhSGRQG1ItWCtq1dK23t7P//l54X2gTjYp3K2b3mZ9Vn9aFckkMCqam11hQfPnx81p9q/b+30n23VlZ/1Prn/621/qH11vqv771d33v1s+1S97u97b3a/rB9Xf9V1//r1bW+7+vrtm77w9fWq1+/W7/avv3567+tr72783Xb3n7X2u+a+77vW3+4fvD1X+u9772679fW+r5v687Xbe3T2rfv7X27/N29+7qutdf79Z8X9fXru/u13fve3T2rfv7X27/N29+7qutdf79Z8X9fXru/u13fve3fvvq3vD13//e33e2ufn9eXz89Pj13/3Vtf1n9t//4N99+69eHr2v+6//3c6r/r/cPHf321a72t/6y1z0/rv35Y/frjP5fPj8/787q21veH9l/r9/+83p/X18/79d+H+s+/V1r6u4e//0zU8/586N9+d+tf/9u1X2t9+bq/v3+/r8/r68eH9e/vv/+89uf107+vr6//9eFfH/5Z//7r2vrw0/3+7fNfHx53rQ+fv/+8P37c335a/+v+9u3n89fHtf9rfXjctdfHj7X+/K+Hj5+fHx8///Ww1h/uWtfW3f/97v3+/X0v/d/7/cOn+/u1d69f1+v318///f3n5+f3+/v3X2t9vVv/9+u//nN/X1+v/fN+f/jw+Xn/2fX9+uP+9s+366fP9/v1y9fD2s/P+8N9f2u7/t/6evVfv+z//vG9Pnx+7O9fP6z1cK3//v79+2v9uNb+0N///s/qWerqD+2v9/f7Q9fH34e1r//6/P/b7z+v9bHrv7Y//v3567/u79b/uf9s77372u8//3n43fW/j6uH31+/3H/uX58e9/vD/v7rD+0/v+9v7//1y+P+cK39X//f1v3h/f7j8P7x7d9e+78ePr/9cO3fn98fP777X7/9dK31/uEfn/dPnx7rP/+z/l5X+8e33/760/0f97fP9/u1v37cf+5W//p7d7++e1v/0/W/fv2w9v7u/q8f1u//fNjf364Pf/31/vr+r2v95/7137X/uNaHx/37Q+8P+8N/+70/fL6/f/79oXv47P75sNbD1f3t8+e1f//98P5vD/cPf61/fPz88fH3Wv99uF9//H37533f/3y9v336fH/743//+eHr23u39u8P3X/2z/sfn91b+59rv1r38P55/f33j66/vt2//f7w7f7u/cM//m+v2u/uYd3r/dvn7v2h9e360P35/v7h44f/+L89fP399+vrh959+Gvdf13722e/1t3/uf94/9m9P+zf//7v5e+1/un3X921+/v9fdf97cMfn+6/6/+/d9/ufn0/1L2P9w8/t7372q/9ev+j6//8uGv9+N9//+HjD7u1/2n/cK27f9x96N0//m3d/9n7W/9u199f/Xrv1197vV8fOtD/7a/W+v3Tfde1Xvffuvv1/e0P98/fHx73a2vX69P/X/t1eP+8v3/76b+7790//vH+7fPj/u5+7b/r2u/f997/+H3Xh9a9+/XzWrvf/+sPf637p0/X39/+tX/9+vA4vO//+l/r/n7dvz88Htf+0P/r/r/78P/19lq73t331of1cK3/ef347L7d1vrpU/dP69vvH7rvd9//3Prn9bN1+Hj/8f3D/brff3Ufvr0//f+f1//6+d1/+K71/b1f+6/9/u77n9f+8cO9D4///ufDtbX/9XF9Xbvv//J/99u9a7f+0L3X53X/uF/d3X14f/+/a/3t8/1v6/eHfX+4v19d+/Xj6vX7q+/Wut8f9/v3r73+fP251s/7H7X3v5+7+9vvPz+7P7z//PHhf/96uLp3/8Pf/+/93/4/a33/9f7r3j/r61+329X9+2d/f+j/9uG//7fWh+v+7uf+/a/3h6713b///Wv/e/+v3397rffP69f9P++7v7w/rK69frp+vP+/7w+r/b/Xp7UPu6/7tT4+9Pev3f8fP334d73/f5+f1z8/P64+ffq92t//W9c///Hh+3t//+H6r18vHn0B67dK/Yx1W50AAAAASUVORK5CYII=";
 
 // --- CONFIGURATIE ---
 const ENDPOINTS = [
-  'http://192.168.1.38:5000',  // 1. Wifi
-  'https://barkr.nl'           // 2. 4G / Tunnel
+  'http://192.168.1.38:5000',
+  'https://barkr.nl'
 ];
 
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -21,6 +17,38 @@ const autoFormatPhone = (input: string) => {
   if (p.startsWith('06') && p.length === 10) return '+316' + p.substring(2);
   return p;
 };
+
+// --- ICONEN (Jouw honden als code - geen losse bestanden nodig!) ---
+
+const BarkingDogIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-40 h-40 text-white drop-shadow-md">
+    <path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.452 3.043-3.324 3.714-4.647.235-.466.13-1.181.13-1.181Z"/>
+    <path d="M14.267 5.172c0-1.39-1.577-2.493-3.5-2.172-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.452 3.043-3.324 3.714-4.647.235-.466.13-1.181.13-1.181Z" transform="matrix(-1 0 0 1 24.267 0)"/>
+    <path d="M8 14v-2c0-.552.448-1 1-1h6c.552 0 1 .448 1 1v2"/>
+    <path d="M9 16c0 .552.448 1 1 1h4c.552 0 1-.448 1-1v-2H9v2Z"/>
+    <path d="M12 18v2"/>
+    <rect x="2" y="6" width="20" height="14" rx="4" ry="4" className="hidden"/> {/* Spacer */}
+    <path d="M5.5 10c-1.5 2-2 5-1.5 8 1 4 6 4 8 4s7 0 8-4c.5-3 0-6-1.5-8" />
+    <circle cx="8.5" cy="13.5" r="1.5" fill="white" stroke="none"/>
+    <circle cx="15.5" cy="13.5" r="1.5" fill="white" stroke="none"/>
+    <path d="M10.5 16.5c.5.5 2.5.5 3 0" />
+    {/* Geluidsgolven */}
+    <path d="M21 7a3 3 0 0 1 0 6" stroke="white" strokeWidth="2"/>
+    <path d="M23 5a5 5 0 0 1 0 10" stroke="white" strokeWidth="2"/>
+  </svg>
+);
+
+const SleepingDogIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-40 h-40 text-blue-200">
+     <path d="M19 12h-2a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v-4a2 2 0 0 0-2-2Z" />
+     <path d="M5 18v-5a4 4 0 0 1 4-4h4" />
+     <path d="M10 13a2 2 0 0 1 2 2v3" />
+     <path d="M19 18h2a1 1 0 0 0 1-1v-2a2 2 0 0 0-2-2" />
+     <path d="M4 18h15" />
+     {/* Gesloten oogje */}
+     <path d="M7 14h.01" strokeWidth="3"/>
+  </svg>
+);
 
 export default function App() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
@@ -45,7 +73,7 @@ export default function App() {
       fetch(`${activeUrl}/save_settings`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(settings)
-      }).catch(e => console.error("Save error:", e));
+      }).catch(e => {});
     }, 800);
     return () => clearTimeout(timer);
   }, [settings, activeUrl]);
@@ -82,12 +110,11 @@ export default function App() {
       <style>{`
         @keyframes bounce-zz {
           0%, 100% { transform: translateY(0); opacity: 0.4; }
-          50% { transform: translateY(-10px); opacity: 1; }
+          50% { transform: translateY(-15px); opacity: 1; }
         }
-        .animate-zz { animation: bounce-zz 2s infinite ease-in-out; }
+        .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
       `}</style>
       
-      {/* HEADER */}
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm">
@@ -108,58 +135,56 @@ export default function App() {
         </button>
       </header>
 
-      {/* DASHBOARD */}
       {!showSettings && (
         <main className="flex-1 p-6 flex flex-col items-center justify-start pt-16 space-y-12">
           
-          <div className="flex flex-col items-center gap-6 w-full">
+          <div className="flex flex-col items-center gap-8 w-full">
             <button 
               onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
               disabled={status !== 'connected'}
-              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[1px] ${
+              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[4px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
-                settings.vacationMode ? 'bg-slate-900 border-blue-900/40' : 'bg-orange-600 border-orange-400'
+                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-400'
               }`}
             >
               {status !== 'connected' ? (
                 <div className="flex flex-col items-center animate-pulse">
-                   <Wifi size={80} className="text-slate-400 mb-2"/>
-                   <span className="text-xs font-bold text-slate-400 uppercase">Verbinding zoeken...</span>
+                  <Wifi size={80} className="text-slate-400 mb-2"/>
+                  <span className="text-xs font-bold text-slate-400 uppercase">Verbinding zoeken...</span>
                 </div>
               ) : settings.vacationMode ? (
-                /* --- SLAAPSTAND --- */
-                <div className="relative flex flex-col items-center justify-center">
-                  <div className="absolute -top-4 right-4 flex text-blue-300 font-black pointer-events-none">
-                    <span className="animate-zz text-3xl">Z</span>
-                    <span className="animate-zz text-2xl" style={{animationDelay:'0.4s'}}>z</span>
-                    <span className="animate-zz text-xl" style={{animationDelay:'0.8s'}}>z</span>
+                /* SLAAPSTAND */
+                <div className="flex flex-col items-center justify-center relative w-full h-full">
+                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none">
+                    <span className="text-3xl animate-zz" style={{animationDelay: '0s'}}>Z</span>
+                    <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
+                    <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
                   </div>
-                  <img src={IMG_SLEEPING} alt="Slaapstand" className="w-44 h-44 object-contain brightness-110" />
+                  <SleepingDogIcon />
                   <span className="text-xs font-black uppercase text-blue-200 tracking-widest mt-4">Wakker worden</span>
                 </div>
               ) : (
-                /* --- ACTIEF --- */
-                <div className="flex flex-col items-center justify-center">
-                   <img src={IMG_BARKING} alt="Actief" className="w-44 h-44 object-contain" />
-                   <span className="text-xs font-black uppercase text-white tracking-widest mt-4">Tik om te slapen</span>
+                /* ACTIEVE STAND */
+                <div className="flex flex-col items-center justify-center w-full h-full">
+                   <BarkingDogIcon />
+                   <span className="text-xs font-black uppercase text-white tracking-widest mt-6">Tik om te slapen</span>
                 </div>
               )}
             </button>
 
-            {/* VERBINDINGS STATUS (Geen overlap) */}
+            {/* VERBINDINGS STATUS */}
             {activeUrl && status === 'connected' && (
-              <div className={`px-5 py-2 rounded-full text-[10px] font-bold uppercase flex items-center gap-2 shadow-sm border ${
-                settings.vacationMode ? 'bg-slate-800 text-blue-300 border-slate-700' : 'bg-white text-orange-600 border-orange-100'
+              <div className={`px-6 py-2.5 rounded-full text-[11px] font-bold uppercase flex items-center gap-2 shadow-sm border transition-colors ${
+                settings.vacationMode ? 'bg-slate-800 text-blue-200 border-slate-700' : 'bg-white text-orange-600 border-orange-100'
               }`}>
-                {activeUrl.includes('barkr') ? <Signal size={12}/> : <Wifi size={12}/>}
+                {activeUrl.includes('barkr') ? <Signal size={14}/> : <Wifi size={14}/>}
                 {activeUrl.includes('barkr') ? '4G Verbinding' : 'Wifi Verbinding'}
               </div>
             )}
           </div>
 
-          {/* LAATSTE PING */}
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
-             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center justify-center gap-1.5 tracking-widest">
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
+             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center justify-center gap-1 tracking-widest">
                <Activity size={12}/> Laatste Controle
              </p>
              <p className="text-4xl font-black text-slate-800 tabular-nums tracking-tight">{lastPing}</p>
@@ -167,7 +192,6 @@ export default function App() {
         </main>
       )}
 
-      {/* SETUP SCHERM */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-in slide-in-from-bottom-5">
           <header className="px-6 py-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center shadow-sm">
@@ -176,7 +200,6 @@ export default function App() {
           </header>
 
           <div className="p-6 space-y-6 max-w-md mx-auto pb-20">
-            {/* DAGEN SELECTIE */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block"><Calendar size={10} className="inline mr-1"/> Actieve Dagen</label>
               <div className="flex justify-between gap-1">
@@ -193,7 +216,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* TIJDSCHEMA */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex justify-between items-center mb-4">
                  <div>
@@ -231,7 +253,6 @@ export default function App() {
               )}
             </div>
 
-            {/* PERSOONSGEGEVENS */}
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase">Naam Gebruiker</label>
@@ -243,7 +264,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* NOODCONTACTEN */}
             <div>
               <div className="flex justify-between items-center mb-2">
                  <label className="text-[10px] font-bold text-orange-600 uppercase">Noodcontacten</label>
