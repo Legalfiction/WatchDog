@@ -1,65 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { Dog, Wifi, AlertTriangle, ShieldAlert } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Settings, X, Signal, Dog, Activity, Moon } from 'lucide-react';
 
 const API_URL = 'https://barkr.nl';
 
 export default function App() {
-  const [errorInfo, setErrorInfo] = useState<string>("Nog geen test gedaan");
-  const [status, setStatus] = useState<'testing' | 'fail' | 'ok'>('testing');
+  const [status, setStatus] = useState<'connected' | 'offline'>('offline'); 
+  const [showSettings, setShowSettings] = useState(false);
+  const [lastPing, setLastPing] = useState('--:--');
+  const [settings, setSettings] = useState({
+    myPhone: '', name: '', vacationMode: false, contacts: []
+  });
 
-  const runDiagnostic = async () => {
-    setStatus('testing');
+  const checkConnection = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/status`, { 
-        method: 'GET',
-        mode: 'cors',
-        headers: { 'Accept': 'application/json' }
-      });
-      
+      const res = await fetch(`${API_URL}/status`, { signal: AbortSignal.timeout(3000) });
       if (res.ok) {
-        setStatus('ok');
-        setErrorInfo("Verbinding met barkr.nl is perfect!");
+        setStatus('connected');
+        setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
       } else {
-        setStatus('fail');
-        setErrorInfo(`Server reageert met foutcode: ${res.status}`);
+        setStatus('offline');
       }
-    } catch (err: any) {
-      setStatus('fail');
-      setErrorInfo(`Browser blokkeert verbinding: ${err.message}. Dit komt vaak door een HTTPS/SSL conflict.`);
+    } catch (e) {
+      setStatus('offline');
     }
-  };
+  }, []);
 
-  useEffect(() => { runDiagnostic(); }, []);
+  useEffect(() => {
+    checkConnection();
+    const interval = setInterval(checkConnection, 5000);
+    return () => clearInterval(interval);
+  }, [checkConnection]);
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-900 text-white p-6 flex flex-col items-center justify-center font-sans">
-      <div className={`p-6 rounded-full mb-8 ${status === 'ok' ? 'bg-emerald-500' : status === 'fail' ? 'bg-red-500' : 'bg-slate-700 animate-pulse'}`}>
-        <Dog size={80} />
-      </div>
-
-      <h1 className="text-2xl font-black mb-2 italic">DIAGNOSE V3</h1>
-      
-      <div className="w-full bg-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl">
-        <div className="flex items-center gap-3 mb-4">
-          {status === 'ok' ? <Wifi className="text-emerald-400" /> : <ShieldAlert className="text-red-400" />}
-          <span className="font-bold uppercase tracking-widest text-xs">Status Rapport</span>
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+      <header className="px-6 py-4 bg-white border-b flex justify-between items-center sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-600 p-1.5 rounded-lg"><Dog size={20} className="text-white" /></div>
+          <div>
+            <h1 className="text-lg font-black italic text-slate-800">BARKR</h1>
+            <div className="flex items-center gap-1.5">
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              <span className="text-[10px] font-bold uppercase tracking-widest">
+                {status === 'connected' ? 'Systeem Actief' : 'Geen Verbinding'}
+              </span>
+            </div>
+          </div>
         </div>
-        
-        <p className="text-slate-300 text-sm leading-relaxed mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700 font-mono">
-          {errorInfo}
-        </p>
+        <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl"><Settings size={20}/></button>
+      </header>
 
+      <main className="flex-1 p-6 flex flex-col items-center justify-center space-y-8">
         <button 
-          onClick={runDiagnostic}
-          className="w-full py-4 bg-orange-600 hover:bg-orange-500 rounded-xl font-bold transition-all active:scale-95"
+          onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
+          className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center border-[8px] transition-all duration-500 shadow-xl ${
+            status === 'offline' ? 'bg-slate-200 border-slate-300' :
+            settings.vacationMode ? 'bg-slate-800 border-slate-600' : 'bg-orange-600 border-orange-400'
+          }`}
         >
-          TEST OPNIEUW
+          {status === 'offline' ? (
+            <div className="relative"><Dog size={100} className="text-slate-400" /><X size={40} className="text-red-500 absolute -top-2 -right-6"/></div>
+          ) : settings.vacationMode ? (
+            <Moon size={80} className="text-blue-200" />
+          ) : (
+            <div className="relative"><Dog size={100} className="text-white" /><Signal size={32} className="text-white absolute -top-2 -right-6 animate-pulse" /></div>
+          )}
         </button>
-      </div>
 
-      <p className="mt-8 text-slate-500 text-[10px] uppercase font-bold tracking-[0.2em]">
-        Gepusht om: {new Date().toLocaleTimeString()}
-      </p>
+        <div className="bg-white p-6 rounded-2xl border w-full max-w-xs text-center shadow-sm">
+          <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Laatste Controle</p>
+          <p className="text-4xl font-black text-slate-800">{lastPing}</p>
+        </div>
+      </main>
     </div>
   );
 }
