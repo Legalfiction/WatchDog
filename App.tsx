@@ -110,9 +110,9 @@ export default function App() {
             <button 
               onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
               disabled={status !== 'connected'}
-              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[6px] ${
+              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[10px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
-                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-orange-500'
+                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-orange-600'
               }`}
             >
               {status !== 'connected' ? (
@@ -121,26 +121,24 @@ export default function App() {
                   <span className="text-xs font-bold text-slate-400 uppercase">Verbinding zoeken...</span>
                 </div>
               ) : settings.vacationMode ? (
-                /* SLAAPSTAND */
                 <div className="flex flex-col items-center justify-center relative w-full h-full">
                   <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10">
                     <span className="text-3xl animate-zz" style={{animationDelay: '0s'}}>Z</span>
                     <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
                     <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
                   </div>
-                  {/* AANPASSING: object-cover vult de cirkel volledig */}
-                  <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover opacity-40 grayscale" />
+                  {/* Corrigeer kartelrand met scale-[1.01] */}
+                  <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.01] opacity-40 grayscale" />
                   <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
                     <span className="text-xs font-black uppercase text-blue-100 tracking-widest mt-24">Wakker worden</span>
                   </div>
                 </div>
               ) : (
-                /* ACTIEVE STAND */
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
-                   {/* AANPASSING: w-full en h-full met object-cover haalt de witte randen weg */}
-                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover drop-shadow-xl" />
-                   <div className="absolute bottom-10 inset-x-0 text-center">
-                      <span className="text-xs font-black uppercase text-white drop-shadow-md tracking-widest">Tik om te slapen</span>
+                   {/* Corrigeer kartelrand met scale-[1.01] */}
+                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.01] drop-shadow-xl" />
+                   <div className="absolute bottom-8 inset-x-0 text-center">
+                      <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] tracking-widest">Tik om te slapen</span>
                    </div>
                 </div>
               )}
@@ -165,7 +163,6 @@ export default function App() {
         </main>
       )}
 
-      {/* ... rest van de settings sectie ongewijzigd ... */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-in slide-in-from-bottom-5">
           <header className="px-6 py-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center shadow-sm">
