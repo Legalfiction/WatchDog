@@ -1,49 +1,3 @@
-// Styling voor de ronde container en de afbeelding
-const styles = StyleSheet.create({
-  // De container die de cirkel vormt
-  mainCircle: {
-    width: 260,           // Pas de grootte aan naar jouw ontwerp
-    height: 260,
-    borderRadius: 130,    // Moet precies de helft van de breedte/hoogte zijn voor een cirkel
-    borderWidth: 6,
-    borderColor: '#F16A0B', // De oranje kleur uit de app
-    overflow: 'hidden',   // CRUCIAAL: Knipt de hoeken van de vierkante afbeelding af
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  // De afbeelding (bron) die de cirkel moet vullen
-  logoImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',  // Zorgt ervoor dat de afbeelding de hele cirkel vult zonder vervorming
-  },
-  // Tekst onder de cirkel
-  statusText: {
-    marginTop: 20,
-    color: '#F16A0B',
-    fontWeight: 'bold',
-    fontSize: 16,
-    letterSpacing: 1.5,
-  }
-});
-
-// Implementatie in je Component
-return (
-  <View style={styles.container}>
-    <TouchableOpacity style={styles.mainCircle}>
-      <Image 
-        source={require('./assets/jouw-hond-logo.png')} 
-        style={styles.logoImage} 
-      />
-    </TouchableOpacity>
-    <Text style={styles.statusText}>TIK OM TE SLAPEN</Text>
-    
-    {/* De rest van je UI zoals de WIFI VERBINDING knop */}
-  </View>
-);
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
@@ -156,9 +110,9 @@ export default function App() {
             <button 
               onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
               disabled={status !== 'connected'}
-              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[4px] ${
+              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[6px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
-                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-orange-400'
+                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-orange-500'
               }`}
             >
               {status !== 'connected' ? (
@@ -174,14 +128,20 @@ export default function App() {
                     <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
                     <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
                   </div>
-                  <img src="/logo.png" alt="Barkr Logo" className="w-48 h-48 object-contain opacity-40 grayscale" />
-                  <span className="text-xs font-black uppercase text-blue-200 tracking-widest mt-4">Wakker worden</span>
+                  {/* AANPASSING: object-cover vult de cirkel volledig */}
+                  <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover opacity-40 grayscale" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
+                    <span className="text-xs font-black uppercase text-blue-100 tracking-widest mt-24">Wakker worden</span>
+                  </div>
                 </div>
               ) : (
                 /* ACTIEVE STAND */
-                <div className="flex flex-col items-center justify-center w-full h-full">
-                   <img src="/logo.png" alt="Barkr Logo" className="w-48 h-48 object-contain drop-shadow-xl" />
-                   <span className="text-xs font-black uppercase text-orange-600 tracking-widest mt-6">Tik om te slapen</span>
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                   {/* AANPASSING: w-full en h-full met object-cover haalt de witte randen weg */}
+                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover drop-shadow-xl" />
+                   <div className="absolute bottom-10 inset-x-0 text-center">
+                      <span className="text-xs font-black uppercase text-white drop-shadow-md tracking-widest">Tik om te slapen</span>
+                   </div>
                 </div>
               )}
             </button>
@@ -205,6 +165,7 @@ export default function App() {
         </main>
       )}
 
+      {/* ... rest van de settings sectie ongewijzigd ... */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-in slide-in-from-bottom-5">
           <header className="px-6 py-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center shadow-sm">
