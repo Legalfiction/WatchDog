@@ -1,138 +1,156 @@
-import os
-import json
-import requests
-import logging
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from datetime import datetime
-import time
-import threading
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
+  Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle
+} from 'lucide-react';
 
-file_lock = threading.Lock()
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
+const ENDPOINTS = ['http://192.168.1.38:5000', 'https://barkr.nl'];
+const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
-app = Flask(__name__)
-CORS(app)
+const autoFormatPhone = (input: string) => {
+  let p = input.replace(/\s/g, '').replace(/-/g, '').replace(/\./g, '');
+  if (p.startsWith('06') && p.length === 10) return '+316' + p.substring(2);
+  return p;
+};
 
-DATA_FILE = os.path.expanduser("~/barkr/settings.json")
-API_KEY = "ojtHErzSmwgW"
+export default function App() {
+  const [activeUrl, setActiveUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState<'searching' | 'connected' | 'offline'>('searching');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showManual, setShowManual] = useState(false);
+  const [lastPing, setLastPing] = useState('--:--');
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('barkr_v16_data');
+    return saved ? JSON.parse(saved) : {
+      myPhone: '', name: '', vacationMode: false, useCustomSchedule: false,
+      activeDays: [0, 1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '08:30',
+      contacts: [], schedules: {}
+    };
+  });
 
-def load_settings():
-    with file_lock:
-        if os.path.exists(DATA_FILE):
-            try:
-                with open(DATA_FILE, "r") as f:
-                    return json.load(f)
-            except:
-                pass
-    return {"name": "Aldo gebruiker", "contacts": [], "activeDays": [0,1,2,3,4,5,6], "startTime": "07:00", "endTime": "08:30"}
+  // VERBINDING ZOEKEN
+  const findConnection = useCallback(async () => {
+    for (const url of ENDPOINTS) {
+      try {
+        const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) });
+        if (res.ok) {
+          setActiveUrl(url);
+          setStatus('connected');
+          setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+          return; 
+        }
+      } catch (e) {}
+    }
+    setStatus('offline');
+  }, []);
 
-def log_status(msg):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {msg}", flush=True)
+  useEffect(() => {
+    findConnection();
+    const interval = setInterval(findConnection, 5000);
+    return () => clearInterval(interval);
+  }, [findConnection]);
 
-def send_whatsapp_to_all(settings):
-    user_name = settings.get('name', 'Gebruiker')
-    contacts = settings.get('contacts', [])
-    start = settings.get('startTime', '07:00')
-    end = settings.get('endTime', '08:30')
-    day_idx = datetime.now().weekday()
-    if settings.get('useCustomSchedule') and str(day_idx) in settings.get('schedules', {}):
-        start = settings['schedules'][str(day_idx)].get('startTime', start)
-        end = settings['schedules'][str(day_idx)].get('endTime', end)
+  // PING LOGICA: Stuur elke 30 seconden een teken van leven naar de Pi
+  useEffect(() => {
+    if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
+    const sendPing = () => fetch(`${activeUrl}/ping`, { method: 'POST' }).catch(() => {});
+    sendPing();
+    const interval = setInterval(sendPing, 30000);
+    return () => clearInterval(interval);
+  }, [status, activeUrl, settings.vacationMode]);
 
-    message = (
-        f"*BARKR ALARM*\n\n"
-        f"Gebruiker: {user_name}\n"
-        f"Status: {start}-{end} geen activiteit gemeten.\n\n"
-        f"De ingestelde eindtijd is verstreken en er is vandaag geen gebruik van de telefoon geregistreerd."
-    )
-    
-    log_status(f"📢 ALARM TRIGGER voor {user_name}: Start verzending naar {len(contacts)} contacten.")
-    for c in contacts:
-        phone = c.get('phone', '').replace('+', '').replace(' ', '')
-        if phone:
-            time.sleep(6) 
-            url = f"https://api.textmebot.com/send.php?recipient={phone}&apikey={API_KEY}&text={requests.utils.quote(message)}"
-            try:
-                res = requests.get(url, timeout=15)
-                log_status(f"   ✅ VERZONDEN naar {c.get('name')} (Code: {res.status_code})")
-            except Exception as e:
-                log_status(f"   ❌ FOUT naar {phone}: {e}")
+  // OPSLAAN EFFECT
+  useEffect(() => {
+    if (!settings.name || !settings.myPhone) return;
+    localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
+    if (activeUrl) fetch(`${activeUrl}/save_settings`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(settings)
+    }).catch(() => {});
+  }, [settings, activeUrl]);
 
-def monitoring_loop():
-    log_status("🚀 BARKR PRODUCTIE MODUS ACTIEF.")
-    while True:
-        try:
-            settings = load_settings()
-            if settings.get('vacationMode'):
-                time.sleep(60)
-                continue
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+      <style>{`@keyframes bounce-zz {0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; }} .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }`}</style>
+      
+      <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20">
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div>
+          <div>
+            <h1 className="text-lg font-black italic tracking-tighter text-slate-800">BARKR</h1>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
+              <span className={status === 'connected' ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600') : 'text-red-500'}>
+                {status === 'offline' ? 'Geen verbinding' : status === 'searching' ? 'Zoeken...' : settings.vacationMode ? 'Systeem in rust' : 'Barkr is waakzaam'}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Info size={20}/></button>
+          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Settings size={20}/></button>
+        </div>
+      </header>
 
-            now = datetime.now()
-            today_str = now.strftime("%Y-%m-%d")
-            day_idx = now.weekday()
+      {!showSettings && !showManual && (
+        <main className="flex-1 p-6 flex flex-col items-center justify-start pt-16 space-y-12">
+          <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} disabled={status !== 'connected'} className={`relative w-72 h-72 rounded-full flex items-center justify-center border-[10px] shadow-2xl overflow-hidden ${settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
+             {settings.vacationMode ? (
+                <div className="flex flex-col items-center justify-center relative w-full h-full">
+                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10">
+                    <span className="text-3xl animate-zz" style={{animationDelay: '0s'}}>Z</span>
+                    <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
+                    <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
+                  </div>
+                  <img src="/logo.png" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40"><span className="text-xs font-black uppercase text-blue-100 mt-24">Wakker worden</span></div>
+                </div>
+             ) : (
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                   <img src="/logo.png" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
+                   <div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">Tik om te slapen</span></div>
+                </div>
+             )}
+          </button>
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
+             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest"><Activity size={12} className="inline mr-1"/> Laatste Controle</p>
+             <p className="text-4xl font-black text-slate-800">{lastPing}</p>
+          </div>
+        </main>
+      )}
 
-            if day_idx in settings.get('activeDays', []):
-                start_str = settings.get('startTime', '07:00')
-                end_str = settings.get('endTime', '08:30')
-                if settings.get('useCustomSchedule') and str(day_idx) in settings.get('schedules', {}):
-                    start_str = settings['schedules'][str(day_idx)].get('startTime', start_str)
-                    end_str = settings['schedules'][str(day_idx)].get('endTime', end_str)
+      {/* Manual & Settings secties blijven ongewijzigd maar placeholder is hersteld naar "Naam" */}
+      {showManual && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
+          <header className="flex justify-between items-center mb-6"><h2 className="text-xl font-black uppercase italic tracking-tight">Handleiding</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full"><X size={20}/></button></header>
+          <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3"><h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4><p className="text-sm text-orange-900 leading-relaxed font-medium">Als de mobiel van de gebruiker **niet is aangezet** tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de contacten verstuurd.</p></section>
+          <section className="bg-blue-50 p-6 rounded-3xl border border-blue-200 space-y-3"><h4 className="font-bold text-blue-800 flex items-center gap-2"><AlertTriangle size={18}/> Versie Instructie</h4><p className="text-sm text-blue-900 leading-relaxed font-medium">In deze versie moet de app **altijd eenmalig handmatig opgestart worden**.</p></section>
+          <section className="bg-slate-800 p-6 rounded-3xl text-white space-y-3"><h4 className="font-bold flex items-center gap-2"><ExternalLink size={18} className="text-orange-400"/> Contact</h4><div className="space-y-1 text-sm"><p>www.barkr.nl</p><p>info@barkr.nl</p></div></section>
+        </div>
+      )}
 
-                start_dt = datetime.combine(now.date(), datetime.strptime(start_str, "%H:%M").time())
-                end_dt = datetime.combine(now.date(), datetime.strptime(end_str, "%H:%M").time())
-
-                last_ping_dt = None
-                if settings.get('last_ping_time'):
-                    last_ping_dt = datetime.strptime(settings['last_ping_time'], "%Y-%m-%d %H:%M:%S")
-
-                is_nu_online = last_ping_dt and (now - last_ping_dt).total_seconds() < 300
-                log_status(f"🔍 MONITOR {settings.get('name')} | Window: {start_str}-{end_str} | Status: {'🟢 AAN' if is_nu_online else '🔴 UIT'}")
-
-                if now > end_dt:
-                    if settings.get('last_processed_date', "") != today_str:
-                        log_status(f"🏁 Deadline bereikt ({end_str}). Evaluatie start...")
-                        is_actief_in_window = last_ping_dt and last_ping_dt >= start_dt
-                        if not is_actief_in_window:
-                            send_whatsapp_to_all(settings)
-                        
-                        settings['last_processed_date'] = today_str
-                        with file_lock:
-                            with open(DATA_FILE, "w") as f:
-                                json.dump(settings, f)
-        except Exception as e:
-            log_status(f"⚠️ LOOP FOUT: {e}")
-        time.sleep(60)
-
-@app.route('/ping', methods=['POST'])
-def ping():
-    settings = load_settings()
-    settings['last_ping_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_status(f"📡 PING: {settings.get('name')} staat AAN")
-    with file_lock:
-        with open(DATA_FILE, "w") as f:
-            json.dump(settings, f)
-    return jsonify({"status": "received"})
-
-@app.route('/save_settings', methods=['POST'])
-def save():
-    data = request.json
-    # BEVEILIGING: Als de naam leeg is, negeren we de save om overschrijven te voorkomen
-    if not data.get('name') or not data.get('myPhone'):
-        log_status("⚠️ BLOKKADE: Lege instellingen genegeerd om dataverlies te voorkomen.")
-        return jsonify({"status": "ignored"}), 200
-
-    data['last_processed_date'] = "" 
-    current = load_settings()
-    data['last_ping_time'] = current.get('last_ping_time', "")
-    log_status(f"💾 OPSLAAN: Instellingen voor {data.get('name')}. Status gereset.")
-    with file_lock:
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f)
-    return jsonify({"status": "ok"})
-
-if __name__ == '__main__':
-    threading.Thread(target=monitoring_loop, daemon=True).start()
-    app.run(host='0.0.0.0', port=5000)
+      {showSettings && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
+          <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
+          <div className="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
+            <div className="flex justify-between items-center"><div><h3 className="font-bold text-sm">Slimme Planning</h3><p className="text-[10px] text-slate-400">Vensters per dag instellen</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
+            {!settings.useCustomSchedule ? (
+              <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Start</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full mt-1 bg-slate-50 border rounded-xl p-3 font-bold"/></div><div><label className="text-[10px] font-bold text-red-400 uppercase">Deadline</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full mt-1 bg-slate-50 border rounded-xl p-3 font-bold text-red-600"/></div></div>
+            ) : (
+              <div className="space-y-3">{settings.activeDays.sort().map(d => (<div key={d} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-2"><span className="text-xs font-black uppercase text-orange-800 block border-b pb-1">{DAYS[d]}</span><div className="grid grid-cols-2 gap-3"><div><p className="text-[9px] font-bold text-slate-400 uppercase">Start</p><input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border text-xs font-bold"/></div><div><p className="text-[9px] font-bold text-red-400 uppercase">Deadline</p><input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border text-xs font-bold text-red-600"/></div></div></div>))}</div>
+            )}
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-2">Gebruiker</label>
+            <input placeholder="Naam" value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full bg-white border p-3 rounded-xl mb-4 font-bold outline-none"/>
+            <input placeholder="06..." value={settings.myPhone} onChange={e=>setSettings({...settings, myPhone:autoFormatPhone(e.target.value)})} className="w-full bg-white border p-3 rounded-xl mb-6 font-mono outline-none"/>
+            
+            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2">Contacten</label>
+            <button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+            <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border rounded-xl p-3 text-sm font-bold outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border rounded-xl p-3 text-sm font-mono outline-none"/></div></div>))}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
