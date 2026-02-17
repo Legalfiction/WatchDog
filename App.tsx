@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
-  Activity, ShieldCheck, Dog 
+  Activity, ShieldCheck, Dog, Clock
 } from 'lucide-react';
 
 // --- CONFIGURATIE ---
@@ -210,12 +210,26 @@ export default function App() {
               ) : (
                 <div className="space-y-3">
                    {settings.activeDays.sort().map(d => (
-                     <div key={d} className="bg-orange-50/50 p-3 rounded-xl border border-orange-100 flex justify-between items-center">
-                        <span className="text-xs font-bold uppercase text-orange-800 flex items-center gap-2"><Calendar size={12}/> {DAYS[d]}</span>
-                        <input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>{
-                          const s = {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}};
-                          setSettings({...settings, schedules: s});
-                        }} className="bg-white px-2 py-1 rounded border border-orange-200 text-xs font-bold text-red-600"/>
+                     <div key={d} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 flex flex-col gap-3">
+                        <span className="text-xs font-black uppercase text-orange-800 flex items-center gap-2 border-b border-orange-100 pb-2">
+                           <Calendar size={14}/> {DAYS[d]}
+                        </span>
+                        <div className="grid grid-cols-2 gap-3">
+                           <div>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Start</p>
+                              <input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>{
+                                const s = {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}};
+                                setSettings({...settings, schedules: s});
+                              }} className="w-full bg-white px-2 py-2 rounded-lg border border-orange-200 text-xs font-bold text-slate-700"/>
+                           </div>
+                           <div>
+                              <p className="text-[9px] font-bold text-red-400 uppercase mb-1">Deadline</p>
+                              <input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>{
+                                const s = {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}};
+                                setSettings({...settings, schedules: s});
+                              }} className="w-full bg-white px-2 py-2 rounded-lg border border-orange-200 text-xs font-bold text-red-600"/>
+                           </div>
+                        </div>
                      </div>
                    ))}
                 </div>
@@ -234,26 +248,48 @@ export default function App() {
             </div>
 
             <div>
-              <div className="flex justify-between items-center mb-2">
-                 <label className="text-[10px] font-bold text-orange-600 uppercase">Noodcontacten</label>
-                 <button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="bg-orange-600 text-white p-2 rounded-lg shadow-md shadow-orange-200"><Plus size={16}/></button>
+              <div className="flex justify-between items-center mb-3">
+                 <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">Contacten</label>
+                 <button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="bg-orange-600 text-white p-2 rounded-lg shadow-md shadow-orange-200 hover:bg-orange-700 transition-colors">
+                    <Plus size={16}/>
+                 </button>
               </div>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {settings.contacts.map((c, i) => (
-                  <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative">
-                     <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={16}/></button>
-                     <div className="space-y-2 pr-6">
-                        <input placeholder="Naam Contact" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full font-bold text-sm outline-none bg-transparent"/>
-                        <input placeholder="Telefoonnummer" value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full font-mono text-xs text-slate-500 outline-none bg-transparent"/>
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
+                     <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-5 right-5 text-slate-300 hover:text-red-400 transition-colors">
+                        <Trash2 size={18}/>
+                     </button>
+                     
+                     <div className="grid gap-3">
+                        <div>
+                           <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label>
+                           <input 
+                              placeholder="Bijv. Saskia Janssen" 
+                              value={c.name} 
+                              onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} 
+                              className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 focus:border-orange-200 outline-none transition-all"
+                           />
+                        </div>
+                        <div>
+                           <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label>
+                           <input 
+                              placeholder="06..." 
+                              value={c.phone} 
+                              onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} 
+                              className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 focus:border-orange-200 outline-none transition-all"
+                           />
+                        </div>
                      </div>
+
                      <button onClick={() => {
                          if(activeUrl) fetch(`${activeUrl}/test_contact`, {
                            method:'POST', 
                            headers:{'Content-Type':'application/json'}, 
                            body:JSON.stringify(c)
                          });
-                       }} className="mt-3 bg-emerald-50 text-emerald-600 text-[10px] font-bold px-3 py-1.5 rounded-lg border border-emerald-100 flex items-center gap-1.5 w-fit hover:bg-emerald-100 transition-colors">
-                       <ShieldCheck size={12}/> TEST VERBINDING
+                       }} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-3 rounded-xl border border-emerald-100 flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors">
+                       <ShieldCheck size={14}/> TEST VERBINDING
                      </button>
                   </div>
                 ))}
