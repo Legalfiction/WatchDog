@@ -18,38 +18,6 @@ const autoFormatPhone = (input: string) => {
   return p;
 };
 
-// --- ICONEN (Jouw honden als code - geen losse bestanden nodig!) ---
-
-const BarkingDogIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-40 h-40 text-white drop-shadow-md">
-    <path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.452 3.043-3.324 3.714-4.647.235-.466.13-1.181.13-1.181Z"/>
-    <path d="M14.267 5.172c0-1.39-1.577-2.493-3.5-2.172-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.452 3.043-3.324 3.714-4.647.235-.466.13-1.181.13-1.181Z" transform="matrix(-1 0 0 1 24.267 0)"/>
-    <path d="M8 14v-2c0-.552.448-1 1-1h6c.552 0 1 .448 1 1v2"/>
-    <path d="M9 16c0 .552.448 1 1 1h4c.552 0 1-.448 1-1v-2H9v2Z"/>
-    <path d="M12 18v2"/>
-    <rect x="2" y="6" width="20" height="14" rx="4" ry="4" className="hidden"/> {/* Spacer */}
-    <path d="M5.5 10c-1.5 2-2 5-1.5 8 1 4 6 4 8 4s7 0 8-4c.5-3 0-6-1.5-8" />
-    <circle cx="8.5" cy="13.5" r="1.5" fill="white" stroke="none"/>
-    <circle cx="15.5" cy="13.5" r="1.5" fill="white" stroke="none"/>
-    <path d="M10.5 16.5c.5.5 2.5.5 3 0" />
-    {/* Geluidsgolven */}
-    <path d="M21 7a3 3 0 0 1 0 6" stroke="white" strokeWidth="2"/>
-    <path d="M23 5a5 5 0 0 1 0 10" stroke="white" strokeWidth="2"/>
-  </svg>
-);
-
-const SleepingDogIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-40 h-40 text-blue-200">
-     <path d="M19 12h-2a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v-4a2 2 0 0 0-2-2Z" />
-     <path d="M5 18v-5a4 4 0 0 1 4-4h4" />
-     <path d="M10 13a2 2 0 0 1 2 2v3" />
-     <path d="M19 18h2a1 1 0 0 0 1-1v-2a2 2 0 0 0-2-2" />
-     <path d="M4 18h15" />
-     {/* Gesloten oogje */}
-     <path d="M7 14h.01" strokeWidth="3"/>
-  </svg>
-);
-
 export default function App() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<'searching' | 'connected' | 'offline'>('searching');
@@ -144,7 +112,7 @@ export default function App() {
               disabled={status !== 'connected'}
               className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl active:scale-95 group overflow-hidden border-[4px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
-                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-400'
+                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-orange-400'
               }`}
             >
               {status !== 'connected' ? (
@@ -155,19 +123,19 @@ export default function App() {
               ) : settings.vacationMode ? (
                 /* SLAAPSTAND */
                 <div className="flex flex-col items-center justify-center relative w-full h-full">
-                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none">
+                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10">
                     <span className="text-3xl animate-zz" style={{animationDelay: '0s'}}>Z</span>
                     <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
                     <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
                   </div>
-                  <SleepingDogIcon />
+                  <img src="./logo.png" alt="Barkr Logo" className="w-48 h-48 object-contain opacity-40 grayscale" />
                   <span className="text-xs font-black uppercase text-blue-200 tracking-widest mt-4">Wakker worden</span>
                 </div>
               ) : (
                 /* ACTIEVE STAND */
                 <div className="flex flex-col items-center justify-center w-full h-full">
-                   <BarkingDogIcon />
-                   <span className="text-xs font-black uppercase text-white tracking-widest mt-6">Tik om te slapen</span>
+                   <img src="./logo.png" alt="Barkr Logo" className="w-48 h-48 object-contain drop-shadow-xl" />
+                   <span className="text-xs font-black uppercase text-orange-600 tracking-widest mt-6">Tik om te slapen</span>
                 </div>
               )}
             </button>
@@ -192,6 +160,7 @@ export default function App() {
         </main>
       )}
 
+      {/* ... De rest van de Settings component blijft hetzelfde ... */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-in slide-in-from-bottom-5">
           <header className="px-6 py-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center shadow-sm">
