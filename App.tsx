@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
-  Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail
+  Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle
 } from 'lucide-react';
 
 // --- CONFIGURATIE ---
@@ -169,38 +169,43 @@ export default function App() {
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-in slide-in-from-bottom-5">
           <header className="px-6 py-4 bg-white border-b sticky top-0 z-10 flex justify-between items-center shadow-sm">
-            <h2 className="text-xl font-black text-slate-800 uppercase italic tracking-tighter">Over Barkr</h2>
+            <h2 className="text-xl font-black text-slate-800 uppercase italic tracking-tighter tracking-tight">Handleiding</h2>
             <button onClick={() => setShowManual(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200"><X size={20}/></button>
           </header>
           <div className="p-6 space-y-8 max-w-md mx-auto pb-20">
+            
+            <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-4 shadow-sm">
+              <h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4>
+              <p className="text-sm text-orange-900 leading-relaxed font-medium">
+                Als de mobiel van de gebruiker **niet is aangezet** tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de noodcontacten verstuurd.
+              </p>
+            </section>
+
+            <section className="bg-blue-50 p-6 rounded-3xl border border-blue-200 space-y-4 shadow-sm">
+              <h4 className="font-bold text-blue-800 flex items-center gap-2"><AlertTriangle size={18}/> Versie Instructie</h4>
+              <p className="text-sm text-blue-900 leading-relaxed font-medium">
+                In deze versie moet de app **altijd eenmalig handmatig opgestart worden** om de bewaking te activeren. In een volgende update zal dit proces automatisch verlopen.
+              </p>
+            </section>
+
             <section className="space-y-4">
-              <div className="bg-orange-600 w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-200 mx-auto mb-6">
-                <Dog size={32} className="text-white" />
-              </div>
-              <h3 className="text-lg font-black text-slate-800 text-center uppercase tracking-tight">De Blaffer die Waakt</h3>
-              <p className="text-sm text-slate-600 leading-relaxed text-center">
-                De naam <strong>Barkr</strong> is afgeleid van 'barker' (blaffer). Net als een trouwe waakhond is deze applicatie altijd waakzaam om een oogje in het zeil te houden voor de mensen die je dierbaar zijn.
+              <h4 className="font-bold text-slate-800 flex items-center gap-2 px-2"><ShieldCheck size={18} className="text-orange-600"/> Waarom Barkr?</h4>
+              <p className="text-sm text-slate-600 leading-relaxed px-2">
+                Barkr houdt vrienden en familie veilig. De naam komt van 'Barker' (blaffer); net als een waakhond slaat het systeem alarm via WhatsApp als er geen activiteit wordt gemeten binnen jouw vensters.
               </p>
             </section>
 
             <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <h4 className="font-bold text-slate-800 flex items-center gap-2"><ShieldCheck size={18} className="text-orange-600"/> Waarom Barkr?</h4>
-              <p className="text-sm text-slate-600 leading-relaxed">
-                Barkr dient voor het in de gaten houden van vrienden en familie. Het systeem controleert automatisch of de gebruiker actief is binnen ingestelde tijdsvensters. Wordt er geen activiteit gemeten? Dan worden je noodcontacten direct gealarmeerd.
-              </p>
-            </section>
-
-            <section className="space-y-4">
-              <h4 className="font-bold text-slate-800 flex items-center gap-2 px-2"><Activity size={18} className="text-orange-600"/> Mogelijkheden</h4>
+              <h4 className="font-bold text-slate-800 flex items-center gap-2"><Activity size={18} className="text-orange-600"/> Functionaliteiten</h4>
               <ul className="space-y-3">
                 {[
-                  'Stel per dag specifieke bewakingstijden in.',
-                  'Voeg meerdere noodcontacten toe voor maximale veiligheid.',
-                  'Vakantiemodus voor wanneer je even geen bewaking nodig hebt.',
-                  'Directe statusupdates via Wifi of 4G verbinding.'
+                  'Stel per dag unieke start- en eindtijden in.',
+                  'Beheer meerdere contactpersonen voor meldingen.',
+                  'Schakel de vakantiemodus in voor rustperiodes.',
+                  'Real-time status via Wifi of 4G verbinding.'
                 ].map((item, i) => (
-                  <li key={i} className="flex gap-3 text-sm text-slate-600 bg-white p-3 rounded-xl border border-slate-100">
-                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400 mt-1.5 shrink-0" />
+                  <li key={i} className="flex gap-3 text-sm text-slate-600">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />
                     {item}
                   </li>
                 ))}
@@ -208,12 +213,12 @@ export default function App() {
             </section>
 
             <section className="bg-slate-800 p-6 rounded-3xl text-white space-y-4">
-              <h4 className="font-bold flex items-center gap-2"><ExternalLink size={18} className="text-orange-400"/> Meer Informatie</h4>
+              <h4 className="font-bold flex items-center gap-2"><ExternalLink size={18} className="text-orange-400"/> Contact & Info</h4>
               <div className="space-y-3">
-                <a href="https://www.barkr.nl" target="_blank" className="flex items-center gap-3 text-sm hover:text-orange-300 transition-colors">
+                <a href="https://www.barkr.nl" target="_blank" className="flex items-center gap-3 text-sm hover:text-orange-300">
                   <Wifi size={16}/> www.barkr.nl
                 </a>
-                <a href="mailto:info@barkr.nl" className="flex items-center gap-3 text-sm hover:text-orange-300 transition-colors">
+                <a href="mailto:info@barkr.nl" className="flex items-center gap-3 text-sm hover:text-orange-300">
                   <Mail size={16}/> info@barkr.nl
                 </a>
               </div>
