@@ -1,3 +1,49 @@
+// Styling voor de ronde container en de afbeelding
+const styles = StyleSheet.create({
+  // De container die de cirkel vormt
+  mainCircle: {
+    width: 260,           // Pas de grootte aan naar jouw ontwerp
+    height: 260,
+    borderRadius: 130,    // Moet precies de helft van de breedte/hoogte zijn voor een cirkel
+    borderWidth: 6,
+    borderColor: '#F16A0B', // De oranje kleur uit de app
+    overflow: 'hidden',   // CRUCIAAL: Knipt de hoeken van de vierkante afbeelding af
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  // De afbeelding (bron) die de cirkel moet vullen
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',  // Zorgt ervoor dat de afbeelding de hele cirkel vult zonder vervorming
+  },
+  // Tekst onder de cirkel
+  statusText: {
+    marginTop: 20,
+    color: '#F16A0B',
+    fontWeight: 'bold',
+    fontSize: 16,
+    letterSpacing: 1.5,
+  }
+});
+
+// Implementatie in je Component
+return (
+  <View style={styles.container}>
+    <TouchableOpacity style={styles.mainCircle}>
+      <Image 
+        source={require('./assets/jouw-hond-logo.png')} 
+        style={styles.logoImage} 
+      />
+    </TouchableOpacity>
+    <Text style={styles.statusText}>TIK OM TE SLAPEN</Text>
+    
+    {/* De rest van je UI zoals de WIFI VERBINDING knop */}
+  </View>
+);
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
