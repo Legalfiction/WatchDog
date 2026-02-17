@@ -128,21 +128,18 @@ export default function App() {
                     <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
                     <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
                   </div>
-                  {/* Logo referentie aangepast naar /logo.png vanuit de public map */}
                   <img src="/logo.png" alt="Barkr Logo" className="w-48 h-48 object-contain opacity-40 grayscale" />
                   <span className="text-xs font-black uppercase text-blue-200 tracking-widest mt-4">Wakker worden</span>
                 </div>
               ) : (
                 /* ACTIEVE STAND */
                 <div className="flex flex-col items-center justify-center w-full h-full">
-                   {/* Logo referentie aangepast naar /logo.png vanuit de public map */}
                    <img src="/logo.png" alt="Barkr Logo" className="w-48 h-48 object-contain drop-shadow-xl" />
                    <span className="text-xs font-black uppercase text-orange-600 tracking-widest mt-6">Tik om te slapen</span>
                 </div>
               )}
             </button>
 
-            {/* VERBINDINGS STATUS */}
             {activeUrl && status === 'connected' && (
               <div className={`px-6 py-2.5 rounded-full text-[11px] font-bold uppercase flex items-center gap-2 shadow-sm border transition-colors ${
                 settings.vacationMode ? 'bg-slate-800 text-blue-200 border-slate-700' : 'bg-white text-orange-600 border-orange-100'
