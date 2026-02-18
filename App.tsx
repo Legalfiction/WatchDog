@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Plus, Trash2, X, Calendar, Wifi, Signal, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle } from 'lucide-react';
+import { Settings, Plus, Trash2, X, Info, Dog, Activity } from 'lucide-react';
 
 const ENDPOINTS = ['http://192.168.1.38:5000', 'https://barkr.nl'];
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
@@ -21,10 +21,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : { name: '', myPhone: '', vacationMode: false, useCustomSchedule: false, activeDays: [0, 1, 2, 3, 4, 5, 6], startTime: '', endTime: '', contacts: [], schedules: {} };
   });
 
+  // 1. Verbinding zoeken
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
-        const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) });
+        const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1000) });
         if (res.ok) { setActiveUrl(url); setStatus('connected'); setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); return; }
       } catch (e) {}
     }
@@ -37,28 +38,62 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // HEARTBEAT: Elke 5 seconden
+  // 2. MOBIELE PING LOGICA (CRUCIAAL)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode || !settings.name) return;
-    const sendPing = () => fetch(`${activeUrl}/ping`, { method: 'POST' }).catch(() => {});
+
+    const sendPing = () => {
+      // STOP DIRECT ALS APP NIET ZICHTBAAR IS (Scherm uit of achtergrond)
+      if (document.visibilityState !== 'visible') return;
+
+      fetch(`${activeUrl}/ping`, { method: 'POST' }).catch(() => {});
+    };
+
+    // Stuur direct 1 ping bij laden
     sendPing();
-    const interval = setInterval(sendPing, 5000);
-    return () => clearInterval(interval);
+
+    // Ping elke 3 seconden, MAAR alleen als scherm aan is
+    const interval = setInterval(sendPing, 3000);
+    
+    // Luister naar wijzigingen (scherm aan/uit)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sendPing(); // Direct pingen als scherm aan gaat
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [status, activeUrl, settings.vacationMode, settings.name]);
 
+  // 3. Opslaan
   const handleSave = () => {
-    if (!settings.name || !settings.startTime || !settings.endTime) return alert("Naam en tijden verplicht.");
-    if (settings.startTime >= settings.endTime) return alert("Deadline moet NA de starttijd liggen.");
+    if (!settings.name || !settings.startTime || !settings.endTime) return alert("Vul alle velden in.");
+    if (settings.startTime >= settings.endTime) return alert("Deadline moet NA starttijd liggen.");
+    
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
-    if (activeUrl) fetch(`${activeUrl}/save_settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(settings) }).then(() => setShowSettings(false));
+    if (activeUrl) fetch(`${activeUrl}/save_settings`, { 
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(settings) 
+    }).then(() => setShowSettings(false));
   };
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+      <style>{`@keyframes bounce-zz {0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; }} .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }`}</style>
+      
       <header className="px-6 py-4 bg-white border-b flex justify-between items-center sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <div className="bg-orange-600 p-1.5 rounded-lg"><Dog size={20} className="text-white" /></div>
-          <h1 className="text-lg font-black italic text-slate-800 uppercase">Barkr</h1>
+          <div>
+            <h1 className="text-lg font-black italic text-slate-800 uppercase">Barkr</h1>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
+              <span className={status === 'connected' ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600') : 'text-red-500'}>{status === 'offline' ? 'Offline' : settings.vacationMode ? 'Rust' : 'Waakzaam'}</span>
+            </div>
+          </div>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl"><Info size={20}/></button>
@@ -77,12 +112,12 @@ export default function App() {
              ) : (
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
                    <img src="/logo.png" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
-                   <div className="absolute bottom-6 text-[11px] font-black uppercase text-white">Tik om te slapen</div>
+                   <div className="absolute bottom-6 text-[11px] font-black uppercase text-white tracking-widest">Tik om te slapen</div>
                 </div>
              )}
           </button>
           <div className="bg-white p-6 rounded-2xl border w-full max-w-xs text-center">
-             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Laatste Controle</p>
+             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2"><Activity size={12} className="inline mr-1"/> Laatste Controle</p>
              <p className="text-4xl font-black text-slate-800">{lastPing}</p>
           </div>
         </main>
@@ -92,13 +127,19 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
           <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase">Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border shadow-sm space-y-4">
-            <input placeholder="Naam" value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full bg-white border p-3 rounded-xl font-bold outline-none"/>
+            <input placeholder="Naam Gebruiker" value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full bg-white border p-3 rounded-xl font-bold outline-none"/>
             <div className="grid grid-cols-2 gap-4">
               <div><label className="text-[10px] font-bold text-slate-400 uppercase">Start</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full mt-1 bg-slate-50 border rounded-xl p-3 font-bold"/></div>
               <div><label className="text-[10px] font-bold text-red-400 uppercase">Deadline</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full mt-1 bg-slate-50 border rounded-xl p-3 font-bold text-red-600"/></div>
             </div>
+            {/* Contacten sectie */}
+             <div className="space-y-4">
+               <label className="text-[10px] font-bold text-orange-600 uppercase">Contacten</label>
+               <button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center"><Plus size={20}/></button>
+               {settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border rounded-xl p-3 text-sm font-bold outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border rounded-xl p-3 text-sm font-mono outline-none"/></div></div>))}
+             </div>
           </div>
-          <button onClick={handleSave} className="w-full bg-orange-600 text-white p-4 rounded-2xl font-black uppercase tracking-widest">Opslaan</button>
+          <button onClick={handleSave} className="w-full bg-orange-600 text-white p-4 rounded-2xl font-black uppercase tracking-widest mt-4">Opslaan</button>
         </div>
       )}
     </div>
