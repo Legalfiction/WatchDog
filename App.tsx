@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle, Wifi, Smartphone, BellRing, HeartPulse, Construction
+  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle, Wifi, Smartphone, BellRing, HeartPulse
 } from 'lucide-react';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
@@ -157,12 +157,12 @@ export default function App() {
 
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
-          <header className="flex justify-between items-center sticky top-0 bg-slate-50 py-2 z-30">
+          {/* Header is nu NIET meer sticky en scrollt mee */}
+          <header className="flex justify-between items-center py-2">
             <h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-800">Handleiding</h2>
             <button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-md border border-slate-100"><X size={24}/></button>
           </header>
 
-          {/* BELANGRIJK: OPSTART INSTRUCTIE */}
           <section className="bg-blue-600 p-6 rounded-[32px] text-white shadow-lg space-y-3 relative overflow-hidden">
             <div className="absolute -right-4 -top-4 opacity-20"><Smartphone size={100}/></div>
             <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-[0.15em]">
@@ -172,7 +172,7 @@ export default function App() {
               In deze huidige fase dient de applicatie eenmalig handmatig opgestart te worden om de bewaking te activeren.
             </p>
             <p className="text-[13px] opacity-90 leading-relaxed">
-              Zodra de app in beeld is, mag deze op de achtergrond blijven draaien. In de nabije toekomst, bij de lancering van onze native <strong>Android</strong> en <strong>Apple</strong> apps, zal dit proces volledig automatisch verlopen.
+              Zodra de app in beeld is, mag deze op de achtergrond blijven draaien. In de nabije toekomst zal dit proces volledig automatisch verlopen.
             </p>
           </section>
 
@@ -181,7 +181,7 @@ export default function App() {
               <Dog size={20}/> De betekenis van Barkr
             </h4>
             <p className="text-sm text-slate-600 leading-relaxed font-medium">
-              <strong>Barkr</strong> is afgeleid van het Engelse 'Barker' (blaffer). Het staat voor een trouwe digitale <strong>waakhond</strong> die over je waakt wanneer je alleen bent. Barkr slaat alarm wanneer er iets niet pluis is, om zo de mensen die om je geven te waarschuwen.
+              <strong>Barkr</strong> is afgeleid van het Engelse 'Barker' (blaffer). Het staat voor een trouwe digitale <strong>waakhond</strong> die over je waakt wanneer je alleen bent. Barkr slaat alarm wanneer er iets niet pluis is.
             </p>
           </section>
 
@@ -243,7 +243,7 @@ export default function App() {
 
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
-          <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
+          <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">Naam Gebruiker</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
             <div className="flex justify-between items-center pt-2"><div><h3 className="font-bold text-slate-800 text-sm italic uppercase tracking-tighter">Slimme Planning</h3><p className="text-[10px] text-slate-400 uppercase font-bold text-center">Vensters per dag</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
