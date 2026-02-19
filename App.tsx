@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
-  Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle
+  Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, AlertTriangle
 } from 'lucide-react';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
@@ -20,7 +20,6 @@ export default function App() {
   const [showManual, setShowManual] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
   
-  // Door terug te gaan naar 'barkr_v16_data' komen je contacten en settings weer terug
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('barkr_v16_data');
     return saved ? JSON.parse(saved) : {
@@ -30,7 +29,6 @@ export default function App() {
     };
   });
 
-  // Opslaan naar de Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -43,7 +41,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl]);
 
-  // Connectie Zoeken
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
@@ -64,18 +61,23 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // --- DE DIRECTE, SIMPELE HARTSLAG ---
+  // --- SECURE HARTSLAG ---
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
 
     const sendPing = () => {
-      fetch(`${activeUrl}/ping`, { method: 'POST' })
-        .then(res => {
-          if(res.ok) {
-            setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-          }
-        })
-        .catch(() => {});
+      fetch(`${activeUrl}/ping`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // De sleutel om de Pi te bewijzen dat dit een echte app is
+        body: JSON.stringify({ client_id: 'barkr_mobile_app_v1' })
+      })
+      .then(res => {
+        if(res.ok) {
+          setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+        }
+      })
+      .catch(() => {});
     };
 
     sendPing();
@@ -155,7 +157,6 @@ export default function App() {
         </main>
       )}
 
-      {/* JOUW EXACTE HANDLEIDING */}
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
           <header className="flex justify-between items-center mb-6"><h2 className="text-xl font-black uppercase italic tracking-tight">Handleiding</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
@@ -166,7 +167,6 @@ export default function App() {
         </div>
       )}
 
-      {/* JOUW EXACTE SETUP */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
           <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
