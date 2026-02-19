@@ -1,5 +1,4 @@
-// service-worker.js
-const VERSION = "v12-background";
+// public/service-worker.js
 const PING_URL = "https://barkr.nl/ping";
 
 self.addEventListener('install', (event) => {
@@ -10,11 +9,11 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(clients.claim());
 });
 
-// De onzichtbare loop
+// Stuur elke 15 seconden een signaal, ongeacht of de app open is.
 setInterval(() => {
   fetch(PING_URL, { 
     method: 'POST', 
     mode: 'no-cors',
-    cache: 'no-store'
+    keepalive: true 
   }).catch(() => {});
-}, 10000); // Elke 10 seconden, zelfs in stand-by
+}, 15000);
