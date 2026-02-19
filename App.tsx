@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Calendar, Wifi, Signal, 
-  Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle
+  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, AlertTriangle, Wifi
 } from 'lucide-react';
 
-const ENDPOINTS = ['http://192.168.1.38:5000', 'https://barkr.nl'];
+const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
-const APP_SECRET = 'BARKR_SECURE_V1';
 
 const autoFormatPhone = (input: string) => {
   let p = input.replace(/\s/g, '').replace(/-/g, '').replace(/\./g, '');
@@ -20,16 +18,23 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
+  
+  // Standaard configuratie ingevuld voor direct gebruik
   const [settings, setSettings] = useState(() => {
-    // Teruggezet naar jouw originele opslagnaam, zodat je data weer terug is
     const saved = localStorage.getItem('barkr_v16_data');
     return saved ? JSON.parse(saved) : {
-      myPhone: '', name: '', vacationMode: false, useCustomSchedule: false,
-      activeDays: [0, 1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '08:30',
-      contacts: [], schedules: {}
+      name: 'Aldo', 
+      vacationMode: false, 
+      useCustomSchedule: false,
+      activeDays: [0, 1, 2, 3, 4, 5, 6], 
+      startTime: '07:00', 
+      endTime: '08:30',
+      contacts: [], 
+      schedules: {}
     };
   });
 
+  // 1. Instellingen opslaan en synchroniseren met de Raspberry Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -42,6 +47,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl]);
 
+  // 2. Verbinding zoeken
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
@@ -49,7 +55,6 @@ export default function App() {
         if (res.ok) {
           setActiveUrl(url);
           setStatus('connected');
-          setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
           return; 
         }
       } catch (e) {}
@@ -63,28 +68,41 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // --- DE ENIGE TOEVOEGING: DE HARTSLAG PING MET BEVEILIGING ---
+  // 3. De Hartslag & Scherm Actief Houden (WakeLock)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
+
+    // Voorkom dat het scherm van de telefoon uitgaat (de enige manier voor web-apps)
+    let wakeLock: any = null;
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {}
+    };
+    requestWakeLock();
 
     const sendPing = () => {
       fetch(`${activeUrl}/ping`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ secret: APP_SECRET }) 
+        body: JSON.stringify({ name: settings.name, secret: 'BARKR_SECURE_V1' })
       })
       .then(res => {
-        if(res.ok) {
-          setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-        }
+        if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
       })
       .catch(() => {});
     };
 
     sendPing();
     const pingInterval = setInterval(sendPing, 5000); 
-    return () => clearInterval(pingInterval);
-  }, [status, activeUrl, settings.vacationMode]);
+
+    return () => {
+      clearInterval(pingInterval);
+      if (wakeLock) wakeLock.release();
+    };
+  }, [status, activeUrl, settings.vacationMode, settings.name]);
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
@@ -162,9 +180,8 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
           <header className="flex justify-between items-center mb-6"><h2 className="text-xl font-black uppercase italic tracking-tight">Handleiding</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3"><h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4><p className="text-sm text-orange-900 leading-relaxed font-medium">Als de mobiel van de gebruiker **niet is aangezet** tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de contacten verstuurd.</p></section>
-          <section className="bg-blue-50 p-6 rounded-3xl border border-blue-200 space-y-3"><h4 className="font-bold text-blue-800 flex items-center gap-2"><AlertTriangle size={18}/> Versie Instructie</h4><p className="text-sm text-blue-900 leading-relaxed font-medium">In deze versie moet de app **altijd eenmalig handmatig opgestart worden**. Bij de volgende update zal dit automatisch gaan.</p></section>
+          <section className="bg-blue-50 p-6 rounded-3xl border border-blue-200 space-y-3"><h4 className="font-bold text-blue-800 flex items-center gap-2"><AlertTriangle size={18}/> Instructie</h4><p className="text-sm text-blue-900 leading-relaxed font-medium">De applicatie houdt het scherm automatisch actief zolang deze geopend is, om te garanderen dat de veiligheidssignalen verstuurd blijven worden.</p></section>
           <section className="space-y-3"><h4 className="font-bold text-slate-800 flex items-center gap-2 px-2"><ShieldCheck size={18} className="text-orange-600"/> Waarom Barkr?</h4><p className="text-sm text-slate-600 px-2 leading-relaxed">Barkr (blaffer) is een digitale waakhond voor vrienden en familie. Het systeem houdt de activiteit in de gaten om tijdig hulp te kunnen inschakelen.</p></section>
-          <section className="bg-slate-800 p-6 rounded-3xl text-white space-y-3"><h4 className="font-bold flex items-center gap-2"><ExternalLink size={18} className="text-orange-400"/> Contact</h4><div className="space-y-1 text-sm"><p>www.barkr.nl</p><p>info@barkr.nl</p></div></section>
         </div>
       )}
 
@@ -172,7 +189,11 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
           <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex justify-between items-center"><div><h3 className="font-bold text-slate-800 text-sm">Slimme Planning</h3><p className="text-[10px] text-slate-400">Vensters per dag instellen</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
+            
+            <div><label className="text-[10px] font-bold text-slate-400 uppercase">Naam Gebruiker</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
+
+            <div className="flex justify-between items-center pt-2"><div><h3 className="font-bold text-slate-800 text-sm">Slimme Planning</h3><p className="text-[10px] text-slate-400">Vensters per dag instellen</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
+            
             {!settings.useCustomSchedule ? (
               <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Start</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div><div><label className="text-[10px] font-bold text-red-400 uppercase">Deadline</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-red-600"/></div></div>
             ) : (
@@ -180,7 +201,12 @@ export default function App() {
             )}
           </div>
           <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2">Contacten</label><button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
-            <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div><button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> TEST VERBINDING</button></div>))}</div>
+            <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div>
+            
+            {/* WERKEND WHATSAPP TEST BERICHT */}
+            <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> TEST VERBINDING (STUUR APP)</button>
+            
+            </div>))}</div>
           </div>
         </div>
       )}
