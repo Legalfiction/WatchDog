@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle, Wifi, Smartphone, BellRing, HeartPulse
+  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle, Wifi, Smartphone, BellRing, HeartPulse, Construction
 } from 'lucide-react';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
@@ -162,36 +162,45 @@ export default function App() {
             <button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-md border border-slate-100"><X size={24}/></button>
           </header>
 
-          {/* INTRODUCTIE */}
-          <section className="space-y-4">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <h4 className="font-black text-orange-600 flex items-center gap-2 uppercase text-xs tracking-[0.15em]">
-                <Dog size={20}/> De betekenis van Barkr
-              </h4>
-              <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                <strong>Barkr</strong> is afgeleid van het Engelse 'Barker' (blaffer). Het staat voor een trouwe digitale <strong>waakhond</strong> die over je waakt wanneer je alleen bent. Net zoals een echte waakhond slaat Barkr alarm wanneer er iets niet pluis is, om zo de mensen die om je geven te waarschuwen.
-              </p>
-            </div>
+          {/* BELANGRIJK: OPSTART INSTRUCTIE */}
+          <section className="bg-blue-600 p-6 rounded-[32px] text-white shadow-lg space-y-3 relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 opacity-20"><Smartphone size={100}/></div>
+            <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-[0.15em]">
+              <AlertTriangle size={18} className="text-orange-400"/> Belangrijk: Opstarten
+            </h4>
+            <p className="text-sm leading-relaxed font-bold">
+              In deze huidige fase dient de applicatie eenmalig handmatig opgestart te worden om de bewaking te activeren.
+            </p>
+            <p className="text-[13px] opacity-90 leading-relaxed">
+              Zodra de app in beeld is, mag deze op de achtergrond blijven draaien. In de nabije toekomst, bij de lancering van onze native <strong>Android</strong> en <strong>Apple</strong> apps, zal dit proces volledig automatisch verlopen.
+            </p>
           </section>
 
-          {/* DOEL & REDEN */}
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h4 className="font-black text-orange-600 flex items-center gap-2 uppercase text-xs tracking-[0.15em]">
+              <Dog size={20}/> De betekenis van Barkr
+            </h4>
+            <p className="text-sm text-slate-600 leading-relaxed font-medium">
+              <strong>Barkr</strong> is afgeleid van het Engelse 'Barker' (blaffer). Het staat voor een trouwe digitale <strong>waakhond</strong> die over je waakt wanneer je alleen bent. Barkr slaat alarm wanneer er iets niet pluis is, om zo de mensen die om je geven te waarschuwen.
+            </p>
+          </section>
+
           <section className="space-y-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 px-2 flex items-center gap-2">
               <HeartPulse size={14}/> Waarom deze applicatie?
             </h3>
             <div className="grid grid-cols-1 gap-4">
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-2">
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-2 shadow-sm">
                 <h5 className="font-bold text-slate-800 text-sm flex items-center gap-2"><Smartphone size={16} className="text-orange-500"/> Welzijnsbewaking</h5>
-                <p className="text-xs text-slate-500 leading-relaxed">Ontworpen voor mensen die alleen wonen of werken. Het biedt een vangnet zonder je privacy te schenden; we kijken alleen of je actief bent.</p>
+                <p className="text-xs text-slate-500 leading-relaxed">Speciaal voor mensen die alleen wonen of werken. Barkr biedt een vangnet zonder inbreuk op je privacy.</p>
               </div>
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-2">
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 space-y-2 shadow-sm">
                 <h5 className="font-bold text-slate-800 text-sm flex items-center gap-2"><BellRing size={16} className="text-orange-500"/> Automatische Escalatie</h5>
-                <p className="text-xs text-slate-500 leading-relaxed">Indien je binnen je persoonlijke tijdvenster geen teken van leven geeft, worden je noodcontacten direct per WhatsApp op de hoogte gebracht.</p>
+                <p className="text-xs text-slate-500 leading-relaxed">Bij inactiviteit tijdens je tijdvenster worden je noodcontacten direct per WhatsApp geïnformeerd.</p>
               </div>
             </div>
           </section>
 
-          {/* FUNCTIONALITEIT */}
           <section className="bg-orange-50 p-7 rounded-[40px] border border-orange-200 space-y-5">
             <h4 className="font-black text-orange-800 flex items-center gap-2 uppercase text-xs tracking-widest">
               <Clock size={20}/> Hoe gebruik je Barkr?
@@ -199,43 +208,31 @@ export default function App() {
             <div className="space-y-4">
               <div className="flex gap-4">
                 <div className="bg-orange-600 text-white w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-black text-xs">1</div>
-                <div><p className="text-sm font-bold text-orange-900">Configuratie</p><p className="text-xs text-orange-800/70">Voer je naam in en stel je kritieke venster in (bijv. 07:00 - 08:30). Voeg minimaal één noodcontact toe.</p></div>
+                <div><p className="text-sm font-bold text-orange-900">Configuratie</p><p className="text-xs text-orange-800/70">Voer je naam in en stel je venster in (bijv. 07:00 - 08:30). Voeg minimaal één noodcontact toe.</p></div>
               </div>
               <div className="flex gap-4">
                 <div className="bg-orange-600 text-white w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-black text-xs">2</div>
-                <div><p className="text-sm font-bold text-orange-900">Activering</p><p className="text-xs text-orange-800/70">Open de app binnen je tijdvenster. Zolang de app op je scherm staat, wordt je hartslag geregistreerd.</p></div>
+                <div><p className="text-sm font-bold text-orange-900">Zichtbaarheid</p><p className="text-xs text-orange-800/70">Houd de app geopend op je scherm tijdens het venster. Het systeem registreert dan je aanwezigheid.</p></div>
               </div>
               <div className="flex gap-4">
                 <div className="bg-orange-600 text-white w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-black text-xs">3</div>
-                <div><p className="text-sm font-bold text-orange-900">Veiligheid</p><p className="text-xs text-orange-800/70">Zodra je de deadline haalt, staakt het systeem de bewaking voor die dag. Mis je de deadline? Dan volgt het alarm.</p></div>
+                <div><p className="text-sm font-bold text-orange-900">Deadline</p><p className="text-xs text-orange-800/70">Zodra de deadline is bereikt, staakt Barkr de bewaking voor die dag. Geen signaal? Dan volgt het alarm.</p></div>
               </div>
             </div>
           </section>
 
-          {/* CONTACT & LINKS */}
           <section className="bg-slate-900 p-8 rounded-[40px] text-white space-y-6 shadow-2xl">
-            <div className="space-y-2">
-              <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest text-orange-400">
-                <ExternalLink size={18}/> Meer Informatie & Support
-              </h4>
-              <p className="text-xs text-slate-400">Bezoek onze website voor uitgebreide documentatie of neem contact op voor hulp.</p>
-            </div>
-            
+            <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest text-orange-400">
+              <ExternalLink size={18}/> Informatie & Support
+            </h4>
             <div className="space-y-4">
               <a href="https://www.barkr.nl" target="_blank" rel="noreferrer" className="flex items-center gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700 active:scale-95 transition-all">
                 <div className="bg-orange-600 p-2 rounded-xl"><Wifi size={18} className="text-white"/></div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Website</span>
-                  <span className="font-bold text-sm tracking-tight">www.barkr.nl</span>
-                </div>
+                <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Website</span><span className="font-bold text-sm">www.barkr.nl</span></div>
               </a>
-
               <a href="mailto:info@barkr.nl" className="flex items-center gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700 active:scale-95 transition-all">
                 <div className="bg-blue-600 p-2 rounded-xl"><Mail size={18} className="text-white"/></div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Email</span>
-                  <span className="font-bold text-sm tracking-tight">info@barkr.nl</span>
-                </div>
+                <div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Email</span><span className="font-bold text-sm">info@barkr.nl</span></div>
               </a>
             </div>
           </section>
