@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, AlertTriangle, Wifi
+  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, Mail, AlertTriangle, Wifi
 } from 'lucide-react';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
@@ -22,18 +22,13 @@ export default function App() {
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('barkr_v16_data');
     return saved ? JSON.parse(saved) : {
-      name: 'Aldo', 
-      vacationMode: false, 
-      useCustomSchedule: false,
-      activeDays: [0, 1, 2, 3, 4, 5, 6], 
-      startTime: '07:00', 
-      endTime: '08:30',
-      contacts: [], 
-      schedules: {}
+      name: 'Aldo', vacationMode: false, useCustomSchedule: false,
+      activeDays: [0, 1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '08:30',
+      contacts: [], schedules: {}
     };
   });
 
-  // Opslaan naar backend
+  // Sync instellingen naar backend
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -46,7 +41,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl]);
 
-  // Connectie zoeken
+  // Netwerkverbinding zoeken
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
@@ -67,12 +62,11 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // --- DE HARDE AAN/UIT SCHAKELAAR (ZONDER WAKELOCK) ---
+  // Hartslag logica (Alleen pingen als scherm zichtbaar is)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
 
     const sendPing = () => {
-      // Controleer via de native API of het scherm écht aan staat en de app in beeld is
       if (document.visibilityState === 'visible') {
         fetch(`${activeUrl}/ping`, { 
           method: 'POST',
@@ -86,21 +80,12 @@ export default function App() {
       }
     };
 
-    // Stuur direct een ping als de app zichtbaar is
-    if (document.visibilityState === 'visible') {
-      sendPing();
-    }
-
-    // Ping iedere 5 seconden (wordt genegeerd door de if-statement zodra het scherm uit gaat)
+    if (document.visibilityState === 'visible') sendPing();
     const pingInterval = setInterval(sendPing, 5000); 
-
-    // Extra trigger: Als de gebruiker de app direct wegklikt, forceer dan een stop.
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        sendPing(); // Direct pingen bij openen
-      }
-    };
     
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') sendPing();
+    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
@@ -112,10 +97,7 @@ export default function App() {
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
       <style>{`
-        @keyframes bounce-zz {
-          0%, 100% { transform: translateY(0); opacity: 0.4; }
-          50% { transform: translateY(-15px); opacity: 1; }
-        }
+        @keyframes bounce-zz { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; } }
         .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
       `}</style>
       
@@ -123,7 +105,7 @@ export default function App() {
         <div className="flex items-center gap-3">
           <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div>
           <div>
-            <h1 className="text-lg font-black italic tracking-tighter text-slate-800">BARKR</h1>
+            <h1 className="text-lg font-black italic tracking-tighter text-slate-800 uppercase">Barkr</h1>
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
               <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
               <span className={status === 'connected' ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600') : 'text-red-500'}>
@@ -154,20 +136,15 @@ export default function App() {
               ) : settings.vacationMode ? (
                 <div className="flex flex-col items-center justify-center relative w-full h-full">
                   <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10">
-                    <span className="text-3xl animate-zz" style={{animationDelay: '0s'}}>Z</span>
-                    <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
-                    <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
+                    <span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span>
                   </div>
                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
-                    <span className="text-xs font-black uppercase text-blue-100 tracking-widest mt-24">Wakker worden</span>
-                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
                    <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
                    <div className="absolute bottom-6 inset-x-0 text-center">
-                      <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest">Tik om te slapen</span>
+                      <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight">Tik om te slapen</span>
                    </div>
                 </div>
               )}
@@ -175,7 +152,7 @@ export default function App() {
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
-             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest"><Activity size={12} className="inline mr-1"/> Laatste Controle</p>
+             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest"><Activity size={12} className="inline mr-1"/> Systeem Hartslag</p>
              <p className="text-4xl font-black text-slate-800 tabular-nums">{lastPing}</p>
           </div>
         </main>
@@ -183,9 +160,48 @@ export default function App() {
 
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
-          <header className="flex justify-between items-center mb-6"><h2 className="text-xl font-black uppercase italic tracking-tight">Handleiding</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
-          <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3"><h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4><p className="text-sm text-orange-900 leading-relaxed font-medium">Als de mobiel van de gebruiker **niet actief** is tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de contacten verstuurd.</p></section>
-          <section className="space-y-3"><h4 className="font-bold text-slate-800 flex items-center gap-2 px-2"><ShieldCheck size={18} className="text-orange-600"/> Waarom Barkr?</h4><p className="text-sm text-slate-600 px-2 leading-relaxed">Barkr (blaffer) is een digitale waakhond voor vrienden en familie. Het systeem houdt de activiteit in de gaten om tijdig hulp te kunnen inschakelen.</p></section>
+          <header className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-black uppercase italic tracking-tight text-slate-800">Handleiding & Info</h2>
+            <button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button>
+          </header>
+
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+            <h4 className="font-bold text-orange-600 flex items-center gap-2 uppercase text-xs tracking-widest">
+              <ShieldCheck size={18}/> Waarom Barkr?
+            </h4>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              <strong>Barkr (blaffer)</strong> is jouw digitale waakhond. De applicatie is ontworpen als welzijnsbewaking voor mensen die alleen wonen of werken. Het systeem controleert passief of je jouw apparaat hebt geactiveerd tijdens kritieke tijdsvensters.
+            </p>
+          </section>
+
+          <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3">
+            <h4 className="font-bold text-orange-800 flex items-center gap-2 uppercase text-xs tracking-widest">
+              <Clock size={18}/> Hoe werkt het?
+            </h4>
+            <ul className="text-sm text-orange-900 space-y-2 list-disc list-inside font-medium">
+              <li>Open de app en zorg dat de status <strong>Waakzaam</strong> is.</li>
+              <li>Indien de app niet actief is vóór de deadline, wordt er alarm geslagen.</li>
+              <li>Jouw noodcontacten ontvangen dan automatisch een WhatsApp-bericht.</li>
+            </ul>
+          </section>
+
+          <section className="bg-slate-800 p-6 rounded-3xl text-white space-y-4 shadow-xl">
+            <h4 className="font-bold flex items-center gap-2 uppercase text-xs tracking-widest text-orange-400">
+              <ExternalLink size={18}/> Meer Informatie
+            </h4>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-slate-700 p-2 rounded-lg"><Wifi size={16} className="text-slate-300"/></div>
+                <a href="https://www.barkr.nl" target="_blank" rel="noreferrer" className="text-sm font-bold border-b border-slate-600 pb-0.5">www.barkr.nl</a>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="bg-slate-700 p-2 rounded-lg"><Mail size={16} className="text-slate-300"/></div>
+                <a href="mailto:info@barkr.nl" className="text-sm font-bold border-b border-slate-600 pb-0.5">info@barkr.nl</a>
+              </div>
+            </div>
+          </section>
+
+          <button onClick={() => setShowManual(false)} className="w-full py-4 bg-slate-800 text-white font-black uppercase rounded-2xl tracking-widest shadow-lg">Begrepen</button>
         </div>
       )}
 
@@ -193,24 +209,18 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
           <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">Naam Gebruiker</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
-
-            <div className="flex justify-between items-center pt-2"><div><h3 className="font-bold text-slate-800 text-sm">Slimme Planning</h3><p className="text-[10px] text-slate-400">Vensters per dag instellen</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
-            
+            <div className="flex justify-between items-center pt-2"><div><h3 className="font-bold text-slate-800 text-sm italic uppercase tracking-tighter">Slimme Planning</h3><p className="text-[10px] text-slate-400 uppercase font-bold text-center">Vensters per dag</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
             {!settings.useCustomSchedule ? (
               <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Start</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div><div><label className="text-[10px] font-bold text-red-400 uppercase">Deadline</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-red-600"/></div></div>
             ) : (
-              <div className="space-y-3">{settings.activeDays.sort().map(d => (<div key={d} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-2"><span className="text-xs font-black uppercase text-orange-800 block border-b border-orange-100 pb-1">{DAYS[d]}</span><div className="grid grid-cols-2 gap-3"><div><p className="text-[9px] font-bold text-slate-400 uppercase">Start</p><input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border border-orange-200 text-xs font-bold text-slate-700"/></div><div><p className="text-[9px] font-bold text-red-400 uppercase">Deadline</p><input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border border-orange-200 text-xs font-bold text-red-600"/></div></div></div>))}</div>
+              <div className="space-y-3">{settings.activeDays.sort().map(d => (<div key={d} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-2"><span className="text-xs font-black uppercase text-orange-800 block border-b border-orange-100 pb-1">{DAYS[d]}</span><div className="grid grid-cols-2 gap-3"><div><p className="text-[9px] font-bold text-slate-400 uppercase">Start</p><input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border border-orange-200 text-xs font-bold text-slate-700 text-center"/></div><div><p className="text-[9px] font-bold text-red-400 uppercase">Deadline</p><input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border border-orange-200 text-xs font-bold text-red-600 text-center"/></div></div></div>))}</div>
             )}
           </div>
-          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2">Contacten</label><button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
-            <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div>
-            
-            <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> TEST VERBINDING (STUUR APP)</button>
-            
-            </div>))}</div>
+          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">Contacten</label><button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+            <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div><button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> TEST VERBINDING</button></div>))}</div>
           </div>
+          <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl active:scale-95 transition-all">Configuratie Opslaan</button>
         </div>
       )}
     </div>
