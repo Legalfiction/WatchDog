@@ -19,7 +19,6 @@ export default function App() {
   const [showManual, setShowManual] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
   
-  // Standaard configuratie ingevuld voor direct gebruik
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('barkr_v16_data');
     return saved ? JSON.parse(saved) : {
@@ -34,7 +33,7 @@ export default function App() {
     };
   });
 
-  // 1. Instellingen opslaan en synchroniseren met de Raspberry Pi
+  // Opslaan naar backend
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -47,7 +46,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl]);
 
-  // 2. Verbinding zoeken
+  // Connectie zoeken
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
@@ -68,39 +67,45 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // 3. De Hartslag & Scherm Actief Houden (WakeLock)
+  // --- DE HARDE AAN/UIT SCHAKELAAR (ZONDER WAKELOCK) ---
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
 
-    // Voorkom dat het scherm van de telefoon uitgaat (de enige manier voor web-apps)
-    let wakeLock: any = null;
-    const requestWakeLock = async () => {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await (navigator as any).wakeLock.request('screen');
-        }
-      } catch (err) {}
-    };
-    requestWakeLock();
-
     const sendPing = () => {
-      fetch(`${activeUrl}/ping`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: settings.name, secret: 'BARKR_SECURE_V1' })
-      })
-      .then(res => {
-        if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-      })
-      .catch(() => {});
+      // Controleer via de native API of het scherm écht aan staat en de app in beeld is
+      if (document.visibilityState === 'visible') {
+        fetch(`${activeUrl}/ping`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: settings.name, secret: 'BARKR_SECURE_V1' })
+        })
+        .then(res => {
+          if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+        })
+        .catch(() => {});
+      }
     };
 
-    sendPing();
+    // Stuur direct een ping als de app zichtbaar is
+    if (document.visibilityState === 'visible') {
+      sendPing();
+    }
+
+    // Ping iedere 5 seconden (wordt genegeerd door de if-statement zodra het scherm uit gaat)
     const pingInterval = setInterval(sendPing, 5000); 
+
+    // Extra trigger: Als de gebruiker de app direct wegklikt, forceer dan een stop.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sendPing(); // Direct pingen bij openen
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(pingInterval);
-      if (wakeLock) wakeLock.release();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [status, activeUrl, settings.vacationMode, settings.name]);
 
@@ -179,8 +184,7 @@ export default function App() {
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
           <header className="flex justify-between items-center mb-6"><h2 className="text-xl font-black uppercase italic tracking-tight">Handleiding</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
-          <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3"><h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4><p className="text-sm text-orange-900 leading-relaxed font-medium">Als de mobiel van de gebruiker **niet is aangezet** tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de contacten verstuurd.</p></section>
-          <section className="bg-blue-50 p-6 rounded-3xl border border-blue-200 space-y-3"><h4 className="font-bold text-blue-800 flex items-center gap-2"><AlertTriangle size={18}/> Instructie</h4><p className="text-sm text-blue-900 leading-relaxed font-medium">De applicatie houdt het scherm automatisch actief zolang deze geopend is, om te garanderen dat de veiligheidssignalen verstuurd blijven worden.</p></section>
+          <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3"><h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4><p className="text-sm text-orange-900 leading-relaxed font-medium">Als de mobiel van de gebruiker **niet actief** is tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de contacten verstuurd.</p></section>
           <section className="space-y-3"><h4 className="font-bold text-slate-800 flex items-center gap-2 px-2"><ShieldCheck size={18} className="text-orange-600"/> Waarom Barkr?</h4><p className="text-sm text-slate-600 px-2 leading-relaxed">Barkr (blaffer) is een digitale waakhond voor vrienden en familie. Het systeem houdt de activiteit in de gaten om tijdig hulp te kunnen inschakelen.</p></section>
         </div>
       )}
@@ -203,7 +207,6 @@ export default function App() {
           <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2">Contacten</label><button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
             <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div>
             
-            {/* WERKEND WHATSAPP TEST BERICHT */}
             <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> TEST VERBINDING (STUUR APP)</button>
             
             </div>))}</div>
