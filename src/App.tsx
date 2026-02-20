@@ -69,6 +69,19 @@ export default function App() {
   const lang = countryObj?.lang || 'nl';
   const daysVoluit = countryObj?.days || ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
 
+  // Bepalen actuele weergave tijden
+  const isBase = activeTab === 'base';
+  const activeDateStr = activeTab === 'today' ? todayStr : tomorrowStr;
+  const activeDayIdx = activeTab === 'today' ? todayIdx : tomorrowIdx;
+  
+  let displayStart = settings.schedules[todayIdx]?.startTime || '06:00';
+  let displayEnd = settings.schedules[todayIdx]?.endTime || '10:00';
+  
+  if (!isBase && settings.overrides[activeDateStr]) {
+    displayStart = settings.overrides[activeDateStr].start;
+    displayEnd = settings.overrides[activeDateStr].end;
+  }
+
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date();
@@ -77,6 +90,7 @@ export default function App() {
 
       setSettings((prev: any) => {
         if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
+          console.log(`[Barkr Log] Override window verstreken voor ${dStr}. Terug naar basis weekplanning.`);
           const newOverrides = { ...prev.overrides };
           delete newOverrides[dStr];
           if (activeTab === 'today') setActiveTab('base');
@@ -106,9 +120,10 @@ export default function App() {
     }
 
     const timer = setTimeout(() => {
+      console.log(`[Barkr Log] Configuratie sync naar backend:`, payload);
       fetch(`${activeUrl}/save_settings`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
-      }).catch(() => {});
+      }).catch(err => console.error(`[Barkr Log] Fout bij opslaan configuratie:`, err));
     }, 800);
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
@@ -133,12 +148,24 @@ export default function App() {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
     const sendPing = () => {
       if (document.visibilityState === 'visible') {
+        const pingPayload = { 
+          name: settings.name, 
+          app_key: 'BARKR_SECURE_V1',
+          active_window: { start: displayStart, end: displayEnd }
+        };
+        
+        console.log(`[Barkr Log] Ping verstuurd -> Gebruiker: ${settings.name} | Window: ${displayStart} - ${displayEnd}`);
+        
         fetch(`${activeUrl}/ping`, { 
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: settings.name, app_key: 'BARKR_SECURE_V1' })
+          body: JSON.stringify(pingPayload)
         }).then(res => {
-          if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-        }).catch(() => {});
+          if(res.ok) {
+            setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+          } else {
+             console.log(`[Barkr Log] Backend weigert ping (buiten window of fout): HTTP ${res.status}`);
+          }
+        }).catch(err => console.error(`[Barkr Log] Ping mislukt:`, err));
       }
     };
     if (document.visibilityState === 'visible') sendPing();
@@ -146,7 +173,7 @@ export default function App() {
     const handleVisibilityChange = () => { if (document.visibilityState === 'visible') sendPing(); };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => { clearInterval(pingInterval); document.removeEventListener('visibilitychange', handleVisibilityChange); };
-  }, [status, activeUrl, settings.vacationMode, settings.name]);
+  }, [status, activeUrl, settings.vacationMode, settings.name, displayStart, displayEnd]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
     if (activeTab === type) {
@@ -182,28 +209,15 @@ export default function App() {
     setSettings({...settings, overrides: newOverrides});
   };
 
-  const isBase = activeTab === 'base';
-  const activeDateStr = activeTab === 'today' ? todayStr : tomorrowStr;
-  const activeDayIdx = activeTab === 'today' ? todayIdx : tomorrowIdx;
-  const hasOverride = !!settings.overrides[activeDateStr];
-  
-  let displayStart = settings.schedules[todayIdx]?.startTime || '06:00';
-  let displayEnd = settings.schedules[todayIdx]?.endTime || '10:00';
-  
-  if (!isBase && settings.overrides[activeDateStr]) {
-    displayStart = settings.overrides[activeDateStr].start;
-    displayEnd = settings.overrides[activeDateStr].end;
-  }
-
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-hidden">
       <style>{`
         @keyframes bounce-zz { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; } }
         .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
       
-      <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+      <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div>
           <div>
@@ -223,86 +237,86 @@ export default function App() {
       </header>
 
       {!showSettings && !showManual && !showWeekPlan && (
-        <main className="flex-1 p-6 space-y-8 overflow-y-auto">
-          {/* HOOFD ACTIE KNOP (W-72) */}
-          <div className="flex flex-col items-center pt-8">
+        <main className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar">
+          {/* HOOFD ACTIE KNOP */}
+          <div className="flex flex-col items-center pt-2">
             <button 
               onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
               disabled={status !== 'connected'}
-              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${
+              className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[8px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
                 settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'
               }`}
             >
-              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : 
+              {status !== 'connected' ? <Wifi size={60} className="text-slate-400 animate-pulse"/> : 
                settings.vacationMode ? (
                 <div className="flex flex-col items-center justify-center relative w-full h-full">
-                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div>
+                  <div className="absolute top-12 right-16 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div>
                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
                    <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
-                   <div className="absolute bottom-6 inset-x-0 text-center">
-                      <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span>
+                   <div className="absolute bottom-5 inset-x-0 text-center">
+                      <span className="text-[10px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span>
                    </div>
                 </div>
               )}
             </button>
             
-            {/* HERSTELDE HARTSLAG KAART */}
-            <div className="mt-8 w-full bg-white px-8 py-5 rounded-[24px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
+            {/* HARTSLAG KAART (Minder margin, kleine tijd) */}
+            <div className="mt-4 w-full bg-white px-6 py-3 rounded-[20px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
                <div className="flex items-center gap-2 mb-1">
                  <Activity size={14} className="text-slate-400" />
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                    {status === 'connected' ? t('heartbeat', lang) : t('last_check', lang)}
                  </p>
                </div>
-               <p className="text-4xl font-black text-slate-800 tabular-nums tracking-tight">{lastPing}</p>
+               <p className="text-sm font-black text-slate-800 tabular-nums tracking-tight">{lastPing}</p>
             </div>
           </div>
 
-          {/* VANDAAG / MORGEN PLANNING */}
-          <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
-            <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+          {/* VANDAAG / MORGEN PLANNING (Compactere spacing) */}
+          <section className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden transition-all">
+            <header className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Clock size={16} className="text-orange-600" />
-                <h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('smart_plan', lang)}</h3>
+                <h3 className="font-black text-[10px] uppercase tracking-tight text-slate-800">{t('current_planning', lang)}</h3>
               </div>
               <button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95">
-                {t('open_week_plan', lang).toUpperCase()}
+                {t('week_plan', lang).toUpperCase()}
               </button>
             </header>
 
-            <div className="p-5 space-y-5">
-              <div className="flex gap-3">
+            <div className="p-4 space-y-4">
+              <div className="flex gap-2">
                 <button 
                   onClick={() => toggleOverride('today')} 
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                 >
                   {t('today', lang)}
                 </button>
                 <button 
                   onClick={() => toggleOverride('tomorrow')} 
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                 >
                   {t('tomorrow', lang)}
                 </button>
               </div>
 
-              <div className={`border rounded-2xl p-4 transition-all ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
-                <div className="grid grid-cols-2 gap-4">
+              <div className={`border rounded-xl p-3 transition-all ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label>
-                    <input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/>
+                    <input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-lg p-2.5 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label>
-                    <input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/>
+                    <input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-lg p-2.5 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/>
                   </div>
                 </div>
                 
-                <p className={`text-[9px] font-black uppercase tracking-widest text-center mt-4 ${!isBase ? 'text-orange-600' : 'text-slate-400'}`}>
+                <p className={`text-[8px] font-black uppercase tracking-widest text-center mt-3 ${!isBase ? 'text-orange-600' : 'text-slate-400'}`}>
                   {isBase ? t('base_active', lang) : `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang) : t('tomorrow', lang)} (${daysVoluit[activeDayIdx]})`}
                 </p>
               </div>
