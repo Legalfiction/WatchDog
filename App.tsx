@@ -21,15 +21,33 @@ const LANGUAGES: any = {
 
 const TRANSLATIONS: any = {
   NL: {
-    vigilant: 'Barkr is waakzaam', idle: 'Systeem in rust', offline: 'Geen verbinding', tap_sleep: 'Tik om te slapen', heartbeat: 'Systeem Hartslag', manual: 'Handleiding', setup: 'Barkr Setup', user_name: 'Naam Gebruiker', smart_plan: 'Slimme Planning', win_day: 'Vensters per dag', start: 'Start', deadline: 'Deadline', contacts: 'Contacten', c_name: 'Naam', c_phone: 'Telefoonnummer', test: 'TEST VERBINDING', save: 'Opslaan', close: 'Sluiten', ok: 'Begrepen', barkr_mean: 'De betekenis van Barkr', barkr_desc: 'Barkr is afgeleid van het Engelse \'Barker\' (blaffer). Het staat voor een trouwe digitale waakhond die over je waakt.', why: 'Waarom deze applicatie?', how: 'Hoe gebruik je Barkr?', ins_title: 'Wanneer gebruik je Barkr?', info_support: 'Informatie & Support', launch_alert: 'Belangrijk: Opstarten', launch_desc: 'In deze fase dient de app handmatig opgestart te worden.', smart_help_t: 'Wat is Slimme Planning?', smart_help_d: 'Hiermee kun je per dag unieke tijden instellen. Handig als je in het weekend later opstaat dan doordeweeks.', active_schedule: 'Huidige Planning'
+    vigilant: 'Barkr is waakzaam', idle: 'Systeem in rust', offline: 'Geen verbinding', tap_sleep: 'Tik om te slapen', heartbeat: 'Systeem Hartslag', manual: 'Handleiding', setup: 'Barkr Setup', user_name: 'Naam Gebruiker', smart_plan: 'Slimme Planning', win_day: 'Vensters per dag', start: 'Start', deadline: 'Deadline', contacts: 'Contacten', c_name: 'Naam', c_phone: 'Telefoonnummer', test: 'TEST VERBINDING', save: 'Opslaan', close: 'Sluiten', ok: 'Begrepen', barkr_mean: 'De betekenis van Barkr', barkr_desc: 'Barkr is afgeleid van het Engelse \'Barker\' (blaffer). Het staat voor een trouwe digitale waakhond die over je waakt.', why: 'Waarom deze applicatie?', how: 'Hoe gebruik je Barkr?', ins_title: 'Wanneer gebruik je Barkr?', info_support: 'Informatie & Support', launch_alert: 'Belangrijk: Opstarten', launch_desc: 'In deze fase dient de app handmatig opgestart te worden.', smart_help_t: 'Wat is Slimme Planning?', smart_help_d: 'Hiermee kun je per dag unieke tijden instellen. Handig als je in het weekend later opstaat dan doordeweeks.', active_schedule: 'Huidige Planning', today: 'Vandaag', tomorrow: 'Morgen'
   },
   EN: {
-    vigilant: 'Barkr is vigilant', idle: 'System idle', offline: 'No connection', tap_sleep: 'Tap to sleep', heartbeat: 'System Heartbeat', manual: 'Manual', setup: 'Barkr Setup', user_name: 'User Name', smart_plan: 'Smart Planning', win_day: 'Windows per day', start: 'Start', deadline: 'Deadline', contacts: 'Contacts', c_name: 'Name', c_phone: 'Phone Number', test: 'TEST CONNECTION', save: 'Save', close: 'Close', ok: 'Understood', barkr_mean: 'The meaning of Barkr', barkr_desc: 'Barkr represents a loyal digital watchdog.', why: 'Why this application?', how: 'How to use Barkr?', ins_title: 'Inspiration', info_support: 'Support', launch_alert: 'Important: Startup', launch_desc: 'Currently, the app must be started manually.', smart_help_t: 'What is Smart Planning?', smart_help_d: 'This allows you to set unique times per day. Useful if you wake up later on weekends.', active_schedule: 'Current Schedule'
+    vigilant: 'Barkr is vigilant', idle: 'System idle', offline: 'No connection', tap_sleep: 'Tap to sleep', heartbeat: 'System Heartbeat', manual: 'Manual', setup: 'Barkr Setup', user_name: 'User Name', smart_plan: 'Smart Planning', win_day: 'Windows per day', start: 'Start', deadline: 'Deadline', contacts: 'Contacts', c_name: 'Name', c_phone: 'Phone Number', test: 'TEST CONNECTION', save: 'Save', close: 'Close', ok: 'Understood', barkr_mean: 'The meaning of Barkr', barkr_desc: 'Barkr represents a loyal digital watchdog.', why: 'Why this application?', how: 'How to use Barkr?', ins_title: 'Inspiration', info_support: 'Support', launch_alert: 'Important: Startup', launch_desc: 'Currently, the app must be started manually.', smart_help_t: 'What is Smart Planning?', smart_help_d: 'This allows you to set unique times per day. Useful if you wake up later on weekends.', active_schedule: 'Current Schedule', today: 'Today', tomorrow: 'Tomorrow'
+  },
+  DE: {
+    today: 'Heute', tomorrow: 'Morgen'
+  },
+  FR: {
+    today: 'Auj.', tomorrow: 'Demain'
+  },
+  ES: {
+    today: 'Hoy', tomorrow: 'Mañana'
+  },
+  IT: {
+    today: 'Oggi', tomorrow: 'Domani'
+  },
+  PL: {
+    today: 'Dziś', tomorrow: 'Jutro'
+  },
+  TR: {
+    today: 'Bugün', tomorrow: 'Yarın'
   }
 };
 
-// Fallback logic voor alle talen naar EN
-Object.keys(LANGUAGES).forEach(l => { if(!TRANSLATIONS[l]) TRANSLATIONS[l] = TRANSLATIONS.EN; });
+// Fallback logic voor alle talen naar EN voor ontbrekende keys
+Object.keys(LANGUAGES).forEach(l => { if(!TRANSLATIONS[l]) TRANSLATIONS[l] = {}; Object.assign(TRANSLATIONS[l], { ...TRANSLATIONS.EN, ...TRANSLATIONS[l] }); });
 
 const t = (key: string, lang: string) => (TRANSLATIONS[lang] || TRANSLATIONS['NL'])[key] || key;
 
@@ -51,6 +69,10 @@ export default function App() {
 
   const lang = settings.language || 'NL';
   const daysVoluit = LANGUAGES[lang].days;
+
+  // Bepaal de huidige dag en de dag van morgen (0 = Maandag, 6 = Zondag in onze array)
+  const currentDayIndex = (new Date().getDay() + 6) % 7; 
+  const tomorrowDayIndex = (currentDayIndex + 1) % 7;
 
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
@@ -107,7 +129,7 @@ export default function App() {
   };
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
       <style>{`
         @keyframes bounce-zz { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; } }
         .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
@@ -135,21 +157,29 @@ export default function App() {
 
       {!showSettings && !showManual && (
         <main className="flex-1 p-6 space-y-8 overflow-y-auto">
-          {/* HOOFD ACTIE KNOP */}
+          {/* HOOFD ACTIE KNOP (HERSTELD NAAR W-72) */}
           <div className="flex flex-col items-center pt-8">
             <button 
               onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
               disabled={status !== 'connected'}
-              className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl border-[10px] ${
+              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
                 settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'
               }`}
             >
-              {status !== 'connected' ? <Wifi size={60} className="text-slate-400 animate-pulse"/> : 
+              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : 
                settings.vacationMode ? (
-                <div className="relative"><img src="/logo.png" alt="Barkr" className="w-64 h-64 object-cover opacity-40 grayscale" /><div className="absolute top-12 right-12 flex font-black text-blue-300"><span className="text-2xl animate-zz">Z</span><span className="text-xl animate-zz ml-1">z</span></div></div>
+                <div className="flex flex-col items-center justify-center relative w-full h-full">
+                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div>
+                  <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
+                </div>
               ) : (
-                <div className="relative"><img src="/logo.png" alt="Barkr" className="w-64 h-64 object-cover drop-shadow-xl" /><div className="absolute bottom-4 inset-x-0 text-center"><span className="text-[10px] font-black uppercase text-white tracking-widest italic">{t('tap_sleep', lang)}</span></div></div>
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
+                   <div className="absolute bottom-6 inset-x-0 text-center">
+                      <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span>
+                   </div>
+                </div>
               )}
             </button>
             <div className="mt-8 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center">
@@ -158,7 +188,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* SLIMME PLANNING OP HOOFDSCHERM */}
+          {/* SLIMME PLANNING OP HOOFDSCHERM MET VANDAAG/MORGEN LOGICA */}
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
             <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-2">
@@ -170,14 +200,27 @@ export default function App() {
               </button>
             </header>
 
-            <div className="p-5 space-y-5">
-              {/* DAGEN SELECTOR */}
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                {daysVoluit.map((day, idx) => (
-                  <button key={idx} onClick={() => toggleDay(idx)} className={`px-4 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border ${settings.activeDays.includes(idx) ? 'bg-orange-100 border-orange-200 text-orange-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
-                    {day}
-                  </button>
-                ))}
+            <div className="p-5 space-y-6">
+              {/* DAGEN SELECTOR - NETJES OP 1 REGEL */}
+              <div className="flex justify-between items-end relative h-10">
+                {daysVoluit.map((day, idx) => {
+                  const isToday = idx === currentDayIndex;
+                  const isTomorrow = idx === tomorrowDayIndex;
+                  
+                  return (
+                    <div key={idx} className="flex flex-col items-center">
+                      {isToday && <span className="text-[8px] font-black text-orange-600 uppercase absolute -top-1">{t('today', lang)}</span>}
+                      {isTomorrow && <span className="text-[8px] font-black text-slate-400 uppercase absolute -top-1">{t('tomorrow', lang)}</span>}
+                      
+                      <button 
+                        onClick={() => toggleDay(idx)} 
+                        className={`w-9 h-9 rounded-[10px] text-[11px] font-black flex items-center justify-center transition-all border ${settings.activeDays.includes(idx) ? 'bg-orange-100 border-orange-200 text-orange-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
+                      >
+                        {day.substring(0, 2)}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* TIJDEN */}
@@ -188,13 +231,16 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {settings.activeDays.sort().map((d: number) => (
-                    <div key={d} className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                      <span className="w-20 text-[10px] font-black text-slate-500 uppercase">{daysVoluit[d].substring(0,2)}</span>
-                      <input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1 text-xs font-black text-center"/>
-                      <input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1 text-xs font-black text-red-600 text-center"/>
-                    </div>
-                  ))}
+                  {settings.activeDays.sort().map((d: number) => {
+                    const isToday = d === currentDayIndex;
+                    return (
+                      <div key={d} className={`flex items-center gap-3 p-3 rounded-2xl border ${isToday ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
+                        <span className={`w-20 text-[10px] font-black uppercase ${isToday ? 'text-orange-600' : 'text-slate-500'}`}>{daysVoluit[d].substring(0,2)} {isToday ? `(${t('today', lang)})` : ''}</span>
+                        <input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1 text-xs font-black text-center"/>
+                        <input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1 text-xs font-black text-red-600 text-center"/>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
