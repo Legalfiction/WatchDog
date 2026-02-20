@@ -168,11 +168,25 @@ export default function App() {
         }).catch(err => console.error(`[Barkr Log] Ping mislukt:`, err));
       }
     };
+    
     if (document.visibilityState === 'visible') sendPing();
     const pingInterval = setInterval(sendPing, 5000); 
-    const handleVisibilityChange = () => { if (document.visibilityState === 'visible') sendPing(); };
+    
+    const handleVisibilityChange = () => { 
+      const logTime = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      if (document.visibilityState === 'visible') {
+        console.log(`[Barkr Log] Tijdstip ${logTime}: Telefoon/App AAN (zichtbaar) -> Gebruiker: ${settings.name} | Window: ${displayStart} - ${displayEnd}`);
+        sendPing(); 
+      } else {
+        console.log(`[Barkr Log] Tijdstip ${logTime}: Telefoon/App UIT (verborgen/achtergrond) -> Gebruiker: ${settings.name} | Window: ${displayStart} - ${displayEnd}`);
+      }
+    };
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => { clearInterval(pingInterval); document.removeEventListener('visibilitychange', handleVisibilityChange); };
+    return () => { 
+      clearInterval(pingInterval); 
+      document.removeEventListener('visibilitychange', handleVisibilityChange); 
+    };
   }, [status, activeUrl, settings.vacationMode, settings.name, displayStart, displayEnd]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
@@ -241,7 +255,12 @@ export default function App() {
           {/* HOOFD ACTIE KNOP */}
           <div className="flex flex-col items-center pt-2">
             <button 
-              onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
+              onClick={() => {
+                const newMode = !settings.vacationMode;
+                const logTime = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+                console.log(`[Barkr Log] Tijdstip ${logTime}: App handmatig ${newMode ? 'UIT (Rust)' : 'AAN (Waakzaam)'} gezet -> Gebruiker: ${settings.name} | Window: ${displayStart} - ${displayEnd}`);
+                setSettings({...settings, vacationMode: newMode});
+              }}
               disabled={status !== 'connected'}
               className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[8px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
@@ -264,7 +283,7 @@ export default function App() {
               )}
             </button>
             
-            {/* HARTSLAG KAART (Minder margin, kleine tijd) */}
+            {/* HARTSLAG KAART */}
             <div className="mt-4 w-full bg-white px-6 py-3 rounded-[20px] border border-slate-100 shadow-sm text-center flex flex-col items-center">
                <div className="flex items-center gap-2 mb-1">
                  <Activity size={14} className="text-slate-400" />
@@ -276,12 +295,15 @@ export default function App() {
             </div>
           </div>
 
-          {/* VANDAAG / MORGEN PLANNING (Compactere spacing) */}
+          {/* VANDAAG / MORGEN PLANNING */}
           <section className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden transition-all">
             <header className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Clock size={16} className="text-orange-600" />
-                <h3 className="font-black text-[10px] uppercase tracking-tight text-slate-800">{t('current_planning', lang)}</h3>
+                {/* AANGEPAST: current_planning is gewijzigd naar weekplanning */}
+                <h3 className="font-black text-[10px] uppercase tracking-tight text-slate-800">
+                  {t('week_plan', lang)}
+                </h3>
               </div>
               <button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95">
                 {t('week_plan', lang).toUpperCase()}
@@ -307,12 +329,14 @@ export default function App() {
               <div className={`border rounded-xl p-3 transition-all ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label>
-                    <input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-lg p-2.5 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/>
+                    {/* AANGEPAST: Text labels en invulvelden zijn iets vergroot */}
+                    <label className="text-[11px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label>
+                    <input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label>
-                    <input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-lg p-2.5 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/>
+                    {/* AANGEPAST: Text labels en invulvelden zijn iets vergroot */}
+                    <label className="text-[11px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label>
+                    <input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/>
                   </div>
                 </div>
                 
@@ -339,8 +363,8 @@ export default function App() {
             {daysVoluit.map((dayName: string, d: number) => (
               <div key={d} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                 <span className="w-24 text-[11px] font-black text-slate-700 uppercase">{dayName}</span>
-                <input type="time" value={settings.schedules[d]?.startTime || '06:00'} onChange={e => setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-xs font-black text-center outline-none"/>
-                <input type="time" value={settings.schedules[d]?.endTime || '10:00'} onChange={e => setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-xs font-black text-red-600 text-center outline-none"/>
+                <input type="time" value={settings.schedules[d]?.startTime || '06:00'} onChange={e => setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-sm font-black text-center outline-none"/>
+                <input type="time" value={settings.schedules[d]?.endTime || '10:00'} onChange={e => setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-sm font-black text-red-600 text-center outline-none"/>
               </div>
             ))}
           </div>
