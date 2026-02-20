@@ -5,6 +5,13 @@ import {
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
+const getLocalYYYYMMDD = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 // --- VOLLEDIGE TAAL & DAGEN CONFIGURATIE ---
 const LANGUAGES: any = {
   NL: { flag: '🇳🇱', prefix: '+31', name: 'Nederlands', days: ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'] },
@@ -21,34 +28,21 @@ const LANGUAGES: any = {
 
 const TRANSLATIONS: any = {
   NL: {
-    vigilant: 'Barkr is waakzaam', idle: 'Systeem in rust', offline: 'Geen verbinding', tap_sleep: 'Tik om te slapen', heartbeat: 'Systeem Hartslag', manual: 'Handleiding', setup: 'Barkr Setup', user_name: 'Naam Gebruiker', smart_plan: 'Slimme Planning', win_day: 'Vensters per dag', start: 'Start', deadline: 'Deadline', contacts: 'Contacten', c_name: 'Naam', c_phone: 'Telefoonnummer', test: 'TEST VERBINDING', save: 'Opslaan', close: 'Sluiten', ok: 'Begrepen', barkr_mean: 'De betekenis van Barkr', barkr_desc: 'Barkr is afgeleid van het Engelse \'Barker\' (blaffer). Het staat voor een trouwe digitale waakhond die over je waakt.', why: 'Waarom deze applicatie?', how: 'Hoe gebruik je Barkr?', ins_title: 'Wanneer gebruik je Barkr?', info_support: 'Informatie & Support', launch_alert: 'Belangrijk: Opstarten', launch_desc: 'In deze fase dient de app handmatig opgestart te worden.', smart_help_t: 'Wat is Slimme Planning?', smart_help_d: 'Hiermee kun je per dag unieke tijden instellen. Handig als je in het weekend later opstaat dan doordeweeks.', active_schedule: 'Huidige Planning', today: 'Vandaag', tomorrow: 'Morgen'
+    vigilant: 'Barkr is waakzaam', idle: 'Systeem in rust', offline: 'Geen verbinding', tap_sleep: 'Tik om te slapen', heartbeat: 'Systeem Hartslag', manual: 'Handleiding', setup: 'Barkr Setup', user_name: 'Naam Gebruiker', smart_plan: 'Slimme Planning', start: 'Start', deadline: 'Deadline', contacts: 'Contacten', c_name: 'Naam', c_phone: 'Telefoonnummer', test: 'TEST VERBINDING', save: 'Opslaan', close: 'Sluiten', ok: 'Begrepen', barkr_mean: 'De betekenis van Barkr', barkr_desc: 'Barkr is afgeleid van het Engelse \'Barker\' (blaffer). Het staat voor een trouwe digitale waakhond die over je waakt.', why: 'Waarom deze applicatie?', how: 'Hoe gebruik je Barkr?', ins_title: 'Wanneer gebruik je Barkr?', info_support: 'Informatie & Support', launch_alert: 'Belangrijk: Opstarten', launch_desc: 'In deze fase dient de app handmatig opgestart te worden.', smart_help_t: 'Wat is Slimme Planning?', smart_help_d: 'De slimme planning is leidend. Wil je incidenteel een andere tijd? Selecteer dan "Vandaag" of "Morgen". Na het verstrijken van die dag valt de app automatisch terug op je standaard tijden.', today: 'Vandaag', tomorrow: 'Morgen', smart_plan_base: 'Standaard Planning (Elke Dag)', planning_for: 'Planning voor'
   },
   EN: {
-    vigilant: 'Barkr is vigilant', idle: 'System idle', offline: 'No connection', tap_sleep: 'Tap to sleep', heartbeat: 'System Heartbeat', manual: 'Manual', setup: 'Barkr Setup', user_name: 'User Name', smart_plan: 'Smart Planning', win_day: 'Windows per day', start: 'Start', deadline: 'Deadline', contacts: 'Contacts', c_name: 'Name', c_phone: 'Phone Number', test: 'TEST CONNECTION', save: 'Save', close: 'Close', ok: 'Understood', barkr_mean: 'The meaning of Barkr', barkr_desc: 'Barkr represents a loyal digital watchdog.', why: 'Why this application?', how: 'How to use Barkr?', ins_title: 'Inspiration', info_support: 'Support', launch_alert: 'Important: Startup', launch_desc: 'Currently, the app must be started manually.', smart_help_t: 'What is Smart Planning?', smart_help_d: 'This allows you to set unique times per day. Useful if you wake up later on weekends.', active_schedule: 'Current Schedule', today: 'Today', tomorrow: 'Tomorrow'
+    vigilant: 'Barkr is vigilant', idle: 'System idle', offline: 'No connection', tap_sleep: 'Tap to sleep', heartbeat: 'System Heartbeat', manual: 'Manual', setup: 'Barkr Setup', user_name: 'User Name', smart_plan: 'Smart Planning', start: 'Start', deadline: 'Deadline', contacts: 'Contacts', c_name: 'Name', c_phone: 'Phone Number', test: 'TEST CONNECTION', save: 'Save', close: 'Close', ok: 'Understood', barkr_mean: 'The meaning of Barkr', barkr_desc: 'Barkr represents a loyal digital watchdog.', why: 'Why this application?', how: 'How to use Barkr?', ins_title: 'Inspiration', info_support: 'Support', launch_alert: 'Important: Startup', launch_desc: 'Currently, the app must be started manually.', smart_help_t: 'What is Smart Planning?', smart_help_d: 'Smart planning is the default. Want a temporary different time? Select "Today" or "Tomorrow". It reverts to default after expiration.', today: 'Today', tomorrow: 'Tomorrow', smart_plan_base: 'Default Schedule (Every Day)', planning_for: 'Schedule for'
   },
-  DE: {
-    today: 'Heute', tomorrow: 'Morgen'
-  },
-  FR: {
-    today: 'Auj.', tomorrow: 'Demain'
-  },
-  ES: {
-    today: 'Hoy', tomorrow: 'Mañana'
-  },
-  IT: {
-    today: 'Oggi', tomorrow: 'Domani'
-  },
-  PL: {
-    today: 'Dziś', tomorrow: 'Jutro'
-  },
-  TR: {
-    today: 'Bugün', tomorrow: 'Yarın'
-  }
+  DE: { today: 'Heute', tomorrow: 'Morgen', smart_plan_base: 'Standardplan (Jeden Tag)', planning_for: 'Planung für' },
+  FR: { today: 'Aujourd\'hui', tomorrow: 'Demain', smart_plan_base: 'Planning par défaut', planning_for: 'Planning pour' },
+  ES: { today: 'Hoy', tomorrow: 'Mañana', smart_plan_base: 'Horario estándar', planning_for: 'Horario para' },
+  IT: { today: 'Oggi', tomorrow: 'Domani', smart_plan_base: 'Orario predefinito', planning_for: 'Orario per' },
+  PL: { today: 'Dziś', tomorrow: 'Jutro', smart_plan_base: 'Domyślny harmonogram', planning_for: 'Harmonogram dla' },
+  TR: { today: 'Bugün', tomorrow: 'Yarın', smart_plan_base: 'Varsayılan Program', planning_for: 'Program:' }
 };
 
-// Fallback logic voor alle talen naar EN voor ontbrekende keys
+// Fallback logic
 Object.keys(LANGUAGES).forEach(l => { if(!TRANSLATIONS[l]) TRANSLATIONS[l] = {}; Object.assign(TRANSLATIONS[l], { ...TRANSLATIONS.EN, ...TRANSLATIONS[l] }); });
-
 const t = (key: string, lang: string) => (TRANSLATIONS[lang] || TRANSLATIONS['NL'])[key] || key;
 
 export default function App() {
@@ -57,34 +51,81 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
+  const [activeTab, setActiveTab] = useState<'base' | 'today' | 'tomorrow'>('base');
   
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('barkr_v16_data');
-    return saved ? JSON.parse(saved) : {
-      name: '', vacationMode: false, useCustomSchedule: false, language: 'NL',
-      activeDays: [0, 1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '08:30',
-      contacts: [], schedules: {}
+    const parsed = saved ? JSON.parse(saved) : {};
+    return {
+      name: parsed.name || '', 
+      vacationMode: parsed.vacationMode || false, 
+      language: parsed.language || 'NL',
+      baseStartTime: parsed.baseStartTime || parsed.startTime || '07:00',
+      baseEndTime: parsed.baseEndTime || parsed.endTime || '08:30',
+      overrides: parsed.overrides || {},
+      contacts: parsed.contacts || []
     };
   });
 
   const lang = settings.language || 'NL';
   const daysVoluit = LANGUAGES[lang].days;
 
-  // Bepaal de huidige dag en de dag van morgen (0 = Maandag, 6 = Zondag in onze array)
-  const currentDayIndex = (new Date().getDay() + 6) % 7; 
-  const tomorrowDayIndex = (currentDayIndex + 1) % 7;
+  const now = new Date();
+  const todayStr = getLocalYYYYMMDD(now);
+  const todayIdx = (now.getDay() + 6) % 7; 
+  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = getLocalYYYYMMDD(tomorrow);
+  const tomorrowIdx = (tomorrow.getDay() + 6) % 7;
 
+  // Sync state & cleanup expired overrides
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const d = new Date();
+      const dStr = getLocalYYYYMMDD(d);
+      const tStr = d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+      setSettings(prev => {
+        if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
+          const newOverrides = { ...prev.overrides };
+          delete newOverrides[dStr];
+          if (activeTab === 'today') setActiveTab('base');
+          return { ...prev, overrides: newOverrides };
+        }
+        return prev;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
+  // Construct backend payload dynamically
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
+
+    const payload: any = { ...settings };
+    payload.useCustomSchedule = true;
+    payload.schedules = {};
+    payload.activeDays = [0,1,2,3,4,5,6]; // Altijd actief in backend
+
+    // Basis tijden vullen voor alle 7 dagen
+    for(let i=0; i<7; i++) {
+        payload.schedules[i] = { startTime: settings.baseStartTime, endTime: settings.baseEndTime };
+    }
+    // Specifieke overschrijvingen injecteren voor Vandaag/Morgen
+    if (settings.overrides[todayStr]) {
+        payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
+    }
+    if (settings.overrides[tomorrowStr]) {
+        payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
+    }
+
     const timer = setTimeout(() => {
       fetch(`${activeUrl}/save_settings`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(settings)
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
       }).catch(() => {});
     }, 800);
     return () => clearTimeout(timer);
-  }, [settings, activeUrl]);
+  }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
@@ -121,12 +162,33 @@ export default function App() {
     return () => { clearInterval(pingInterval); document.removeEventListener('visibilitychange', handleVisibilityChange); };
   }, [status, activeUrl, settings.vacationMode, settings.name]);
 
-  const toggleDay = (idx: number) => {
-    const newDays = settings.activeDays.includes(idx) 
-      ? settings.activeDays.filter((d: number) => d !== idx)
-      : [...settings.activeDays, idx];
-    setSettings({...settings, activeDays: newDays});
+  const toggleOverride = (type: 'today' | 'tomorrow') => {
+    if (activeTab === type) {
+      setActiveTab('base');
+    } else {
+      setActiveTab(type);
+      const targetStr = type === 'today' ? todayStr : tomorrowStr;
+      if (!settings.overrides[targetStr]) {
+        setSettings({...settings, overrides: {...settings.overrides, [targetStr]: {start: settings.baseStartTime, end: settings.baseEndTime}}});
+      }
+    }
   };
+
+  const updateTime = (field: 'start'|'end', value: string) => {
+    if (activeTab === 'base') {
+      setSettings({...settings, [field === 'start' ? 'baseStartTime' : 'baseEndTime']: value});
+    } else {
+      const activeStr = activeTab === 'today' ? todayStr : tomorrowStr;
+      const newOverrides = {...settings.overrides};
+      if (!newOverrides[activeStr]) newOverrides[activeStr] = { start: settings.baseStartTime, end: settings.baseEndTime };
+      newOverrides[activeStr][field] = value;
+      setSettings({...settings, overrides: newOverrides});
+    }
+  };
+
+  const activeDateStr = activeTab === 'today' ? todayStr : (activeTab === 'tomorrow' ? tomorrowStr : null);
+  const displayStart = activeTab === 'base' ? settings.baseStartTime : settings.overrides[activeDateStr!]?.start || settings.baseStartTime;
+  const displayEnd = activeTab === 'base' ? settings.baseEndTime : settings.overrides[activeDateStr!]?.end || settings.baseEndTime;
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
@@ -188,61 +250,51 @@ export default function App() {
             </div>
           </div>
 
-          {/* SLIMME PLANNING OP HOOFDSCHERM MET VANDAAG/MORGEN LOGICA */}
+          {/* NIEUWE SLIMME PLANNING LOGICA OP HOOFDSCHERM */}
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
-            <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <CalendarDays size={16} className="text-orange-600" />
-                <h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('active_schedule', lang)}</h3>
-              </div>
-              <button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`text-[9px] font-black px-3 py-1.5 rounded-full transition-all border ${settings.useCustomSchedule ? 'bg-orange-600 border-orange-700 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>
-                {t('smart_plan', lang).toUpperCase()}
-              </button>
+            <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
+              <CalendarDays size={16} className="text-orange-600" />
+              <h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('smart_plan', lang)}</h3>
             </header>
 
-            <div className="p-5 space-y-6">
-              {/* DAGEN SELECTOR - NETJES OP 1 REGEL */}
-              <div className="flex justify-between items-end relative h-10">
-                {daysVoluit.map((day, idx) => {
-                  const isToday = idx === currentDayIndex;
-                  const isTomorrow = idx === tomorrowDayIndex;
-                  
-                  return (
-                    <div key={idx} className="flex flex-col items-center">
-                      {isToday && <span className="text-[8px] font-black text-orange-600 uppercase absolute -top-1">{t('today', lang)}</span>}
-                      {isTomorrow && <span className="text-[8px] font-black text-slate-400 uppercase absolute -top-1">{t('tomorrow', lang)}</span>}
-                      
-                      <button 
-                        onClick={() => toggleDay(idx)} 
-                        className={`w-9 h-9 rounded-[10px] text-[11px] font-black flex items-center justify-center transition-all border ${settings.activeDays.includes(idx) ? 'bg-orange-100 border-orange-200 text-orange-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}
-                      >
-                        {day.substring(0, 2)}
-                      </button>
-                    </div>
-                  );
-                })}
+            <div className="p-5 space-y-5">
+              
+              {/* VANDAAG / MORGEN OVERRIDE KNOPPEN */}
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => toggleOverride('today')} 
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-normal transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : (settings.overrides[todayStr] ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-600')}`}
+                >
+                  {t('today', lang)}
+                </button>
+                <button 
+                  onClick={() => toggleOverride('tomorrow')} 
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-normal transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : (settings.overrides[tomorrowStr] ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-600')}`}
+                >
+                  {t('tomorrow', lang)}
+                </button>
               </div>
 
-              {/* TIJDEN */}
-              {!settings.useCustomSchedule ? (
+              {/* SUBTIELE INDICATOR WELKE PLANNING ACTIEF IS */}
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-3">
+                  {activeTab === 'today' ? `${t('planning_for', lang)} ${t('today', lang).toLowerCase()} (${daysVoluit[todayIdx]})` :
+                   activeTab === 'tomorrow' ? `${t('planning_for', lang)} ${t('tomorrow', lang).toLowerCase()} (${daysVoluit[tomorrowIdx]})` :
+                   t('smart_plan_base', lang)}
+                </p>
+
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 font-black text-slate-700 text-center"/></div>
-                  <div className="space-y-1"><label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 font-black text-red-600 text-center"/></div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label>
+                    <input type="time" value={displayStart} onChange={e=>updateTime('start', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${activeTab === 'base' ? 'bg-white border-slate-200 text-slate-700' : 'bg-orange-50 border-orange-200 text-orange-900'}`}/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label>
+                    <input type="time" value={displayEnd} onChange={e=>updateTime('end', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${activeTab === 'base' ? 'bg-white border-slate-200 text-red-600' : 'bg-orange-50 border-orange-200 text-red-600'}`}/>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {settings.activeDays.sort().map((d: number) => {
-                    const isToday = d === currentDayIndex;
-                    return (
-                      <div key={d} className={`flex items-center gap-3 p-3 rounded-2xl border ${isToday ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
-                        <span className={`w-20 text-[10px] font-black uppercase ${isToday ? 'text-orange-600' : 'text-slate-500'}`}>{daysVoluit[d].substring(0,2)} {isToday ? `(${t('today', lang)})` : ''}</span>
-                        <input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1 text-xs font-black text-center"/>
-                        <input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1 text-xs font-black text-red-600 text-center"/>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              </div>
+
             </div>
           </section>
         </main>
@@ -254,9 +306,25 @@ export default function App() {
           <section className="bg-blue-600 p-6 rounded-[32px] text-white shadow-lg space-y-3 relative overflow-hidden"><h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-[0.15em]"><AlertTriangle size={18} className="text-orange-400"/> {t('launch_alert', lang)}</h4><p className="text-sm font-bold">{t('launch_desc', lang)}</p></section>
           
           <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3">
-            <h4 className="font-black text-orange-800 flex items-center gap-2 uppercase text-xs tracking-widest"><Zap size={18}/> {t('smart_help_t', lang)}</h4>
-            <p className="text-xs text-orange-900 leading-relaxed">{t('smart_help_d', lang)}</p>
+            <h4 className="font-black text-orange-800 flex items-center gap-2 uppercase text-xs tracking-widest"><CalendarDays size={18}/> {t('smart_help_t', lang)}</h4>
+            <p className="text-sm text-orange-900 leading-relaxed font-medium">{t('smart_help_d', lang)}</p>
           </section>
+
+          <section className="space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 px-2 flex items-center gap-2"><Zap size={14}/> {t('ins_title', lang)}</h3>
+            <div className="space-y-3">
+              {[1,2,3,4].map(i => (
+                <div key={i} className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex gap-4 items-start">
+                  <div className="bg-orange-100 p-3 rounded-2xl text-orange-600">
+                    {i===1 && <Plane size={24}/>} {i===2 && <Briefcase size={24}/>} {i===3 && <Home size={24}/>} {i===4 && <Mountain size={24}/>}
+                  </div>
+                  <div><h5 className="font-black text-slate-800 text-sm uppercase italic tracking-tight">{t(`ins_${i}_t`, lang)}</h5><p className="text-xs text-slate-500 leading-relaxed">{t(`ins_${i}_d`, lang)}</p></div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4"><h4 className="font-black text-orange-600 flex items-center gap-2 uppercase text-xs tracking-[0.15em]"><Dog size={20}/> {t('barkr_mean', lang)}</h4><p className="text-sm text-slate-600 leading-relaxed font-medium">{t('barkr_desc', lang)}</p></section>
 
           <section className="bg-slate-900 p-8 rounded-[40px] text-white space-y-6 shadow-2xl">
             <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest text-orange-400"><ExternalLink size={18}/> {t('info_support', lang)}</h4>
@@ -265,7 +333,8 @@ export default function App() {
               <a href="mailto:info@barkr.nl" className="flex items-center gap-4 bg-slate-800 p-4 rounded-2xl border border-slate-700 active:scale-95 transition-all"><div className="bg-blue-600 p-2 rounded-xl"><Mail size={18} className="text-white"/></div><div className="flex flex-col"><span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Email</span><span className="font-bold text-sm tracking-tight">info@barkr.nl</span></div></a>
             </div>
           </section>
-          <button onClick={() => setShowManual(false)} className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-3xl tracking-widest shadow-lg">{t('close', lang)}</button>
+
+          <button onClick={() => setShowManual(false)} className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-3xl tracking-widest shadow-lg active:scale-95 transition-all">{t('close', lang)}</button>
         </div>
       )}
 
@@ -274,7 +343,6 @@ export default function App() {
           <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            {/* TAAL DROPDOWN */}
             <div className="relative">
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">App Language</label>
               <div className="relative">
@@ -286,7 +354,6 @@ export default function App() {
                 <ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} />
               </div>
             </div>
-
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
           </div>
 
