@@ -1,212 +1,142 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog, Clock, Info, ExternalLink, AlertTriangle, Wifi
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Info, HeartPulse, Clock, X, ChevronDown, Plus, Trash2, ShieldCheck, Activity } from 'lucide-react';
+import { COUNTRIES } from './constants/countries';
+import { TRANSLATIONS } from './constants/translations';
 
-const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
-const DAYS = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
-
-const autoFormatPhone = (input: string) => {
-  let p = input.replace(/\s/g, '').replace(/-/g, '').replace(/\./g, '');
-  if (p.startsWith('06') && p.length === 10) return '+316' + p.substring(2);
-  return p;
-};
+const t = (key: string, lang: string) => (TRANSLATIONS[lang] || TRANSLATIONS['nl'])[key] || key;
 
 export default function App() {
-  const [activeUrl, setActiveUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState<'searching' | 'connected' | 'offline'>('searching');
   const [showSettings, setShowSettings] = useState(false);
-  const [showManual, setShowManual] = useState(false);
-  const [lastPing, setLastPing] = useState('--:--');
-  
-  // Standaard configuratie ingevuld voor direct gebruik
+  const [activeTab, setActiveTab] = useState<'today' | 'tomorrow' | null>(null); // Deselecteerbaar
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('barkr_v16_data');
-    return saved ? JSON.parse(saved) : {
-      name: 'Aldo', 
-      vacationMode: false, 
-      useCustomSchedule: false,
-      activeDays: [0, 1, 2, 3, 4, 5, 6], 
-      startTime: '07:00', 
-      endTime: '08:30',
-      contacts: [], 
-      schedules: {}
+    return saved ? JSON.parse(saved) : { 
+      name: 'Aldo', vacationMode: false, country: 'NL', 
+      contacts: [{ name: 'Aldo user', phone: '+31615964009' }] 
     };
   });
+  
+  const lang = COUNTRIES[settings.country]?.lang || 'nl';
+  const days = COUNTRIES[settings.country]?.days || COUNTRIES['NL'].days;
+  const todayIdx = (new Date().getDay() + 6) % 7;
 
-  // 1. Instellingen opslaan en synchroniseren met de Raspberry Pi
+  const getStatusLine = () => {
+    if (!activeTab) return "STANDAARD WEEKPLANNING ACTIEF";
+    const day = activeTab === 'today' ? days[todayIdx] : days[(todayIdx + 1) % 7];
+    return `PLANNING VOOR ${day.toUpperCase()} ACTIEF`;
+  };
+
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
-    if (!activeUrl) return;
-    const timer = setTimeout(() => {
-      fetch(`${activeUrl}/save_settings`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(settings)
-      }).catch(() => {});
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [settings, activeUrl]);
-
-  // 2. Verbinding zoeken
-  const findConnection = useCallback(async () => {
-    for (const url of ENDPOINTS) {
-      try {
-        const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) });
-        if (res.ok) {
-          setActiveUrl(url);
-          setStatus('connected');
-          return; 
-        }
-      } catch (e) {}
-    }
-    setStatus('offline');
-  }, []);
-
-  useEffect(() => {
-    findConnection();
-    const interval = setInterval(findConnection, 5000);
-    return () => clearInterval(interval);
-  }, [findConnection]);
-
-  // 3. De Hartslag & Scherm Actief Houden (WakeLock)
-  useEffect(() => {
-    if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
-
-    // Voorkom dat het scherm van de telefoon uitgaat (de enige manier voor web-apps)
-    let wakeLock: any = null;
-    const requestWakeLock = async () => {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await (navigator as any).wakeLock.request('screen');
-        }
-      } catch (err) {}
-    };
-    requestWakeLock();
-
-    const sendPing = () => {
-      fetch(`${activeUrl}/ping`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: settings.name, secret: 'BARKR_SECURE_V1' })
-      })
-      .then(res => {
-        if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
-      })
-      .catch(() => {});
-    };
-
-    sendPing();
-    const pingInterval = setInterval(sendPing, 5000); 
-
-    return () => {
-      clearInterval(pingInterval);
-      if (wakeLock) wakeLock.release();
-    };
-  }, [status, activeUrl, settings.vacationMode, settings.name]);
+  }, [settings]);
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
-      <style>{`
-        @keyframes bounce-zz {
-          0%, 100% { transform: translateY(0); opacity: 0.4; }
-          50% { transform: translateY(-15px); opacity: 1; }
-        }
-        .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
-      `}</style>
-      
-      <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
+    <div className="max-w-md mx-auto h-screen bg-white font-sans text-slate-900 flex flex-col overflow-hidden border-x border-slate-100">
+      {/* 1. Header: Compact en professioneel */}
+      <header className="px-5 py-3 flex justify-between items-center border-b border-slate-100 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div>
-          <div>
-            <h1 className="text-lg font-black italic tracking-tighter text-slate-800">BARKR</h1>
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
-              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
-              <span className={status === 'connected' ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600') : 'text-red-500'}>
-                {status === 'offline' ? 'Geen verbinding' : status === 'searching' ? 'Zoeken...' : settings.vacationMode ? 'Systeem in rust' : 'Barkr is waakzaam'}
+          <div className="bg-[#f26522] p-1.5 rounded-lg">
+            <img src="/logo.png" className="w-5 h-5 brightness-0 invert" alt="Barkr" />
+          </div>
+          <div className="flex flex-col">
+            <h1 className="text-lg font-black italic leading-none uppercase tracking-tighter">Barkr</h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${settings.vacationMode ? 'bg-blue-500' : 'bg-green-500 animate-pulse'}`} />
+              <span className="text-[9px] font-black uppercase text-slate-400">
+                {settings.vacationMode ? t('idle', lang) : t('vigilant', lang)}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Info size={20} className="text-slate-600"/></button>
-          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Settings size={20} className="text-slate-600"/></button>
+        <div className="flex gap-1">
+          <button className="p-2 rounded-lg bg-slate-50 text-slate-400"><Info size={18}/></button>
+          <button onClick={() => setShowSettings(true)} className="p-2 rounded-lg bg-slate-50 text-slate-400"><Settings size={18}/></button>
         </div>
       </header>
 
-      {!showSettings && !showManual && (
-        <main className="flex-1 p-6 flex flex-col items-center justify-start pt-16 space-y-12">
-          <div className="flex flex-col items-center gap-8 w-full">
-            <button 
-              onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
-              disabled={status !== 'connected'}
-              className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${
-                status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : 
-                settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'
-              }`}
-            >
-              {status !== 'connected' ? (
-                <Wifi size={80} className="text-slate-400 animate-pulse"/>
-              ) : settings.vacationMode ? (
-                <div className="flex flex-col items-center justify-center relative w-full h-full">
-                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10">
-                    <span className="text-3xl animate-zz" style={{animationDelay: '0s'}}>Z</span>
-                    <span className="text-2xl animate-zz ml-1" style={{animationDelay: '0.4s'}}>z</span>
-                    <span className="text-xl animate-zz ml-1" style={{animationDelay: '0.8s'}}>z</span>
-                  </div>
-                  <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
-                    <span className="text-xs font-black uppercase text-blue-100 tracking-widest mt-24">Wakker worden</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center w-full h-full relative">
-                   <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
-                   <div className="absolute bottom-6 inset-x-0 text-center">
-                      <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest">Tik om te slapen</span>
-                   </div>
-                </div>
-              )}
-            </button>
-          </div>
+      <main className="flex-1 flex flex-col items-center justify-around p-4 overflow-hidden">
+        {/* 2. Status Cirkel: Logica exact uit uw oude script */}
+        <button 
+          onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
+          className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center border-4 transition-all duration-500 overflow-hidden shrink-0 ${
+            settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-[#f26522] border-orange-500'
+          }`}
+        >
+          {settings.vacationMode ? (
+            <div className="flex flex-col items-center justify-center w-full h-full relative">
+              <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-900/40">
+                <span className="text-xs font-black uppercase text-blue-100 tracking-widest mt-24">WAKKER WORDEN</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center w-full h-full relative">
+              <img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02]" />
+              <div className="absolute bottom-6 inset-x-0 text-center">
+                <span className="text-[10px] font-black uppercase text-white tracking-widest italic drop-shadow-md">Tik om te slapen</span>
+              </div>
+            </div>
+          )}
+        </button>
 
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 w-full max-w-xs text-center shadow-sm">
-             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-widest"><Activity size={12} className="inline mr-1"/> Laatste Controle</p>
-             <p className="text-4xl font-black text-slate-800 tabular-nums">{lastPing}</p>
-          </div>
-        </main>
-      )}
-
-      {showManual && (
-        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20">
-          <header className="flex justify-between items-center mb-6"><h2 className="text-xl font-black uppercase italic tracking-tight">Handleiding</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
-          <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3"><h4 className="font-bold text-orange-800 flex items-center gap-2"><Clock size={18}/> Belangrijke werking</h4><p className="text-sm text-orange-900 leading-relaxed font-medium">Als de mobiel van de gebruiker **niet is aangezet** tijdens het ingestelde tijdswindow, wordt er automatisch een **WhatsApp-bericht** naar de contacten verstuurd.</p></section>
-          <section className="bg-blue-50 p-6 rounded-3xl border border-blue-200 space-y-3"><h4 className="font-bold text-blue-800 flex items-center gap-2"><AlertTriangle size={18}/> Instructie</h4><p className="text-sm text-blue-900 leading-relaxed font-medium">De applicatie houdt het scherm automatisch actief zolang deze geopend is, om te garanderen dat de veiligheidssignalen verstuurd blijven worden.</p></section>
-          <section className="space-y-3"><h4 className="font-bold text-slate-800 flex items-center gap-2 px-2"><ShieldCheck size={18} className="text-orange-600"/> Waarom Barkr?</h4><p className="text-sm text-slate-600 px-2 leading-relaxed">Barkr (blaffer) is een digitale waakhond voor vrienden en familie. Het systeem houdt de activiteit in de gaten om tijdig hulp te kunnen inschakelen.</p></section>
+        {/* 3. Hartslag: Minimalistisch en kleiner font */}
+        <div className="w-full bg-white rounded-3xl py-4 border border-slate-100 text-center shrink-0">
+          <div className="flex items-center justify-center gap-2 text-slate-300 mb-0.5 font-bold text-[9px] uppercase tracking-widest"><HeartPulse size={12} /> {t('heartbeat', lang)}</div>
+          <div className="text-3xl font-black text-slate-800 tracking-tighter leading-none">09:16</div>
         </div>
-      )}
 
-      {showSettings && (
-        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20">
-          <header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter">Barkr Setup</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            
-            <div><label className="text-[10px] font-bold text-slate-400 uppercase">Naam Gebruiker</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
-
-            <div className="flex justify-between items-center pt-2"><div><h3 className="font-bold text-slate-800 text-sm">Slimme Planning</h3><p className="text-[10px] text-slate-400">Vensters per dag instellen</p></div><button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`w-12 h-7 rounded-full relative transition-colors ${settings.useCustomSchedule ? 'bg-orange-600' : 'bg-slate-200'}`}><div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${settings.useCustomSchedule ? 'translate-x-5' : ''}`}/></button></div>
-            
-            {!settings.useCustomSchedule ? (
-              <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Start</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div><div><label className="text-[10px] font-bold text-red-400 uppercase">Deadline</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-red-600"/></div></div>
-            ) : (
-              <div className="space-y-3">{settings.activeDays.sort().map(d => (<div key={d} className="bg-orange-50/50 p-4 rounded-xl border border-orange-100 space-y-2"><span className="text-xs font-black uppercase text-orange-800 block border-b border-orange-100 pb-1">{DAYS[d]}</span><div className="grid grid-cols-2 gap-3"><div><p className="text-[9px] font-bold text-slate-400 uppercase">Start</p><input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border border-orange-200 text-xs font-bold text-slate-700"/></div><div><p className="text-[9px] font-bold text-red-400 uppercase">Deadline</p><input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>{setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})}} className="w-full bg-white px-2 py-1.5 rounded-lg border border-orange-200 text-xs font-bold text-red-600"/></div></div></div>))}</div>
-            )}
+        {/* 4. Planning: Strakke blokken, geen schaduwen */}
+        <div className="w-full space-y-3 rounded-3xl bg-slate-50/30 p-4 border border-slate-100 shrink-0">
+          <div className="flex justify-between items-center px-1">
+             <div className="flex items-center gap-1.5 text-[#f26522] font-black text-[9px] uppercase tracking-wider"><Clock size={14}/> ACTUELE PLANNING</div>
+             <button className="py-1.5 px-4 rounded-full bg-slate-800 text-white font-black uppercase text-[7px]">OPEN WEEKPLANNING</button>
           </div>
-          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2">Contacten</label><button onClick={()=>setSettings({...settings, contacts:[...settings.contacts, {name:'', phone:''}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
-            <div className="space-y-4">{settings.contacts.map((c, i) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Naam</label><input placeholder="Naam" value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">Telefoonnummer</label><input placeholder="06..." value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=autoFormatPhone(e.target.value); setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div>
-            
-            {/* WERKEND WHATSAPP TEST BERICHT */}
-            <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> TEST VERBINDING (STUUR APP)</button>
-            
-            </div>))}</div>
+          
+          <div className="flex gap-2">
+             <button 
+               onClick={() => setActiveTab(activeTab === 'today' ? null : 'today')} 
+               className={`flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase border transition-all ${activeTab === 'today' ? 'bg-[#f26522] text-white border-[#f26522]' : 'bg-white text-slate-400 border-slate-100'}`}
+             >VANDAAG</button>
+             <button 
+               onClick={() => setActiveTab(activeTab === 'tomorrow' ? null : 'tomorrow')} 
+               className={`flex-1 py-3.5 rounded-xl font-black text-[10px] uppercase border transition-all ${activeTab === 'tomorrow' ? 'bg-[#f26522] text-white border-[#f26522]' : 'bg-white text-slate-400 border-slate-100'}`}
+             >MORGEN</button>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 grid grid-cols-2 gap-3 text-center border border-slate-50">
+             <div className="flex flex-col"><span className="text-[8px] font-black text-slate-300 uppercase">START</span><span className="font-black text-slate-700 text-base">06:00</span></div>
+             <div className="flex flex-col"><span className="text-[8px] font-black text-[#f26522] uppercase">DEADLINE</span><span className="font-black text-[#f26522] text-base">10:00</span></div>
+             <div className="col-span-2 pt-2 border-t border-slate-50">
+               <span className="text-[10px] font-extrabold text-slate-500 uppercase italic tracking-tight">
+                 {getStatusLine()}
+               </span>
+             </div>
+          </div>
+        </div>
+      </main>
+
+      {/* 5. Setup: Compact en zonder witruimte */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-slate-900/10 backdrop-blur-[1px] flex items-end p-2">
+          <div className="bg-white w-full rounded-[2rem] p-6 space-y-4 max-h-[90vh] overflow-y-auto no-scrollbar border-t border-slate-100">
+            <div className="flex justify-between items-center"><h2 className="text-lg font-black italic uppercase text-slate-800 tracking-tighter">BARKR SETUP</h2><button onClick={() => setShowSettings(false)} className="p-1.5 bg-slate-50 rounded-full text-slate-300"><X size={18}/></button></div>
+            <div className="space-y-4">
+              <div className="space-y-1"><label className="text-[9px] font-black text-slate-300 uppercase ml-1">NAAM GEBRUIKER</label><input type="text" value={settings.name} className="w-full bg-slate-50 border-none rounded-xl py-3 px-4 font-black text-slate-700" /></div>
+              <div className="space-y-2">
+                 <div className="flex justify-between items-center px-1"><label className="text-[9px] font-black text-[#f26522] uppercase tracking-widest">CONTACTEN</label><button className="p-1 bg-[#f26522] text-white rounded-lg"><Plus size={16}/></button></div>
+                 {settings.contacts.map((c: any, i: number) => (
+                    <div key={i} className="bg-white p-4 rounded-2xl border border-slate-100 relative space-y-3">
+                       <button className="absolute top-4 right-5 text-slate-200"><Trash2 size={16}/></button>
+                       <div className="space-y-0.5"><label className="text-[8px] font-black text-slate-300 uppercase">NAAM</label><input value={c.name} className="w-full bg-slate-50 rounded-lg py-2 px-4 font-black text-slate-700 border-none text-sm" /></div>
+                       <div className="space-y-0.5"><label className="text-[8px] font-black text-slate-300 uppercase">NUMMER</label><input value={c.phone} className="w-full bg-slate-50 rounded-lg py-2 px-4 font-black text-slate-700 border-none text-sm" /></div>
+                       <button className="w-full py-2 bg-emerald-50 text-emerald-600 rounded-xl font-black text-[9px] uppercase tracking-widest border border-emerald-100 flex items-center justify-center gap-2">
+                         <ShieldCheck size={14}/> TEST VERBINDING
+                       </button>
+                    </div>
+                 ))}
+              </div>
+            </div>
+            <button onClick={() => setShowSettings(false)} className="w-full bg-slate-900 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px]">OPSLAAN</button>
           </div>
         </div>
       )}
