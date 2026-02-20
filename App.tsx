@@ -5,7 +5,14 @@ import {
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
-// --- 100% VOLLEDIGE TAAL & DAGEN CONFIGURATIE ---
+const getLocalYYYYMMDD = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// --- VOLLEDIGE TAAL & DAGEN CONFIGURATIE ---
 const LANGUAGES: any = {
   NL: { flag: '🇳🇱', prefix: '+31', name: 'Nederlands', days: ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'] },
   EN: { flag: '🇬🇧', prefix: '+44', name: 'English (UK)', days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
@@ -21,28 +28,28 @@ const LANGUAGES: any = {
 
 const TRANSLATIONS: any = {
   NL: {
-    vigilant: 'Barkr is waakzaam', idle: 'Systeem in rust', offline: 'Geen verbinding', tap_sleep: 'Tik om te slapen', heartbeat: 'Systeem Hartslag', manual: 'Handleiding', setup: 'Barkr Setup', user_name: 'Naam Gebruiker', smart_plan: 'Slimme Planning', start: 'Start', deadline: 'Deadline', contacts: 'Contacten', c_name: 'Naam', c_phone: 'Telefoonnummer', test: 'TEST VERBINDING', save: 'Opslaan', close: 'Sluiten', ok: 'Begrepen', barkr_mean: 'De betekenis van Barkr', barkr_desc: 'Barkr is afgeleid van het Engelse \'Barker\' (blaffer). Het staat voor een trouwe digitale waakhond die over je waakt.', why: 'Waarom deze applicatie?', why_desc1: 'Welzijnsbewaking voor mensen die alleen wonen of werken. Barkr biedt een vangnet zonder inbreuk op je privacy.', why_desc2: 'Bij inactiviteit tijdens je tijdvenster worden je noodcontacten direct per WhatsApp geïnformeerd.', how: 'Hoe gebruik je Barkr?', how_step1: 'Stel je naam in, bepaal je venster en deadline, en voeg je noodcontacten toe.', how_step2: 'Houd de app geopend op je scherm. Barkr registreert passief je aanwezigheid zolang je het toestel bedient.', how_step3: 'Geen signaal gemeten bij de deadline? Barkr slaat direct alarm via WhatsApp.', ins_title: 'Wanneer gebruik je Barkr?', ins_1_t: 'De Vroege Reiziger', ins_1_d: 'Vlieg je vroeg? Stel je deadline vlak na je wekker in. Verslaap je je? Dan krijgen je reisgenoten direct bericht.', ins_2_t: 'Afspraak & Werk', ins_2_d: 'Laat familie of collega\'s automatisch weten als je niet op tijd \'online\' bent bij belangrijke verplichtingen.', ins_3_t: 'Alleenwonenden', ins_3_d: 'Barkr is je dagelijkse check-in. Als je in de ochtend je toestel niet gebruikt, weten je naasten dat ze even moeten kijken.', ins_4_t: 'Outdoor & Sport', ins_4_d: 'Ga je alleen wandelen of sporten? Stel een deadline in voor je verwachte terugkomst.', info_support: 'Informatie & Support', launch_alert: 'Belangrijk: Opstarten', launch_desc: 'In deze fase dient de app handmatig opgestart te worden. Zodra de app in beeld is, mag deze op de achtergrond blijven draaien. Native Android/Apple apps volgen spoedig.', smart_help_t: 'Wat is Slimme Planning?', smart_help_d: 'Hiermee kun je per dag unieke tijden instellen. Handig als je in het weekend later opstaat dan doordeweeks. Deze planning is leidend.', today: 'Vandaag', active_schedule: 'Weekplanning', toggle_on: 'AAN', toggle_off: 'UIT'
+    vigilant: 'Barkr is waakzaam', idle: 'Systeem in rust', offline: 'Geen verbinding', tap_sleep: 'Tik om te slapen', heartbeat: 'Systeem Hartslag', manual: 'Handleiding', setup: 'Barkr Setup', user_name: 'Naam Gebruiker', smart_plan: 'Actuele Planning', start: 'Start', deadline: 'Deadline', contacts: 'Contacten', c_name: 'Naam', c_phone: 'Telefoonnummer', test: 'TEST VERBINDING', save: 'Opslaan', close: 'Sluiten', ok: 'Begrepen', barkr_mean: 'De betekenis van Barkr', barkr_desc: 'Barkr is afgeleid van het Engelse \'Barker\' (blaffer). Het staat voor een trouwe digitale waakhond die over je waakt.', why: 'Waarom deze applicatie?', why_desc1: 'Welzijnsbewaking voor mensen die alleen wonen of werken. Barkr biedt een vangnet zonder inbreuk op je privacy.', why_desc2: 'Bij inactiviteit tijdens je tijdvenster worden je noodcontacten direct per WhatsApp geïnformeerd.', how: 'Hoe gebruik je Barkr?', how_step1: 'Stel je naam in, bepaal je venster en deadline, en voeg je noodcontacten toe.', how_step2: 'Houd de app geopend op je scherm. Barkr registreert passief je aanwezigheid.', how_step3: 'Geen signaal gemeten bij de deadline? Barkr slaat direct alarm via WhatsApp.', ins_title: 'Wanneer gebruik je Barkr?', ins_1_t: 'De Vroege Reiziger', ins_1_d: 'Vlieg je vroeg? Stel je deadline vlak na je wekker in. Verslaap je je? Dan krijgen je reisgenoten direct bericht.', ins_2_t: 'Afspraak & Werk', ins_2_d: 'Laat familie of collega\'s automatisch weten als je niet op tijd \'online\' bent.', ins_3_t: 'Alleenwonenden', ins_3_d: 'Barkr is je dagelijkse check-in. Als je in de ochtend je toestel niet gebruikt, weten je naasten dat ze even moeten kijken.', ins_4_t: 'Outdoor & Sport', ins_4_d: 'Ga je alleen wandelen of sporten? Stel een deadline in voor je verwachte terugkomst.', info_support: 'Informatie & Support', launch_alert: 'Belangrijk: Opstarten', launch_desc: 'In deze fase dient de app handmatig opgestart te worden.', smart_help_t: 'Wat is de Weekplanning?', smart_help_d: 'De weekplanning is leidend. Wil je incidenteel een andere tijd? Selecteer dan "Vandaag" of "Morgen" op het hoofdscherm. Na het verstrijken van die dag valt de app automatisch terug op je standaard weekplanning.', today: 'Vandaag', tomorrow: 'Morgen', week_plan: 'Weekplanning', open_week_plan: 'Open Weekplanning', temp_active: 'Tijdelijke overschrijving actief', base_active: 'Standaard weekplanning actief'
   },
   EN: {
-    vigilant: 'Barkr is vigilant', idle: 'System idle', offline: 'No connection', tap_sleep: 'Tap to sleep', heartbeat: 'System Heartbeat', manual: 'Manual', setup: 'Barkr Setup', user_name: 'User Name', smart_plan: 'Smart Planning', start: 'Start', deadline: 'Deadline', contacts: 'Contacts', c_name: 'Name', c_phone: 'Phone Number', test: 'TEST CONNECTION', save: 'Save', close: 'Close', ok: 'Understood', barkr_mean: 'The meaning of Barkr', barkr_desc: 'Barkr is derived from \'Barker\'. It represents a loyal digital watchdog that watches over you.', why: 'Why this application?', why_desc1: 'Well-being monitoring for people living or working alone. Barkr provides a safety net without invading your privacy.', why_desc2: 'In case of inactivity during your window, your emergency contacts are informed via WhatsApp.', how: 'How to use Barkr?', how_step1: 'Set your name, window, and deadline, and add your emergency contacts.', how_step2: 'Keep the app open on your screen. Barkr passively registers your presence while you use the device.', how_step3: 'No signal measured by the deadline? Barkr triggers an alarm via WhatsApp.', ins_title: 'Inspiration: When to use Barkr?', ins_1_t: 'The Early Traveler', ins_1_d: 'Flying early? Set your deadline just after your alarm. Overslept? Your travel mates get notified immediately.', ins_2_t: 'Meeting & Work', ins_2_d: 'Automatically let family or colleagues know if you aren\'t \'online\' in time for important obligations.', ins_3_t: 'Living Alone', ins_3_d: 'Barkr is your daily check-in. If you don\'t use your device in the morning, loved ones know to check in.', ins_4_t: 'Outdoor & Sports', ins_4_d: 'Going hiking or sports alone? Set a deadline for your expected return.', info_support: 'Information & Support', launch_alert: 'Important: Startup', launch_desc: 'Currently, the app must be started manually. Once open, it can run in the background. Native Android/Apple apps are coming soon.', smart_help_t: 'What is Smart Planning?', smart_help_d: 'This allows you to set unique times per day. Useful if you wake up later on weekends. This schedule is leading.', today: 'Today', active_schedule: 'Weekly Schedule', toggle_on: 'ON', toggle_off: 'OFF'
+    vigilant: 'Barkr is vigilant', idle: 'System idle', offline: 'No connection', tap_sleep: 'Tap to sleep', heartbeat: 'System Heartbeat', manual: 'Manual', setup: 'Barkr Setup', user_name: 'User Name', smart_plan: 'Current Schedule', start: 'Start', deadline: 'Deadline', contacts: 'Contacts', c_name: 'Name', c_phone: 'Phone Number', test: 'TEST CONNECTION', save: 'Save', close: 'Close', ok: 'Understood', barkr_mean: 'The meaning of Barkr', barkr_desc: 'Barkr is derived from \'Barker\'. It represents a loyal digital watchdog that watches over you.', why: 'Why this application?', why_desc1: 'Well-being monitoring for people living or working alone.', why_desc2: 'In case of inactivity during your window, your emergency contacts are informed via WhatsApp.', how: 'How to use Barkr?', how_step1: 'Set your name, window, and deadline, and add contacts.', how_step2: 'Keep the app open on your screen. Barkr passively registers your presence.', how_step3: 'No signal measured by the deadline? Barkr triggers an alarm.', ins_title: 'When to use Barkr?', ins_1_t: 'The Early Traveler', ins_1_d: 'Flying early? Set your deadline just after your alarm.', ins_2_t: 'Meeting & Work', ins_2_d: 'Automatically let family or colleagues know if you aren\'t \'online\'.', ins_3_t: 'Living Alone', ins_3_d: 'Barkr is your daily check-in. If you don\'t use your device, loved ones know.', ins_4_t: 'Outdoor & Sports', ins_4_d: 'Going hiking or sports alone? Set a deadline for your return.', info_support: 'Information & Support', launch_alert: 'Important: Startup', launch_desc: 'Currently, the app must be started manually.', smart_help_t: 'What is the Weekly Schedule?', smart_help_d: 'The weekly schedule is leading. Want a temporary different time? Select "Today" or "Tomorrow" on the home screen. It reverts to your default weekly schedule after it expires.', today: 'Today', tomorrow: 'Tomorrow', week_plan: 'Weekly Schedule', open_week_plan: 'Open Weekly Schedule', temp_active: 'Temporary override active', base_active: 'Default schedule active'
   },
   DE: {
-    vigilant: 'Barkr ist wachsam', idle: 'System im Ruhemodus', offline: 'Keine Verbindung', tap_sleep: 'Tippen zum Schlafen', heartbeat: 'System-Herzschlag', manual: 'Handbuch', setup: 'Barkr Setup', user_name: 'Benutzername', smart_plan: 'Smarte Planung', start: 'Start', deadline: 'Deadline', contacts: 'Kontakte', c_name: 'Name', c_phone: 'Telefonnummer', test: 'VERBINDUNG TESTEN', save: 'Speichern', close: 'Schließen', ok: 'Verstanden', barkr_mean: 'Die Bedeutung von Barkr', barkr_desc: 'Barkr leitet sich von \'Barker\' ab. Es steht für einen treuen digitalen Wachhund, der über Sie wacht.', why: 'Warum diese App?', why_desc1: 'Sicherheitsnetz für Alleinlebende. Barkr überwacht passiv, ohne Ihre Privatsphäre zu verletzen.', why_desc2: 'Bei Inaktivität während Ihres Zeitfensters werden Ihre Notfallkontakte sofort per WhatsApp informiert.', how: 'Wie benutzt man Barkr?', how_step1: 'Name, Fenster und Deadline einstellen und Kontakte hinzufügen.', how_step2: 'App auf dem Bildschirm offen lassen. Barkr registriert passiv Ihre Anwesenheit.', how_step3: 'Kein Signal bis zur Deadline? Barkr löst sofort Alarm via WhatsApp aus.', ins_title: 'Wann nutzt man Barkr?', ins_1_t: 'Frühreisende', ins_1_d: 'Früher Flug? Deadline kurz nach dem Wecker stellen. Verschlafen? Ihre Mitreisenden werden benachrichtigt.', ins_2_t: 'Termine & Arbeit', ins_2_d: 'Kollegen automatisch informieren, wenn Sie nicht rechtzeitig \'online\' sind.', ins_3_t: 'Alleinlebende', ins_3_d: 'Ihr täglicher Check-in. Wenn Sie das Gerät morgens nicht nutzen, wissen Angehörige Bescheid.', ins_4_t: 'Outdoor & Sport', ins_4_d: 'Allein wandern? Deadline für die Rückkehr setzen.', info_support: 'Info & Support', launch_alert: 'Wichtig: Starten', launch_desc: 'Die App muss manuell gestartet werden. Native Apps folgen bald.', smart_help_t: 'Was ist Smarte Planung?', smart_help_d: 'Legen Sie einzigartige Zeiten pro Tag fest. Praktisch fürs Wochenende. Dieser Plan ist bindend.', today: 'Heute', active_schedule: 'Wochenplan', toggle_on: 'AN', toggle_off: 'AUS'
+    vigilant: 'Barkr ist wachsam', idle: 'System im Ruhemodus', offline: 'Keine Verbindung', tap_sleep: 'Tippen zum Schlafen', heartbeat: 'System-Herzschlag', manual: 'Handbuch', setup: 'Barkr Setup', user_name: 'Benutzername', smart_plan: 'Aktueller Plan', start: 'Start', deadline: 'Deadline', contacts: 'Kontakte', c_name: 'Name', c_phone: 'Telefonnummer', test: 'VERBINDUNG TESTEN', save: 'Speichern', close: 'Schließen', ok: 'Verstanden', barkr_mean: 'Die Bedeutung von Barkr', barkr_desc: 'Barkr steht für einen treuen digitalen Wachhund, der über Sie wacht.', why: 'Warum diese App?', why_desc1: 'Sicherheitsnetz für Alleinlebende.', why_desc2: 'Bei Inaktivität werden Ihre Notfallkontakte per WhatsApp informiert.', how: 'Wie benutzt man Barkr?', how_step1: 'Name, Fenster und Deadline einstellen.', how_step2: 'App auf dem Bildschirm offen lassen.', how_step3: 'Kein Signal? Barkr löst sofort Alarm aus.', ins_title: 'Wann nutzt man Barkr?', ins_1_t: 'Frühreisende', ins_1_d: 'Früher Flug? Deadline nach dem Wecker stellen.', ins_2_t: 'Termine & Arbeit', ins_2_d: 'Kollegen informieren, wenn Sie nicht rechtzeitig \'online\' sind.', ins_3_t: 'Alleinlebende', ins_3_d: 'Täglicher Check-in.', ins_4_t: 'Outdoor & Sport', ins_4_d: 'Allein wandern? Deadline setzen.', info_support: 'Info & Support', launch_alert: 'Wichtig: Starten', launch_desc: 'Die App muss manuell gestartet werden.', smart_help_t: 'Was ist der Wochenplan?', smart_help_d: 'Der Wochenplan ist bindend. Möchten Sie vorübergehend eine andere Zeit? Wählen Sie "Heute" oder "Morgen".', today: 'Heute', tomorrow: 'Morgen', week_plan: 'Wochenplan', open_week_plan: 'Wochenplan öffnen', temp_active: 'Temporäre Anpassung aktiv', base_active: 'Standardplan aktiv'
   },
   FR: {
-    vigilant: 'Barkr est vigilant', idle: 'Système au repos', offline: 'Pas de connexion', tap_sleep: 'Appuyer pour dormir', heartbeat: 'Battement du système', manual: 'Manuel', setup: 'Configuration Barkr', user_name: 'Nom', smart_plan: 'Planning Intelligent', start: 'Début', deadline: 'Date limite', contacts: 'Contacts', c_name: 'Nom', c_phone: 'Numéro', test: 'TESTER LA CONNEXION', save: 'Enregistrer', close: 'Fermer', ok: 'Compris', barkr_mean: 'La signification de Barkr', barkr_desc: 'Un chien de garde numérique fidèle qui veille sur vous.', why: 'Pourquoi cette application ?', why_desc1: 'Suivi du bien-être pour les personnes seules. Un filet de sécurité sans intrusion.', why_desc2: 'En cas d\'inactivité, vos contacts d\'urgence sont informés par WhatsApp.', how: 'Comment utiliser Barkr ?', how_step1: 'Réglez votre nom, fenêtre et deadline, et ajoutez vos contacts.', how_step2: 'Gardez l\'app ouverte. Barkr enregistre passivement votre présence.', how_step3: 'Pas de signal à l\'échéance ? Barkr déclenche l\'alarme.', ins_title: 'Quand utiliser Barkr ?', ins_1_t: 'Le Voyageur Matinal', ins_1_d: 'Vol matinal ? Vos compagnons sont alertés si vous ne vous réveillez pas.', ins_2_t: 'Travail', ins_2_d: 'Prévenez automatiquement si vous n\'êtes pas \'en ligne\' pour vos obligations.', ins_3_t: 'Personnes Seules', ins_3_d: 'Check-in quotidien. Sans activité le matin, vos proches sont prévenus.', ins_4_t: 'Outdoor & Sport', ins_4_d: 'Fixez une heure de retour pour vos randonnées.', info_support: 'Info & Support', launch_alert: 'Important : Démarrage', launch_desc: 'L\'app doit être lancée manuellement. Apps natives à venir.', smart_help_t: 'Qu\'est-ce que le Planning Intelligent ?', smart_help_d: 'Permet de définir des horaires uniques par jour. Pratique pour le week-end.', today: 'Aujourd\'hui', active_schedule: 'Planning Hebdomadaire', toggle_on: 'ON', toggle_off: 'OFF'
+    vigilant: 'Barkr est vigilant', idle: 'Système au repos', offline: 'Pas de connexion', tap_sleep: 'Appuyer pour dormir', heartbeat: 'Battement', manual: 'Manuel', setup: 'Configuration Barkr', user_name: 'Nom', smart_plan: 'Planning Actuel', start: 'Début', deadline: 'Date limite', contacts: 'Contacts', c_name: 'Nom', c_phone: 'Numéro', test: 'TESTER LA CONNEXION', save: 'Enregistrer', close: 'Fermer', ok: 'Compris', barkr_mean: 'La signification de Barkr', barkr_desc: 'Un chien de garde numérique fidèle qui veille sur vous.', why: 'Pourquoi cette application ?', why_desc1: 'Suivi du bien-être pour les personnes seules.', why_desc2: 'En cas d\'inactivité, vos contacts sont informés par WhatsApp.', how: 'Comment utiliser Barkr ?', how_step1: 'Réglez votre nom et deadline.', how_step2: 'Gardez l\'app ouverte.', how_step3: 'Pas de signal ? Alarme déclenchée.', ins_title: 'Quand utiliser Barkr ?', ins_1_t: 'Le Voyageur Matinal', ins_1_d: 'Vol matinal ? Vos compagnons sont alertés si vous ne vous réveillez pas.', ins_2_t: 'Travail', ins_2_d: 'Prévenez automatiquement si vous n\'êtes pas \'en ligne\'.', ins_3_t: 'Personnes Seules', ins_3_d: 'Check-in quotidien.', ins_4_t: 'Outdoor & Sport', ins_4_d: 'Fixez une heure de retour.', info_support: 'Info & Support', launch_alert: 'Important : Démarrage', launch_desc: 'L\'app doit être lancée manuellement.', smart_help_t: 'Qu\'est-ce que le Planning Hebdo ?', smart_help_d: 'Le planning hebdomadaire est la base. Vous pouvez modifier temporairement "Aujourd\'hui" ou "Demain".', today: 'Aujourd\'hui', tomorrow: 'Demain', week_plan: 'Planning Hebdo', open_week_plan: 'Ouvrir le Planning', temp_active: 'Modification active', base_active: 'Planning par défaut'
   },
   ES: {
-    vigilant: 'Barkr está vigilante', idle: 'Sistema en reposo', offline: 'Sin conexión', tap_sleep: 'Toca para dormir', heartbeat: 'Latido del sistema', manual: 'Manual', setup: 'Configuración Barkr', user_name: 'Nombre de usuario', smart_plan: 'Planificación inteligente', start: 'Inicio', deadline: 'Límite', contacts: 'Contactos', c_name: 'Nombre', c_phone: 'Teléfono', test: 'PROBAR CONEXIÓN', save: 'Guardar', close: 'Cerrar', ok: 'Entendido', barkr_mean: 'El significado de Barkr', barkr_desc: 'Barkr representa a un fiel perro guardián digital que vela por ti.', why: '¿Por qué esta aplicación?', why_desc1: 'Red de seguridad para personas que viven solas. Sin invadir tu privacidad.', why_desc2: 'En caso de inactividad, tus contactos de emergencia son informados vía WhatsApp.', how: '¿Cómo usar Barkr?', how_step1: 'Configura tu nombre, horario y límite, y añade contactos.', how_step2: 'Mantén la app abierta. Barkr registra pasivamente tu presencia.', how_step3: '¿Sin señal al límite? Barkr activa la alarma.', ins_title: '¿Cuándo usar Barkr?', ins_1_t: 'El viajero madrugador', ins_1_d: '¿Vuelo temprano? Tus compañeros reciben un aviso si te duermes.', ins_2_t: 'Trabajo', ins_2_d: 'Informa automáticamente si no estás en línea a tiempo.', ins_3_t: 'Viviendo solo', ins_3_d: 'Registro diario. Si no usas el dispositivo, tus seres queridos lo sabrán.', ins_4_t: 'Aire libre y deportes', ins_4_d: 'Establece una hora de regreso para tus caminatas.', info_support: 'Información y soporte', launch_alert: 'Importante: Inicio', launch_desc: 'Actualmente, la app debe iniciarse manualmente. Próximamente apps nativas.', smart_help_t: '¿Qué es la Planificación Inteligente?', smart_help_d: 'Permite horarios únicos por día. Útil para los fines de semana.', today: 'Hoy', active_schedule: 'Horario Semanal', toggle_on: 'ON', toggle_off: 'OFF'
+    vigilant: 'Barkr está vigilante', idle: 'Sistema en reposo', offline: 'Sin conexión', tap_sleep: 'Toca para dormir', heartbeat: 'Latido', manual: 'Manual', setup: 'Configuración', user_name: 'Nombre de usuario', smart_plan: 'Horario Actual', start: 'Inicio', deadline: 'Límite', contacts: 'Contactos', c_name: 'Nombre', c_phone: 'Teléfono', test: 'PROBAR CONEXIÓN', save: 'Guardar', close: 'Cerrar', ok: 'Entendido', barkr_mean: 'Significado de Barkr', barkr_desc: 'Representa a un fiel perro guardián digital que vela por ti.', why: '¿Por qué esta aplicación?', why_desc1: 'Red de seguridad para personas que viven solas.', why_desc2: 'En caso de inactividad, tus contactos son informados vía WhatsApp.', how: '¿Cómo usar Barkr?', how_step1: 'Configura tu nombre y límite.', how_step2: 'Mantén la app abierta.', how_step3: '¿Sin señal al límite? Barkr activa la alarma.', ins_title: '¿Cuándo usar Barkr?', ins_1_t: 'El viajero', ins_1_d: '¿Vuelo temprano? Tus compañeros reciben un aviso si te duermes.', ins_2_t: 'Trabajo', ins_2_d: 'Informa automáticamente si no estás en línea.', ins_3_t: 'Viviendo solo', ins_3_d: 'Registro diario.', ins_4_t: 'Deportes', ins_4_d: 'Establece una hora de regreso para tus caminatas.', info_support: 'Información y soporte', launch_alert: 'Importante: Inicio', launch_desc: 'Actualmente, la app debe iniciarse manualmente.', smart_help_t: '¿Qué es el Horario Semanal?', smart_help_d: 'El horario semanal es el estándar. Selecciona "Hoy" o "Mañana" para anular temporalmente.', today: 'Hoy', tomorrow: 'Mañana', week_plan: 'Horario Semanal', open_week_plan: 'Abrir Horario Semanal', temp_active: 'Ajuste temporal activo', base_active: 'Horario estándar activo'
   },
   IT: {
-    vigilant: 'Barkr è vigile', idle: 'Sistema a riposo', offline: 'Nessuna connessione', tap_sleep: 'Tocca per dormire', heartbeat: 'Battito del sistema', manual: 'Manuale', setup: 'Configurazione Barkr', user_name: 'Nome utente', smart_plan: 'Pianificazione intelligente', start: 'Inizio', deadline: 'Scadenza', contacts: 'Contatti', c_name: 'Nome', c_phone: 'Telefono', test: 'TEST CONNESSIONE', save: 'Salva', close: 'Chiudi', ok: 'Capito', barkr_mean: 'Il significato di Barkr', barkr_desc: 'Barkr rappresenta un fedele cane da guardia digitale che veglia su di te.', why: 'Perché questa app?', why_desc1: 'Rete di sicurezza per chi vive o lavora solo, senza invadere la privacy.', why_desc2: 'In caso di inattività, i tuoi contatti vengono informati via WhatsApp.', how: 'Come usare Barkr?', how_step1: 'Imposta nome, orari e contatti.', how_step2: 'Tieni l\'app aperta. Barkr registra passivamente la tua presenza.', how_step3: 'Nessun segnale alla scadenza? Barkr attiva l\'allarme.', ins_title: 'Quando usare Barkr?', ins_1_t: 'Viaggiatore mattutino', ins_1_d: 'Volo presto? I tuoi compagni vengono avvisati se ti addormenti.', ins_2_t: 'Lavoro', ins_2_d: 'Informa automaticamente se non sei online in tempo per impegni.', ins_3_t: 'Vivere da soli', ins_3_d: 'Check-in quotidiano. Se non usi il dispositivo, i tuoi cari lo sapranno.', ins_4_t: 'Outdoor e sport', ins_4_d: 'Imposta un orario di rientro per le tue escursioni.', info_support: 'Info e supporto', launch_alert: 'Importante: Avvio', launch_desc: 'L\'app deve essere avviata manualmente. App native in arrivo.', smart_help_t: 'Cos\'è la Pianificazione Intelligente?', smart_help_d: 'Consente orari unici per ogni giorno. Molto utile per i fine settimana.', today: 'Oggi', active_schedule: 'Programma Settimanale', toggle_on: 'ON', toggle_off: 'OFF'
+    vigilant: 'Barkr è vigile', idle: 'Sistema a riposo', offline: 'Nessuna connessione', tap_sleep: 'Tocca per dormire', heartbeat: 'Battito', manual: 'Manuale', setup: 'Configurazione', user_name: 'Nome utente', smart_plan: 'Programma Attuale', start: 'Inizio', deadline: 'Scadenza', contacts: 'Contatti', c_name: 'Nome', c_phone: 'Telefono', test: 'TEST CONNESSIONE', save: 'Salva', close: 'Chiudi', ok: 'Capito', barkr_mean: 'Il significato di Barkr', barkr_desc: 'Rappresenta un fedele cane da guardia digitale che veglia su di te.', why: 'Perché questa app?', why_desc1: 'Rete di sicurezza per chi vive o lavora solo.', why_desc2: 'In caso di inattività, i tuoi contatti vengono informati via WhatsApp.', how: 'Come usare Barkr?', how_step1: 'Imposta nome, orari e contatti.', how_step2: 'Tieni l\'app aperta.', how_step3: 'Nessun segnale? Allarme.', ins_title: 'Quando usare Barkr?', ins_1_t: 'Viaggiatore', ins_1_d: 'I tuoi compagni vengono avvisati se ti addormenti.', ins_2_t: 'Lavoro', ins_2_d: 'Informa automaticamente se non sei online.', ins_3_t: 'Vivere da soli', ins_3_d: 'Check-in quotidiano.', ins_4_t: 'Sport', ins_4_d: 'Imposta un orario di rientro per le escursioni.', info_support: 'Info e supporto', launch_alert: 'Importante: Avvio', launch_desc: 'L\'app deve essere avviata manualmente.', smart_help_t: 'Cos\'è il Programma Settimanale?', smart_help_d: 'Seleziona "Oggi" o "Domani" per modificare temporaneamente l\'orario.', today: 'Oggi', tomorrow: 'Domani', week_plan: 'Programma Settimanale', open_week_plan: 'Apri Programma', temp_active: 'Modifica temporanea attiva', base_active: 'Programma predefinito attivo'
   },
   PL: {
-    vigilant: 'Barkr czuwa', idle: 'System w spoczynku', offline: 'Brak połączenia', tap_sleep: 'Dotknij, aby uśpić', heartbeat: 'Tętno systemu', manual: 'Instrukcja', setup: 'Konfiguracja Barkr', user_name: 'Nazwa', smart_plan: 'Inteligentne planowanie', start: 'Początek', deadline: 'Termin', contacts: 'Kontakty', c_name: 'Nazwa', c_phone: 'Telefon', test: 'TEST POŁĄCZENIA', save: 'Zapisz', close: 'Zamknij', ok: 'Rozumiem', barkr_mean: 'Znaczenie Barkr', barkr_desc: 'Wierny cyfrowy pies stróżujący, który nad Tobą czuwa.', why: 'Dlaczego ta aplikacja?', why_desc1: 'Siatka bezpieczeństwa dla osób samotnych, chroniąca prywatność.', why_desc2: 'W przypadku braku aktywności kontakty są informowane przez WhatsApp.', how: 'Jak używać Barkr?', how_step1: 'Ustaw nazwę, okno czasowe i dodaj kontakty.', how_step2: 'Trzymaj aplikację otwartą. Barkr rejestruje Twoją obecność.', how_step3: 'Brak sygnału w terminie? Barkr wysyła alarm.', ins_title: 'Kiedy używać Barkr?', ins_1_t: 'Wczesny lot', ins_1_d: 'Zaspałeś? Twoi towarzysze podróży zostaną powiadomieni.', ins_2_t: 'Spotkania', ins_2_d: 'Automatycznie informuj, jeśli nie jesteś online na czas.', ins_3_t: 'Samotne mieszkanie', ins_3_d: 'Codzienny check-in. Brak aktywności rano powiadomi bliskich.', ins_4_t: 'Sport', ins_4_d: 'Ustaw planowany czas powrotu z samotnych wędrówek.', info_support: 'Info i wsparcie', launch_alert: 'Ważne: Uruchomienie', launch_desc: 'Aplikację należy uruchomić ręcznie. Wkrótce aplikacje natywne.', smart_help_t: 'Czym jest Inteligentne Planowanie?', smart_help_d: 'Pozwala ustawić unikalne czasy dla każdego dnia.', today: 'Dziś', active_schedule: 'Harmonogram Tygodniowy', toggle_on: 'WŁ', toggle_off: 'WYŁ'
+    vigilant: 'Barkr czuwa', idle: 'System w spoczynku', offline: 'Brak połączenia', tap_sleep: 'Dotknij, aby uśpić', heartbeat: 'Tętno', manual: 'Instrukcja', setup: 'Konfiguracja', user_name: 'Nazwa', smart_plan: 'Aktualny Harmonogram', start: 'Początek', deadline: 'Termin', contacts: 'Kontakty', c_name: 'Nazwa', c_phone: 'Telefon', test: 'TEST POŁĄCZENIA', save: 'Zapisz', close: 'Zamknij', ok: 'Rozumiem', barkr_mean: 'Znaczenie Barkr', barkr_desc: 'Wierny cyfrowy pies stróżujący, który nad Tobą czuwa.', why: 'Dlaczego ta aplikacja?', why_desc1: 'Siatka bezpieczeństwa dla osób samotnych.', why_desc2: 'W przypadku braku aktywności kontakty są informowane przez WhatsApp.', how: 'Jak używać Barkr?', how_step1: 'Ustaw nazwę i termin.', how_step2: 'Trzymaj aplikację otwartą.', how_step3: 'Brak sygnału? Barkr wysyła alarm.', ins_title: 'Kiedy używać Barkr?', ins_1_t: 'Wczesny lot', ins_1_d: 'Zaspałeś? Towarzysze zostaną powiadomieni.', ins_2_t: 'Spotkania', ins_2_d: 'Automatycznie informuj, jeśli nie jesteś online.', ins_3_t: 'Samotne mieszkanie', ins_3_d: 'Codzienny check-in.', ins_4_t: 'Sport', ins_4_d: 'Ustaw planowany czas powrotu.', info_support: 'Info i wsparcie', launch_alert: 'Ważne: Uruchomienie', launch_desc: 'Aplikację należy uruchomić ręcznie.', smart_help_t: 'Czym jest Harmonogram Tygodniowy?', smart_help_d: 'Harmonogram to baza. Wybierz "Dziś" lub "Jutro", aby tymczasowo zmienić czas.', today: 'Dziś', tomorrow: 'Jutro', week_plan: 'Harmonogram Tygodniowy', open_week_plan: 'Otwórz Harmonogram', temp_active: 'Tymczasowa zmiana aktywna', base_active: 'Domyślny harmonogram aktywny'
   },
   TR: {
-    vigilant: 'Barkr nöbette', idle: 'Sistem uykuda', offline: 'Bağlantı yok', tap_sleep: 'Uyutmak için dokun', heartbeat: 'Sistem Nabzı', manual: 'Kılavuz', setup: 'Barkr Kurulumu', user_name: 'Kullanıcı Adı', smart_plan: 'Akıllı Planlama', start: 'Başlangıç', deadline: 'Son Tarih', contacts: 'Kişiler', c_name: 'İsim', c_phone: 'Telefon', test: 'TEST ET', save: 'Kaydet', close: 'Kapat', ok: 'Anlaşıldı', barkr_mean: 'Barkr\'ın Anlamı', barkr_desc: 'Sizi koruyan sadık bir dijital bekçi köpeği.', why: 'Neden bu uygulama?', why_desc1: 'Yalnız yaşayanlar için güvenlik ağı. Gizliliğinizi ihlal etmez.', why_desc2: 'Hareketsizlik durumunda kişilerinize WhatsApp\'tan haber verilir.', how: 'Barkr nasıl kullanılır?', how_step1: 'İsminizi ve saatleri ayarlayın, kişilerinizi ekleyin.', how_step2: 'Uygulamayı açık tutun. Barkr varlığınızı kaydeder.', how_step3: 'Süre dolduğunda sinyal yok mu? Barkr alarm verir.', ins_title: 'Barkr ne zaman kullanılır?', ins_1_t: 'Erken Yolcu', ins_1_d: 'Erken uçuş? Uyuyakalırsanız arkadaşlarınız haber alır.', ins_2_t: 'İş ve Toplantı', ins_2_d: 'Zamanında online olmazsanız ailenize haber verin.', ins_3_t: 'Yalnız Yaşayanlar', ins_3_d: 'Sabah cihazı kullanmazsanız sevdikleriniz durumu anlar.', ins_4_t: 'Doğa ve Spor', ins_4_d: 'Beklenen dönüş saatiniz için bir son tarih belirleyin.', info_support: 'Bilgi ve Destek', launch_alert: 'Önemli: Başlatma', launch_desc: 'Uygulama manuel başlatılmalıdır. Yakında mobil uygulamalar gelecek.', smart_help_t: 'Akıllı Planlama Nedir?', smart_help_d: 'Hafta sonları için her güne özel saat belirlemenizi sağlar.', today: 'Bugün', active_schedule: 'Haftalık Program', toggle_on: 'AÇIK', toggle_off: 'KAPALI'
+    vigilant: 'Barkr nöbette', idle: 'Sistem uykuda', offline: 'Bağlantı yok', tap_sleep: 'Uyutmak için dokun', heartbeat: 'Sistem Nabzı', manual: 'Kılavuz', setup: 'Barkr Kurulumu', user_name: 'Kullanıcı Adı', smart_plan: 'Mevcut Program', start: 'Başlangıç', deadline: 'Son Tarih', contacts: 'Kişiler', c_name: 'İsim', c_phone: 'Telefon', test: 'TEST ET', save: 'Kaydet', close: 'Kapat', ok: 'Anlaşıldı', barkr_mean: 'Barkr\'ın Anlamı', barkr_desc: 'Sizi koruyan sadık bir dijital bekçi köpeği.', why: 'Neden bu uygulama?', why_desc1: 'Yalnız yaşayanlar için güvenlik ağı.', why_desc2: 'Hareketsizlik durumunda kişilerinize WhatsApp\'tan haber verilir.', how: 'Barkr nasıl kullanılır?', how_step1: 'İsminizi ve saatleri ayarlayın.', how_step2: 'Uygulamayı açık tutun.', how_step3: 'Sinyal yok mu? Barkr alarm verir.', ins_title: 'Ne zaman kullanılır?', ins_1_t: 'Erken Yolcu', ins_1_d: 'Uyuyakalırsanız arkadaşlarınız haber alır.', ins_2_t: 'İş', ins_2_d: 'Zamanında online olmazsanız haber verin.', ins_3_t: 'Yalnız Yaşayanlar', ins_3_d: 'Günlük check-in.', ins_4_t: 'Spor', ins_4_d: 'Beklenen dönüş saati belirleyin.', info_support: 'Bilgi ve Destek', launch_alert: 'Önemli: Başlatma', launch_desc: 'Uygulama manuel başlatılmalıdır.', smart_help_t: 'Haftalık Program Nedir?', smart_help_d: 'Geçici olarak farklı bir saat ayarlamak için "Bugün" veya "Yarın"ı seçin.', today: 'Bugün', tomorrow: 'Yarın', week_plan: 'Haftalık Program', open_week_plan: 'Programı Aç', temp_active: 'Geçici ayar aktif', base_active: 'Varsayılan program aktif'
   }
 };
 
@@ -50,12 +57,17 @@ TRANSLATIONS.US = TRANSLATIONS.EN;
 TRANSLATIONS.BE = TRANSLATIONS.NL;
 const t = (key: string, lang: string) => (TRANSLATIONS[lang] || TRANSLATIONS['NL'])[key] || key;
 
+const defaultSchedules: any = {};
+for(let i=0; i<7; i++) defaultSchedules[i] = {startTime: '06:00', endTime: '10:00'};
+
 export default function App() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<'searching' | 'connected' | 'offline'>('searching');
   const [showSettings, setShowSettings] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
+  const [activeTab, setActiveTab] = useState<'today' | 'tomorrow'>('today');
   
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('barkr_v16_data');
@@ -64,31 +76,66 @@ export default function App() {
       name: parsed.name || '', 
       vacationMode: parsed.vacationMode || false, 
       language: parsed.language || 'NL',
-      useCustomSchedule: parsed.useCustomSchedule !== undefined ? parsed.useCustomSchedule : true,
-      activeDays: parsed.activeDays || [0, 1, 2, 3, 4, 5, 6], 
-      // Default tijden geüpdatet naar 06:00 - 10:00
-      startTime: parsed.startTime || '06:00', 
-      endTime: parsed.endTime || '10:00',
+      overrides: parsed.overrides || {},
       contacts: parsed.contacts || [], 
-      schedules: parsed.schedules || {}
+      schedules: (parsed.schedules && Object.keys(parsed.schedules).length > 0) ? parsed.schedules : defaultSchedules
     };
   });
 
   const lang = settings.language || 'NL';
   const daysVoluit = LANGUAGES[lang].days;
-  const currentDayIndex = (new Date().getDay() + 6) % 7; 
 
+  const now = new Date();
+  const todayStr = getLocalYYYYMMDD(now);
+  const todayIdx = (now.getDay() + 6) % 7; 
+  const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = getLocalYYYYMMDD(tomorrow);
+  const tomorrowIdx = (tomorrow.getDay() + 6) % 7;
+
+  // Cleanup verstreken overrides (Fallback naar Leidende Weekplanning)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const d = new Date();
+      const dStr = getLocalYYYYMMDD(d);
+      const tStr = d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+      setSettings((prev: any) => {
+        if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
+          const newOverrides = { ...prev.overrides };
+          delete newOverrides[dStr];
+          return { ...prev, overrides: newOverrides };
+        }
+        return prev;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sync state naar backend
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
+
+    const payload: any = { ...settings };
+    payload.useCustomSchedule = true;
+    payload.activeDays = [0,1,2,3,4,5,6]; // Alle dagen luisteren in de backend
+    payload.schedules = JSON.parse(JSON.stringify(settings.schedules)); 
+
+    // Injecteer de overrides van Vandaag en Morgen in de backend configuratie
+    if (settings.overrides[todayStr]) {
+        payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
+    }
+    if (settings.overrides[tomorrowStr]) {
+        payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
+    }
+
     const timer = setTimeout(() => {
       fetch(`${activeUrl}/save_settings`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(settings)
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
       }).catch(() => {});
     }, 800);
     return () => clearTimeout(timer);
-  }, [settings, activeUrl]);
+  }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
@@ -125,6 +172,28 @@ export default function App() {
     return () => { clearInterval(pingInterval); document.removeEventListener('visibilitychange', handleVisibilityChange); };
   }, [status, activeUrl, settings.vacationMode, settings.name]);
 
+  const updateOverrideTime = (field: 'start'|'end', value: string) => {
+    const activeDateStr = activeTab === 'today' ? todayStr : tomorrowStr;
+    const activeDayIdx = activeTab === 'today' ? todayIdx : tomorrowIdx;
+    
+    const newOverrides = {...settings.overrides};
+    if (!newOverrides[activeDateStr]) {
+      newOverrides[activeDateStr] = { 
+        start: settings.schedules[activeDayIdx]?.startTime || '06:00', 
+        end: settings.schedules[activeDayIdx]?.endTime || '10:00' 
+      };
+    }
+    newOverrides[activeDateStr][field] = value;
+    setSettings({...settings, overrides: newOverrides});
+  };
+
+  const activeDateStr = activeTab === 'today' ? todayStr : tomorrowStr;
+  const activeDayIdx = activeTab === 'today' ? todayIdx : tomorrowIdx;
+  const hasOverride = !!settings.overrides[activeDateStr];
+  
+  const displayStart = hasOverride ? settings.overrides[activeDateStr].start : settings.schedules[activeDayIdx]?.startTime || '06:00';
+  const displayEnd = hasOverride ? settings.overrides[activeDateStr].end : settings.schedules[activeDayIdx]?.endTime || '10:00';
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
       <style>{`
@@ -152,9 +221,9 @@ export default function App() {
         </div>
       </header>
 
-      {!showSettings && !showManual && (
+      {!showSettings && !showManual && !showWeekPlan && (
         <main className="flex-1 p-6 space-y-8 overflow-y-auto">
-          {/* HOOFD ACTIE KNOP */}
+          {/* HOOFD ACTIE KNOP (HERSTELD W-72) */}
           <div className="flex flex-col items-center pt-8">
             <button 
               onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})}
@@ -185,50 +254,80 @@ export default function App() {
             </div>
           </div>
 
-          {/* WEEKPLANNING OP HOOFDSCHERM */}
+          {/* VANDAAG / MORGEN PLANNING */}
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
             <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <CalendarDays size={16} className="text-orange-600" />
-                <h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('active_schedule', lang)}</h3>
+                <Clock size={16} className="text-orange-600" />
+                <h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('smart_plan', lang)}</h3>
               </div>
-              <button onClick={() => setSettings({...settings, useCustomSchedule: !settings.useCustomSchedule})} className={`text-[9px] font-black px-3 py-1.5 rounded-full transition-all border ${settings.useCustomSchedule ? 'bg-orange-600 border-orange-700 text-white' : 'bg-white border-slate-200 text-slate-400'}`}>
-                {settings.useCustomSchedule ? t('toggle_on', lang) : t('toggle_off', lang)}
+              <button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95">
+                {t('open_week_plan', lang).toUpperCase()}
               </button>
             </header>
 
             <div className="p-5 space-y-5">
-              {!settings.useCustomSchedule ? (
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setActiveTab('today')} 
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                >
+                  {t('today', lang)}
+                </button>
+                <button 
+                  onClick={() => setActiveTab('tomorrow')} 
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                >
+                  {t('tomorrow', lang)}
+                </button>
+              </div>
+
+              <div className={`border rounded-2xl p-4 transition-all ${hasOverride ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1"><label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label><input type="time" value={settings.startTime} onChange={e=>setSettings({...settings, startTime:e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 font-black text-slate-700 text-center"/></div>
-                  <div className="space-y-1"><label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label><input type="time" value={settings.endTime} onChange={e=>setSettings({...settings, endTime:e.target.value})} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 font-black text-red-600 text-center"/></div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label>
+                    <input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${hasOverride ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label>
+                    <input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${hasOverride ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {settings.activeDays.sort().map((d: number) => {
-                    const isToday = d === currentDayIndex;
-                    return (
-                      <div key={d} className={`flex items-center gap-3 p-3 rounded-2xl border ${isToday ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
-                        <div className="w-24 flex flex-col">
-                          <span className={`text-[10px] font-black uppercase ${isToday ? 'text-orange-600' : 'text-slate-500'}`}>{daysVoluit[d]}</span>
-                          {isToday && <span className="text-[8px] font-black text-orange-400 uppercase">{t('today', lang)}</span>}
-                        </div>
-                        <input type="time" value={settings.schedules[d]?.startTime || settings.startTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1.5 text-xs font-black text-center outline-none"/>
-                        <input type="time" value={settings.schedules[d]?.endTime || settings.endTime} onChange={e=>setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-white border border-slate-200 rounded-lg py-1.5 text-xs font-black text-red-600 text-center outline-none"/>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                <p className={`text-[9px] font-black uppercase tracking-widest text-center mt-3 ${hasOverride ? 'text-orange-600' : 'text-slate-400'}`}>
+                  {hasOverride ? t('temp_active', lang) : t('base_active', lang)}
+                </p>
+              </div>
             </div>
           </section>
         </main>
       )}
 
+      {/* NIEUW SCHERM: WEEKPLANNING */}
+      {showWeekPlan && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar">
+          <header className="flex justify-between items-center mb-2">
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-800">{t('week_plan', lang)}</h2>
+            <button onClick={() => setShowWeekPlan(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={24}/></button>
+          </header>
+          <p className="text-sm font-medium text-slate-600 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm leading-relaxed">
+            Stel hier je standaard wekelijkse tijden in. Deze tijden zijn leidend en herhalen zich elke week automatisch.
+          </p>
+          <div className="space-y-3">
+            {daysVoluit.map((dayName: string, d: number) => (
+              <div key={d} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <span className="w-24 text-[11px] font-black text-slate-700 uppercase">{dayName}</span>
+                <input type="time" value={settings.schedules[d]?.startTime || '06:00'} onChange={e => setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], startTime:e.target.value}}})} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-xs font-black text-center outline-none"/>
+                <input type="time" value={settings.schedules[d]?.endTime || '10:00'} onChange={e => setSettings({...settings, schedules: {...settings.schedules, [d]: {...settings.schedules[d], endTime:e.target.value}}})} className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-xs font-black text-red-600 text-center outline-none"/>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setShowWeekPlan(false)} className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl active:scale-95 transition-all">{t('save', lang)}</button>
+        </div>
+      )}
+
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-8 pb-20 no-scrollbar">
           <header className="flex justify-between items-center py-2"><h2 className="text-2xl font-black uppercase italic tracking-tight text-slate-800">{t('manual', lang)}</h2><button onClick={() => setShowManual(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={24}/></button></header>
-          
           <section className="bg-blue-600 p-6 rounded-[32px] text-white shadow-lg space-y-3 relative overflow-hidden"><h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-[0.15em]"><AlertTriangle size={18} className="text-orange-400"/> {t('launch_alert', lang)}</h4><p className="text-sm font-bold">{t('launch_desc', lang)}</p></section>
           
           <section className="bg-orange-50 p-6 rounded-3xl border border-orange-200 space-y-3">
