@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TRANSLATIONS } from './constants/translations';
 import { COUNTRIES } from './constants/countries';
-import InfoPage from './components/InfoPage'; 
+import { InfoPage } from './components/InfoPage'; // <-- FIX: Accolades toegevoegd voor named import
 
 const appStyles = `
   @keyframes zzz-float {
@@ -16,7 +16,7 @@ const appStyles = `
 export default function App() {
   const [status, setStatus] = useState<'connected' | 'offline'>('connected');
   const [showManual, setShowManual] = useState(false);
-  const [showSettings, setShowSettings] = useState(false); // Hersteld
+  const [showSettings, setShowSettings] = useState(false);
   const [lastPing] = useState('09:16');
   const [activeTab, setActiveTab] = useState<'today' | 'tomorrow'>('today');
 
@@ -131,7 +131,7 @@ export default function App() {
         <p className="text-center text-[9px] font-bold text-slate-300 mt-4 italic uppercase">{t('standard_active')}</p>
       </div>
 
-      {/* SETUP PAGINA MODAL (HERSTELD) */}
+      {/* SETUP PAGINA MODAL */}
       {showSettings && (
         <div className="fixed inset-0 bg-white z-[60] p-6 overflow-y-auto">
           <div className="flex justify-between items-center mb-8">
@@ -145,7 +145,7 @@ export default function App() {
                 type="text" 
                 value={settings.name} 
                 onChange={(e) => setSettings({...settings, name: e.target.value})}
-                className="w-full bg-slate-50 p-4 rounded-xl font-bold"
+                className="w-full bg-slate-50 p-4 rounded-xl font-bold border border-slate-200 focus:outline-none focus:border-orange-500"
               />
             </div>
             <div className="flex justify-between items-center">
@@ -154,6 +154,7 @@ export default function App() {
                 type="checkbox" 
                 checked={settings.smartPlanning} 
                 onChange={(e) => setSettings({...settings, smartPlanning: e.target.checked})}
+                className="w-5 h-5 accent-orange-600"
               />
             </div>
             <button 
