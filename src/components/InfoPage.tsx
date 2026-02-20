@@ -26,12 +26,9 @@ export const InfoPage = ({ lang, t, onClose }: any) => (
         <section className="space-y-4">
           <div className="flex items-center gap-3 text-slate-400"><Clock size={20} /><h3 className="font-black uppercase tracking-wider text-xs">{t('how', lang)}</h3></div>
           <div className="space-y-3">
-            {[1, 2, 3].map(s => (
-              <div key={s} className="flex gap-4 p-4 bg-white border border-slate-100 rounded-2xl">
-                <div className="w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center font-black text-xs shrink-0">{s}</div>
-                <p className="text-[11px] text-slate-500 font-bold leading-relaxed">{t(`how_step${s}`, lang)}</p>
-              </div>
-            ))}
+            <div className="flex gap-4 p-4 bg-white border border-slate-100 rounded-2xl"><div className="w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center font-black text-xs shrink-0">1</div><p className="text-[11px] text-slate-500 font-bold leading-relaxed">{t('how_step1', lang)}</p></div>
+            <div className="flex gap-4 p-4 bg-white border border-slate-100 rounded-2xl"><div className="w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center font-black text-xs shrink-0">2</div><p className="text-[11px] text-slate-500 font-bold leading-relaxed">{t('how_step2', lang)}</p></div>
+            <div className="flex gap-4 p-4 bg-white border border-slate-100 rounded-2xl"><div className="w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center font-black text-xs shrink-0">3</div><p className="text-[11px] text-slate-500 font-bold leading-relaxed">{t('how_step3', lang)}</p></div>
           </div>
         </section>
 
@@ -47,9 +44,8 @@ export const InfoPage = ({ lang, t, onClose }: any) => (
 
         <section className="bg-blue-50 rounded-3xl p-6 border border-blue-100"><div className="flex items-center gap-3 text-blue-600"><Smartphone size={24} /><h3 className="font-black uppercase tracking-wider text-xs">{t('launch_alert', lang)}</h3></div><p className="text-blue-800/70 text-[11px] font-bold leading-relaxed mt-2">{t('launch_desc', lang)}</p></section>
 
-        <section className="p-8 bg-[#0f172a] rounded-[2.5rem] text-white space-y-4">
+        <section className="p-8 bg-[#0f172a] rounded-[2.5rem] text-white space-y-6">
           <h3 className="font-black italic text-sm flex items-center gap-3 uppercase"><ExternalLink size={20}/> {t('info_support', lang)}</h3>
-          <p className="text-[11px] text-slate-400 font-bold leading-relaxed">{t('info_desc', lang)}</p>
           <div className="space-y-3">
             <a href="https://www.barkr.nl" target="_blank" className="flex items-center gap-4 p-4 bg-white/10 rounded-2xl"><div className="bg-[#f26522] p-2 rounded-xl"><Wifi size={16}/></div><div><p className="text-[9px] uppercase font-black opacity-40">{t('website', lang)}</p><p className="font-black text-sm uppercase italic">www.barkr.nl</p></div></a>
             <a href="mailto:info@barkr.nl" className="flex items-center gap-4 p-4 bg-white/10 rounded-2xl"><div className="bg-blue-600 p-2 rounded-xl"><Mail size={16}/></div><div><p className="text-[9px] uppercase font-black opacity-40">{t('email', lang)}</p><p className="font-black text-sm uppercase italic">info@barkr.nl</p></div></a>
