@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, Info, Dog, Activity, HeartPulse, Plus, Trash2, X, ChevronDown, Smartphone, Clock } from 'lucide-react';
+import { Settings, Info, Activity, HeartPulse, Plus, Trash2, X, ChevronDown, Clock } from 'lucide-react';
 import { COUNTRIES } from './constants/countries';
 import { TRANSLATIONS } from './constants/translations';
 import { InfoPage } from './components/InfoPage';
@@ -20,7 +20,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showWeekPlan, setShowWeekPlan] = useState(false);
-  const [lastPing, setLastPing] = useState('23:23');
+  const [lastPing, setLastPing] = useState('--:--');
   
   const now = new Date();
   const todayStr = getLocalYYYYMMDD(now); const tomorrowStr = getLocalYYYYMMDD(new Date(now.getTime() + 86400000));
@@ -39,7 +39,13 @@ export default function App() {
   const lang = COUNTRIES[settings.country]?.lang || 'nl';
   const daysVoluit = COUNTRIES[settings.country]?.days || COUNTRIES['NL'].days;
 
-  useEffect(() => { localStorage.setItem('barkr_v16_data', JSON.stringify(settings)); }, [settings]);
+  const syncBackend = useCallback((data: any) => {
+    if (activeUrl) {
+      fetch(`${activeUrl}/save_settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ...data, app_key: APP_KEY }) }).catch(() => {});
+    }
+  }, [activeUrl]);
+
+  useEffect(() => { localStorage.setItem('barkr_v16_data', JSON.stringify(settings)); syncBackend(settings); }, [settings, syncBackend]);
 
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) { try { const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) }); if (res.ok) { setActiveUrl(url); setStatus('connected'); return; } } catch (e) {} }
@@ -64,10 +70,9 @@ export default function App() {
     <div className="max-w-md mx-auto min-h-screen bg-white font-sans text-[#1a2b3c] flex flex-col overflow-hidden">
       <style>{`@keyframes bounce-zz { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; } } .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; } .no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
       
-      {/* Header uit Screenshot 1/11 */}
       <header className="px-6 py-4 flex justify-between items-center sticky top-0 bg-white z-10 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="bg-[#f26522] p-2 rounded-xl shadow-md"><Dog size={24} fill="white" className="text-white" /></div>
+          <div className="bg-[#f26522] p-2 rounded-xl shadow-md"><img src="/logo.png" className="w-6 h-6 brightness-0 invert" alt="Barkr" /></div>
           <div>
             <h1 className="text-xl font-black italic tracking-tight leading-none">BARKR</h1>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -83,11 +88,11 @@ export default function App() {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-start pt-8 p-6 gap-8 overflow-y-auto no-scrollbar">
-        {/* Status Cirkel uit Screenshot 1/2 */}
+        {/* Status Cirkel met PNG-AFBEELDING */}
         <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-700 shadow-2xl active:scale-95 ${!settings.vacationMode ? 'bg-[#f26522] border-8 border-orange-400' : 'bg-[#242f3e] border-8 border-slate-700'}`}>
           <div className="flex flex-col items-center gap-2">
              <div className="relative">
-                <Dog size={100} fill="white" className={`text-white transition-opacity ${settings.vacationMode ? 'opacity-20' : 'opacity-100'}`} />
+                <img src="/logo.png" className={`w-[120px] h-[120px] transition-opacity brightness-0 invert ${settings.vacationMode ? 'opacity-20' : 'opacity-100'}`} alt="Barkr" />
                 {settings.vacationMode && <span className="absolute -top-4 -right-4 text-4xl font-black text-blue-400 animate-zz">Zzz</span>}
                 {!settings.vacationMode && <Activity size={32} className="absolute -right-8 top-0 text-orange-200 animate-pulse" />}
              </div>
@@ -95,13 +100,13 @@ export default function App() {
           </div>
         </button>
 
-        {/* Hartslag Kaart uit Screenshot 11 */}
+        {/* Hartslag Kaart */}
         <div className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.15)] border border-slate-50 text-center">
           <div className="flex items-center justify-center gap-2 text-slate-400 mb-2 font-bold text-[10px] uppercase tracking-widest"><HeartPulse size={14} /> {t('heartbeat', lang)}</div>
           <div className="text-6xl font-black text-slate-800 tracking-tighter">{lastPing}</div>
         </div>
 
-        {/* ACTUELE PLANNING Sectie uit Screenshot 11/14 */}
+        {/* ACTUELE PLANNING Sectie */}
         <div className="w-full max-w-sm space-y-4 rounded-[2.5rem] bg-slate-50/50 p-6 border border-slate-100">
           <div className="flex justify-between items-center px-1">
              <div className="flex items-center gap-2 text-[#f26522]"><Clock size={16}/><h3 className="font-black uppercase tracking-wider text-[10px]">{t('act_plan', lang)}</h3></div>
@@ -119,7 +124,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Modals */}
       {showManual && <InfoPage lang={lang} t={t} onClose={() => setShowManual(false)} />}
       
       {showSettings && (
@@ -148,23 +152,4 @@ export default function App() {
       {showWeekPlan && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end p-4">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-8 space-y-6 overflow-y-auto no-scrollbar shadow-2xl">
-            <div className="flex justify-between items-start"><div className="space-y-1"><h2 className="text-2xl font-black italic tracking-tighter uppercase">{t('week_plan', lang)}</h2><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t('week_plan_desc', lang)}</p></div><button onClick={() => setShowWeekPlan(false)} className="bg-slate-100 p-2 rounded-full text-slate-300"><X size={20}/></button></div>
-            <div className="space-y-3">
-              {daysVoluit.map((d:string, i:number) => (
-                <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <span className="font-black text-slate-600 text-xs uppercase">{d}</span>
-                  <div className="flex gap-2 items-center">
-                    <input type="time" value={settings.schedules[i].startTime} onChange={e => { const s={...settings.schedules}; s[i].startTime=e.target.value; setSettings({...settings, schedules:s}) }} className="bg-white p-2 rounded-lg font-black text-[10px] shadow-sm border-none" />
-                    <span className="text-slate-300 font-black">-</span>
-                    <input type="time" value={settings.schedules[i].endTime} onChange={e => { const s={...settings.schedules}; s[i].endTime=e.target.value; setSettings({...settings, schedules:s}) }} className="bg-white p-2 rounded-lg font-black text-[10px] text-[#f26522] shadow-sm border-none" />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowWeekPlan(false)} className="w-full bg-[#f26522] text-white py-6 rounded-2xl font-black uppercase shadow-xl text-xs">{t('save', lang)}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+            <div
