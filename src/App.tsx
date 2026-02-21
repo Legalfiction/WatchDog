@@ -125,7 +125,7 @@ export default function App() {
     if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) setActiveTab('base');
   }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
 
-  // --- HIER ZIT DE ESSENTIËLE FIX VOOR DE RASPBERRY PI ---
+  // Synchronisatie met de Raspberry Pi (Reverted naar de werkende versie)
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -135,27 +135,21 @@ export default function App() {
     payload.activeDays = [0,1,2,3,4,5,6];
     payload.schedules = JSON.parse(JSON.stringify(settings.schedules)); 
 
-    const nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-
-    // Controleer of de window voor VANDAAG in het verleden ligt
     if (settings.overrides[todayStr]) {
-        if (settings.overrides[todayStr].end > nowTime) {
-            payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
-        } else {
-            // Eindtijd is al voorbij? Vertel de Pi dat de dag klaar is (start=stop=nu)
-            payload.schedules[todayIdx] = { startTime: nowTime, endTime: nowTime };
-        }
-    } else {
-        // Controleer ook de basis-planning voor vandaag
-        if (payload.schedules[todayIdx].endTime < nowTime) {
-            // Als de basis-deadline (bijv 10:00) al voorbij is, zet hem op 'nu' om vals alarm te voorkomen
-            payload.schedules[todayIdx] = { startTime: nowTime, endTime: nowTime };
-        }
+        payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
+    }
+    if (settings.overrides[tomorrowStr]) {
+        payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
     }
 
     const timer = setTimeout(() => {
-      fetch(`${activeUrl}/save_settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }).catch(() => {});
+      fetch(`${activeUrl}/save_settings`, { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify(payload) 
+      }).catch(() => {});
     }, 800); 
+    
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
@@ -167,6 +161,7 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
+  // Ping mechanisme (Reverted naar de werkende versie)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
@@ -179,7 +174,7 @@ export default function App() {
         .then(res => { if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); });
       }
     };
-    doPing(); 
+    doPing();
     const i = setInterval(doPing, 5000); 
     document.addEventListener('visibilitychange', doPing);
     return () => { clearInterval(i); document.removeEventListener('visibilitychange', doPing); };
@@ -220,18 +215,12 @@ export default function App() {
   const displayStart = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].start : settings.schedules[activeDayIdx].startTime;
   const displayEnd = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].end : settings.schedules[activeDayIdx].endTime;
 
-  const isUserSet = settings.name && settings.name.trim().length > 0 && settings.contacts && settings.contacts.length > 0;
-
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
       <style>{`
         @keyframes bounce-zz { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-15px); opacity: 1; } }
         .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        @keyframes gentle-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-        .animate-gentle-bounce { animation: gentle-bounce 3s infinite ease-in-out; }
-        @keyframes alert-pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(239,68,68,0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
-        .animate-alert-pulse { animation: alert-pulse 2s infinite; }
       `}</style>
 
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
@@ -258,21 +247,6 @@ export default function App() {
               {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">Tik voor slaapstand</span></div></div>}
             </button>
             <div className="mt-5 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
-            
-            <div 
-              onClick={() => { if (!isUserSet) setShowSettings(true); }}
-              className={`mt-5 w-full px-6 py-4 rounded-2xl border shadow-sm flex items-center justify-center gap-4 transition-all duration-500 ${isUserSet ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-200 cursor-pointer hover:bg-red-100/50 active:scale-[0.98]'}`}
-            >
-              <div className={`p-3 rounded-full ${isUserSet ? 'bg-emerald-100 text-emerald-600 animate-gentle-bounce' : 'bg-red-100 text-red-600 animate-alert-pulse'}`}>
-                {isUserSet ? <UserCheck size={24} /> : <UserX size={24} />}
-              </div>
-              <div className="text-left">
-                <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${isUserSet ? 'text-emerald-500' : 'text-red-500'}`}>Contactpersoon</p>
-                <p className={`text-sm font-black ${isUserSet ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {isUserSet ? "Baasje is gekoppeld" : "Waar is het baasje?"}
-                </p>
-              </div>
-            </div>
           </div>
 
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
@@ -305,7 +279,7 @@ export default function App() {
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
                     <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
                     <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div>
-                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5"><select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >{COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}</select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div><input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div></div>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5"><select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >{COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}</select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div><input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div></div>
                   </div>
                 )
               })}
