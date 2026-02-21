@@ -15,13 +15,12 @@ root.render(
 );
 
 // --- SERVICE WORKER REGISTRATIE ---
-// Dit script zorgt ervoor dat de Barkr-app op de achtergrond kan blijven draaien
-// en dat de browser de app als een betrouwbare applicatie herkent.
+// We verwijzen nu specifiek naar 'service-worker.js' zodat de cache-killer werkt
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('/service-worker.js')
       .then(reg => {
-        console.log('✅ Barkr Service Worker succesvol geregistreerd op scope:', reg.scope);
+        console.log('✅ Digitale Waakhond Service Worker geregistreerd:', reg.scope);
       })
       .catch(err => {
         console.error('❌ Service Worker registratie mislukt:', err);
