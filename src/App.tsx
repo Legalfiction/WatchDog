@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown
+  Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown, UserCheck, UserX
 } from 'lucide-react';
 
 import { COUNTRIES } from './constants/countries';
@@ -50,7 +50,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [showWeekPlan, setShowWeekPlan] = useState(false);
-  const [lastPing, setLastPing] = useState('--:--');
   
   const interactionTimer = useRef<number>(0); 
   
@@ -103,7 +102,6 @@ export default function App() {
   // 1. Verwijder verstreken overschrijvingen (Met 12s pauze bij activiteit)
   useEffect(() => {
     const interval = setInterval(() => {
-      // FIX: Als we aan het typen zijn, doe dan even NIETS.
       if (Date.now() - interactionTimer.current < 12000) return; 
 
       const d = new Date();
@@ -169,7 +167,7 @@ export default function App() {
     const doPing = () => {
       if (document.visibilityState === 'visible' && !settingsRef.current.vacationMode) {
         fetch(`${activeUrl}/ping`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) })
-        .then(res => { if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); });
+        .catch(() => {}); // Fouten negeren, ping is 'fire and forget'
       }
     };
     doPing(); const i = setInterval(doPing, 5000); document.addEventListener('visibilitychange', doPing);
@@ -211,6 +209,9 @@ export default function App() {
   const displayStart = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].start : settings.schedules[activeDayIdx].startTime;
   const displayEnd = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].end : settings.schedules[activeDayIdx].endTime;
 
+  // Bepaal of de gebruiker (contactpersoon) is ingesteld
+  const isUserSet = settings.name && settings.name.trim().length > 0;
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
       <style>{`
@@ -240,9 +241,21 @@ export default function App() {
         <main className="flex-1 p-4 space-y-6 overflow-y-auto">
           <div className="flex flex-col items-center pt-4">
             <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} disabled={status !== 'connected'} className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
-              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span></div></div>}
+              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">Tik voor slaapstand</span></div></div>}
             </button>
-            <div className="mt-5 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
+            
+            <div className={`mt-5 bg-white px-6 py-4 rounded-2xl border shadow-sm flex items-center justify-center gap-4 transition-all ${isUserSet ? 'border-emerald-100' : 'border-red-100'}`}>
+              <div className={`p-3 rounded-full ${isUserSet ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+                {isUserSet ? <UserCheck size={24} /> : <UserX size={24} />}
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Status Contactpersoon</p>
+                <p className={`text-sm font-black ${isUserSet ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {isUserSet ? "Correct ingesteld" : "Nog instellen a.u.b."}
+                </p>
+              </div>
+            </div>
+
           </div>
 
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
