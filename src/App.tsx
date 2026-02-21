@@ -12,53 +12,21 @@ const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
 const COUNTRY_CALLING_CODES = [
   { name: "Afghanistan", code: "+93" }, { name: "Albanië", code: "+355" }, { name: "Algerije", code: "+213" },
-  { name: "Amerikaanse Maagdeneilanden", code: "+1340" }, { name: "Andorra", code: "+376" }, { name: "Angola", code: "+244" },
-  { name: "Argentinië", code: "+54" }, { name: "Armenië", code: "+374" }, { name: "Aruba", code: "+297" },
-  { name: "Australië", code: "+61" }, { name: "Azerbeidzjan", code: "+994" }, { name: "Bahama's", code: "+1242" },
-  { name: "Bahrein", code: "+973" }, { name: "Bangladesh", code: "+880" }, { name: "Barbados", code: "+1246" },
-  { name: "België", code: "+32" }, { name: "Belize", code: "+501" }, { name: "Bermuda", code: "+1441" },
-  { name: "Bolivia", code: "+591" }, { name: "Bosnië en Herzegovina", code: "+387" }, { name: "Brazilië", code: "+55" },
-  { name: "Bulgarije", code: "+359" }, { name: "Cambodja", code: "+855" }, { name: "Canada", code: "+1" },
-  { name: "Chili", code: "+56" }, { name: "China", code: "+86" }, { name: "Colombia", code: "+57" },
-  { name: "Costa Rica", code: "+506" }, { name: "Cuba", code: "+53" }, { name: "Curaçao", code: "+599" },
-  { name: "Cyprus", code: "+357" }, { name: "Denemarken", code: "+45" }, { name: "Dominicaanse Republiek", code: "+1809" },
-  { name: "Duitsland", code: "+49" }, { name: "Ecuador", code: "+593" }, { name: "Egypte", code: "+20" },
-  { name: "El Salvador", code: "+503" }, { name: "Estland", code: "+372" }, { name: "Ethiopië", code: "+251" },
-  { name: "Fiji", code: "+679" }, { name: "Filipijnen", code: "+63" }, { name: "Finland", code: "+358" },
-  { name: "Frankrijk", code: "+33" }, { name: "Georgië", code: "+995" }, { name: "Ghana", code: "+233" },
-  { name: "Griekenland", code: "+30" }, { name: "Guatemala", code: "+502" }, { name: "Honduras", code: "+504" },
-  { name: "Hongarije", code: "+36" }, { name: "Hongkong", code: "+852" }, { name: "Ierland", code: "+353" },
-  { name: "IJsland", code: "+354" }, { name: "India", code: "+91" }, { name: "Indonesië", code: "+62" },
-  { name: "Irak", code: "+964" }, { name: "Iran", code: "+98" }, { name: "Israël", code: "+972" },
-  { name: "Italië", code: "+39" }, { name: "Ivoorkust", code: "+225" }, { name: "Jamaica", code: "+1876" },
-  { name: "Japan", code: "+81" }, { name: "Jemen", code: "+967" }, { name: "Jordanië", code: "+962" },
-  { name: "Kaapverdië", code: "+238" }, { name: "Kameroen", code: "+237" }, { name: "Kenia", code: "+254" },
-  { name: "Koeweit", code: "+965" }, { name: "Kroatië", code: "+385" }, { name: "Laos", code: "+856" },
-  { name: "Letland", code: "+371" }, { name: "Libanon", code: "+961" }, { name: "Libië", code: "+218" },
-  { name: "Liechtenstein", code: "+423" }, { name: "Litouwen", code: "+370" }, { name: "Luxemburg", code: "+352" },
-  { name: "Madagaskar", code: "+261" }, { name: "Maleisië", code: "+60" }, { name: "Mali", code: "+223" },
-  { name: "Malta", code: "+356" }, { name: "Marokko", code: "+212" }, { name: "Mauritius", code: "+230" },
-  { name: "Mexico", code: "+52" }, { name: "Moldavië", code: "+373" }, { name: "Monaco", code: "+377" },
-  { name: "Mongolië", code: "+976" }, { name: "Montenegro", code: "+382" }, { name: "Mozambique", code: "+258" },
-  { name: "Myanmar", code: "+95" }, { name: "Namibië", code: "+264" }, { name: "Nederland", code: "+31" },
-  { name: "Nepal", code: "+977" }, { name: "Nicaragua", code: "+505" }, { name: "Nieuw-Zeeland", code: "+64" },
-  { name: "Nigeria", code: "+234" }, { name: "Noord-Macedonië", code: "+389" }, { name: "Noorwegen", code: "+47" },
-  { name: "Oekraïne", code: "+380" }, { name: "Oezbekistan", code: "+998" }, { name: "Oman", code: "+968" },
-  { name: "Oostenrijk", code: "+43" }, { name: "Pakistan", code: "+92" }, { name: "Panama", code: "+507" },
-  { name: "Paraguay", code: "+595" }, { name: "Peru", code: "+51" }, { name: "Polen", code: "+48" },
-  { name: "Portugal", code: "+351" }, { name: "Puerto Rico", code: "+1787" }, { name: "Qatar", code: "+974" },
-  { name: "Roemenië", code: "+40" }, { name: "Rusland", code: "+7" }, { name: "Rwanda", code: "+250" },
-  { name: "Saoedi-Arabië", code: "+966" }, { name: "Senegal", code: "+221" }, { name: "Servië", code: "+381" },
-  { name: "Singapore", code: "+65" }, { name: "Slovenië", code: "+386" }, { name: "Slowakije", code: "+421" },
-  { name: "Spanje", code: "+34" }, { name: "Sri Lanka", code: "+94" }, { name: "Suriname", code: "+597" },
-  { name: "Syrië", code: "+963" }, { name: "Taiwan", code: "+886" }, { name: "Tanzania", code: "+255" },
-  { name: "Thailand", code: "+66" }, { name: "Trinidad en Tobago", code: "+1868" }, { name: "Tsjechië", code: "+420" },
-  { name: "Tunesië", code: "+216" }, { name: "Turkije", code: "+90" }, { name: "Uruguay", code: "+598" },
-  { name: "Venezuela", code: "+58" }, { name: "Verenigd Koninkrijk", code: "+44" },
-  { name: "Verenigde Arabische Emiraten", code: "+971" }, { name: "Verenigde Staten", code: "+1" },
-  { name: "Vietnam", code: "+84" }, { name: "Wit-Rusland", code: "+375" }, { name: "Zambia", code: "+260" },
-  { name: "Zimbabwe", code: "+263" }, { name: "Zuid-Afrika", code: "+27" }, { name: "Zuid-Korea", code: "+82" },
-  { name: "Zweden", code: "+46" }, { name: "Zwitserland", code: "+41" }
+  { name: "Andorra", code: "+376" }, { name: "Angola", code: "+244" }, { name: "Argentinië", code: "+54" },
+  { name: "Australië", code: "+61" }, { name: "België", code: "+32" }, { name: "Brazilië", code: "+55" },
+  { name: "Canada", code: "+1" }, { name: "Chili", code: "+56" }, { name: "China", code: "+86" },
+  { name: "Colombia", code: "+57" }, { name: "Costa Rica", code: "+506" }, { name: "Cuba", code: "+53" },
+  { name: "Curaçao", code: "+599" }, { name: "Denemarken", code: "+45" }, { name: "Duitsland", code: "+49" },
+  { name: "Egypte", code: "+20" }, { name: "Frankrijk", code: "+33" }, { name: "Griekenland", code: "+30" },
+  { name: "Hongkong", code: "+852" }, { name: "Ierland", code: "+353" }, { name: "IJsland", code: "+354" },
+  { name: "India", code: "+91" }, { name: "Indonesië", code: "+62" }, { name: "Israël", code: "+972" },
+  { name: "Italië", code: "+39" }, { name: "Japan", code: "+81" }, { name: "Luxemburg", code: "+352" },
+  { name: "Marokko", code: "+212" }, { name: "Mexico", code: "+52" }, { name: "Monaco", code: "+377" },
+  { name: "Nederland", code: "+31" }, { name: "Noorwegen", code: "+47" }, { name: "Oostenrijk", code: "+43" },
+  { name: "Polen", code: "+48" }, { name: "Portugal", code: "+351" }, { name: "Spanje", code: "+34" },
+  { name: "Suriname", code: "+597" }, { name: "Turkije", code: "+90" }, { name: "Verenigd Koninkrijk", code: "+44" },
+  { name: "Verenigde Staten", code: "+1" }, { name: "Zuid-Afrika", code: "+27" }, { name: "Zweden", code: "+46" },
+  { name: "Zwitserland", code: "+41" }
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const LANG_NAMES: any = {
@@ -132,20 +100,10 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // --- CACHE-KILLER EFFECT ---
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (let registration of registrations) {
-          registration.unregister();
-        }
-      });
-    }
-  }, []);
-
   // 1. Verwijder verstreken overschrijvingen (Met 12s pauze bij activiteit)
   useEffect(() => {
     const interval = setInterval(() => {
+      // FIX: Als we aan het typen zijn, doe dan even NIETS.
       if (Date.now() - interactionTimer.current < 12000) return; 
 
       const d = new Date();
@@ -153,56 +111,50 @@ export default function App() {
       const tStr = d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
 
       setSettings((prev: any) => {
-        if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
-          const newOverrides = { ...prev.overrides };
-          delete newOverrides[dStr];
-          return { ...prev, overrides: newOverrides };
-        }
-        return prev;
+        if (!prev.overrides) return prev;
+        const newOverrides = { ...prev.overrides };
+        let changed = false;
+
+        Object.keys(newOverrides).forEach(dateKey => {
+          if (dateKey < dStr || (dateKey === dStr && tStr > newOverrides[dateKey].end)) {
+            delete newOverrides[dateKey];
+            changed = true;
+          }
+        });
+
+        return changed ? { ...prev, overrides: newOverrides } : prev;
       });
     }, 2000); 
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Bewaak de knoppen
+  // 2. Bewaak de knoppen: Zet in neutrale stand als data weg is
   useEffect(() => {
-    if (activeTab === 'today' && !settings.overrides[todayStr]) {
-      setActiveTab('base');
-    }
-    if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) {
-      setActiveTab('base');
-    }
+    if (activeTab === 'today' && !settings.overrides[todayStr]) setActiveTab('base');
+    if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) setActiveTab('base');
   }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
 
-  // Synchronisatie met de Raspberry Pi
+  // Opslaan naar Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
-    
     const payload: any = { ...settings };
     payload.useCustomSchedule = true;
     payload.activeDays = [0,1,2,3,4,5,6];
     payload.schedules = JSON.parse(JSON.stringify(settings.schedules)); 
-
     if (settings.overrides[todayStr]) {
         payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
     }
     if (settings.overrides[tomorrowStr]) {
         payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
     }
-
     const timer = setTimeout(() => {
-      fetch(`${activeUrl}/save_settings`, { 
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'}, 
-        body: JSON.stringify(payload) 
-      }).catch(() => {});
+      fetch(`${activeUrl}/save_settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }).catch(() => {});
     }, 800); 
-    
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
-  // Zoek Raspberry Pi verbinding
+  // Pi Verbinding
   useEffect(() => {
     const find = async () => {
       for (const url of ENDPOINTS) { try { const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) }); if (res.ok) { setActiveUrl(url); setStatus('connected'); return; } } catch (e) {} }
@@ -211,90 +163,53 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
-  // Ping mechanisme
+  // Ping
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
       if (document.visibilityState === 'visible' && !settingsRef.current.vacationMode) {
-        fetch(`${activeUrl}/ping`, { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) 
-        })
+        fetch(`${activeUrl}/ping`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) })
         .then(res => { if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); });
       }
     };
-    doPing();
-    const i = setInterval(doPing, 5000); 
-    document.addEventListener('visibilitychange', doPing);
+    doPing(); const i = setInterval(doPing, 5000); document.addEventListener('visibilitychange', doPing);
     return () => { clearInterval(i); document.removeEventListener('visibilitychange', doPing); };
   }, [status, activeUrl]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
-    interactionTimer.current = Date.now(); 
-    const nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-
+    interactionTimer.current = Date.now(); // Start de 12s genadetijd
     if (activeTab === type) { 
       setActiveTab('base'); 
       const newOverrides = {...settings.overrides};
-      const dateStr = type === 'today' ? todayStr : tomorrowStr;
-      delete newOverrides[dateStr];
+      delete newOverrides[type === 'today' ? todayStr : tomorrowStr];
       setSettings({...settings, overrides: newOverrides});
     } else { 
+      setActiveTab(type); 
       const targetStr = type === 'today' ? todayStr : tomorrowStr; 
       const targetIdx = type === 'today' ? todayIdx : tomorrowIdx; 
-      const defaultEnd = settings.schedules[targetIdx]?.endTime || '10:00';
-
-      // VOORKOM VERLEDEN: Als je "Vandaag" kiest maar de standaardtijd is al voorbij
-      if (type === 'today' && nowTime > defaultEnd) {
-        setActiveTab('base');
-        return;
-      }
-
-      setActiveTab(type); 
       if (!settings.overrides[targetStr]) { 
-        setSettings({...settings, overrides: {...settings.overrides, [targetStr]: {start: settings.schedules[targetIdx]?.startTime || '06:00', end: defaultEnd}}}); 
+        setSettings({...settings, overrides: {...settings.overrides, [targetStr]: {start: settings.schedules[targetIdx]?.startTime || '06:00', end: settings.schedules[targetIdx]?.endTime || '10:00'}}}); 
       } 
     }
   };
 
   const updateOverrideTime = (field: 'start'|'end', val: string) => {
-    interactionTimer.current = Date.now(); 
-    let currentTab = activeTab;
-    if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
-
+    interactionTimer.current = Date.now(); // Reset de 12s genadetijd bij elke toetsaanslag
+    let currentTab = activeTab === 'base' ? 'today' : activeTab;
+    if (activeTab === 'base') setActiveTab('today');
     const dStr = currentTab === 'today' ? todayStr : tomorrowStr; 
     const dIdx = currentTab === 'today' ? todayIdx : tomorrowIdx;
     const newO = {...settings.overrides}; 
     if (!newO[dStr]) newO[dStr] = { start: settings.schedules[dIdx]?.startTime || '06:00', end: settings.schedules[dIdx]?.endTime || '10:00' };
-    
     newO[dStr][field] = val; 
-
-    // VOORKOM VERLEDEN: Als de nieuwe eindtijd voor Vandaag in het verleden ligt
-    if (currentTab === 'today') {
-      const nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-      if (nowTime > newO[dStr].end) {
-        delete newO[dStr];
-        setSettings({...settings, overrides: newO});
-        setActiveTab('base');
-        return;
-      }
-    }
-
     setSettings({...settings, overrides: newO});
   };
 
   const isBase = activeTab === 'base';
   const activeDateStr = activeTab === 'today' ? todayStr : tomorrowStr;
   const activeDayIdx = activeTab === 'today' ? todayIdx : tomorrowIdx;
-  const hasOverride = !!settings.overrides[activeDateStr];
-  
-  let displayStart = settings.schedules[todayIdx]?.startTime || '06:00';
-  let displayEnd = settings.schedules[todayIdx]?.endTime || '10:00';
-  if (!isBase && hasOverride) {
-    displayStart = settings.overrides[activeDateStr].start;
-    displayEnd = settings.overrides[activeDateStr].end;
-  }
+  const displayStart = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].start : settings.schedules[activeDayIdx].startTime;
+  const displayEnd = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].end : settings.schedules[activeDayIdx].endTime;
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
@@ -349,23 +264,10 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar"><header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="relative">
-              <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label>
-              <div className="relative">
-                <select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">
-                  {Object.keys(COUNTRIES).map(k => (
-                    <option key={k} value={k}>
-                      {COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} />
-              </div>
-            </div>
+            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
           </div>
-          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label>
-            <button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label><button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
             <div className="space-y-4">
               {settings.contacts.map((c: any, i: number) => {
                 let code = c.phoneCode; let num = c.phoneNumber;
@@ -382,12 +284,7 @@ export default function App() {
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
                     <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
                     <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div>
-                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5">
-                          <select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >
-                            {COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}
-                          </select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div>
-                        <input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/>
-                      </div></div>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5"><select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >{COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}</select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div><input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div></div>
                     <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button>
                   </div>
                 )
