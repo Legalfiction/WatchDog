@@ -157,15 +157,24 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
+  // GECORRIGEERDE PING LOGICA
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
-      if (document.visibilityState === 'visible' && !settingsRef.current.vacationMode) {
-        fetch(`${activeUrl}/ping`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) })
-        .catch(() => {}); 
+      // De 'visibilityState' check is verwijderd zodat de hartslag doorgaat in de achtergrond
+      if (!settingsRef.current.vacationMode) {
+        fetch(`${activeUrl}/ping`, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) 
+        }).catch(() => {}); 
       }
     };
-    doPing(); const i = setInterval(doPing, 5000); document.addEventListener('visibilitychange', doPing);
+    doPing(); 
+    const i = setInterval(doPing, 5000); 
+    // We luisteren nog steeds naar visibilitychange om direct te pingen bij terugkeer, 
+    // maar blokkeren de ping niet meer als de tab verborgen is.
+    document.addEventListener('visibilitychange', doPing);
     return () => { clearInterval(i); document.removeEventListener('visibilitychange', doPing); };
   }, [status, activeUrl]);
 
@@ -253,7 +262,6 @@ export default function App() {
                     <span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span>
                   </div>
                   <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
-                  {/* NIEUW: Duidelijke tekst tijdens de slaapstand */}
                   <div className="absolute bottom-6 inset-x-0 text-center">
                     <span className="text-[10px] font-black uppercase text-slate-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-widest text-center px-4 leading-tight italic">
                       Slaapstand (App inactief)
