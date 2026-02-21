@@ -75,7 +75,7 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // 1. Verwijder verstreken overschrijvingen uit het geheugen
+  // Verwijder verstreken overschrijvingen
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date();
@@ -86,25 +86,16 @@ export default function App() {
         if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
           const newOverrides = { ...prev.overrides };
           delete newOverrides[dStr];
+          if (activeTab === 'today') setActiveTab('base');
           return { ...prev, overrides: newOverrides };
         }
         return prev;
       });
     }, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeTab]);
 
-  // 2. Bewaak de knoppen: Zet in neutrale stand als de overschrijving niet meer bestaat
-  useEffect(() => {
-    if (activeTab === 'today' && !settings.overrides[todayStr]) {
-      setActiveTab('base');
-    }
-    if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) {
-      setActiveTab('base');
-    }
-  }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
-
-  // Synchronisatie met de Raspberry Pi (800ms)
+  // DE FIX: Sla op naar de Pi met 2000ms vertraging om terugspringen te voorkomen
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -127,7 +118,7 @@ export default function App() {
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload) 
       }).catch(() => {});
-    }, 800); 
+    }, 2000); // <-- Aangepast naar 2 seconden
     
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
