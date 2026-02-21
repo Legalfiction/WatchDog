@@ -132,19 +132,18 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // --- CACHE-KILLER EFFECT (Dwingt browser naar nieuwe versie zonder dataverlies) ---
+  // --- CACHE-KILLER EFFECT ---
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         for (let registration of registrations) {
           registration.unregister();
-          console.log("🏁 Oude Service Worker verwijderd.");
         }
       });
     }
   }, []);
 
-  // 1. Verwijder verstreken overschrijvingen
+  // 1. Verwijder verstreken overschrijvingen (Met 12s pauze bij activiteit)
   useEffect(() => {
     const interval = setInterval(() => {
       if (Date.now() - interactionTimer.current < 12000) return; 
@@ -233,6 +232,8 @@ export default function App() {
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
     interactionTimer.current = Date.now(); 
+    const nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
     if (activeTab === type) { 
       setActiveTab('base'); 
       const newOverrides = {...settings.overrides};
@@ -240,11 +241,19 @@ export default function App() {
       delete newOverrides[dateStr];
       setSettings({...settings, overrides: newOverrides});
     } else { 
-      setActiveTab(type); 
       const targetStr = type === 'today' ? todayStr : tomorrowStr; 
       const targetIdx = type === 'today' ? todayIdx : tomorrowIdx; 
+      const defaultEnd = settings.schedules[targetIdx]?.endTime || '10:00';
+
+      // VOORKOM VERLEDEN: Als je "Vandaag" kiest maar de standaardtijd is al voorbij
+      if (type === 'today' && nowTime > defaultEnd) {
+        setActiveTab('base');
+        return;
+      }
+
+      setActiveTab(type); 
       if (!settings.overrides[targetStr]) { 
-        setSettings({...settings, overrides: {...settings.overrides, [targetStr]: {start: settings.schedules[targetIdx]?.startTime || '06:00', end: settings.schedules[targetIdx]?.endTime || '10:00'}}}); 
+        setSettings({...settings, overrides: {...settings.overrides, [targetStr]: {start: settings.schedules[targetIdx]?.startTime || '06:00', end: defaultEnd}}}); 
       } 
     }
   };
@@ -253,11 +262,25 @@ export default function App() {
     interactionTimer.current = Date.now(); 
     let currentTab = activeTab;
     if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
+
     const dStr = currentTab === 'today' ? todayStr : tomorrowStr; 
     const dIdx = currentTab === 'today' ? todayIdx : tomorrowIdx;
     const newO = {...settings.overrides}; 
     if (!newO[dStr]) newO[dStr] = { start: settings.schedules[dIdx]?.startTime || '06:00', end: settings.schedules[dIdx]?.endTime || '10:00' };
+    
     newO[dStr][field] = val; 
+
+    // VOORKOM VERLEDEN: Als de nieuwe eindtijd voor Vandaag in het verleden ligt
+    if (currentTab === 'today') {
+      const nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+      if (nowTime > newO[dStr].end) {
+        delete newO[dStr];
+        setSettings({...settings, overrides: newO});
+        setActiveTab('base');
+        return;
+      }
+    }
+
     setSettings({...settings, overrides: newO});
   };
 
@@ -302,7 +325,7 @@ export default function App() {
         <main className="flex-1 p-4 space-y-6 overflow-y-auto">
           <div className="flex flex-col items-center pt-4">
             <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} disabled={status !== 'connected'} className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
-              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span></div></div>}
+              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span></div></div>}
             </button>
             <div className="mt-5 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
           </div>
@@ -345,8 +368,7 @@ export default function App() {
             <button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
             <div className="space-y-4">
               {settings.contacts.map((c: any, i: number) => {
-                let code = c.phoneCode;
-                let num = c.phoneNumber;
+                let code = c.phoneCode; let num = c.phoneNumber;
                 if (code === undefined || num === undefined) {
                   if (c.phone) {
                     const cleanPhone = c.phone.replace(/\s+/g, '');
@@ -359,31 +381,13 @@ export default function App() {
                 return (
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
                     <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label>
-                      <input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label>
-                      <div className="flex gap-2 relative">
-                        <div className="relative w-2/5">
-                          <select 
-                            value={code} 
-                            onChange={e => {
-                              const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n});
-                            }}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none"
-                          >
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5">
+                          <select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >
                             {COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}
-                          </select>
-                          <ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} />
-                        </div>
-                        <input placeholder="612345678" value={num} onChange={e => {
-                          let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); 
-                          const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n});
-                        }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/>
-                      </div>
-                    </div>
+                          </select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div>
+                        <input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/>
+                      </div></div>
                     <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button>
                   </div>
                 )
