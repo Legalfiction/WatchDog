@@ -1,15 +1,20 @@
 // public/service-worker.js
 
-// Zorgt ervoor dat een nieuwe versie van de app DIRECT wordt geïnstalleerd (helpt bij updates)
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Neemt direct de controle over, zodat de gebruiker niet eerst hoeft te refreshen
+// Zodra de nieuwe versie activeert, vernietigt hij álle oude vastgelopen caches
 self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          return caches.delete(cacheName);
+        })
+      );
+    }).then(() => {
+      return clients.claim();
+    })
+  );
 });
-
-// LET OP: De 'setInterval' ping is hier verwijderd. 
-// De betrouwbare ping-logica zit nu veilig verankerd in App.tsx, 
-// die netjes stopt zodra het telefoonscherm op zwart gaat.
