@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, CalendarDays, ChevronDown
+  Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown
 } from 'lucide-react';
+
+// Modulaire imports (exact zoals in jouw mappenstructuur)
 import { COUNTRIES } from './constants/countries';
 import { t } from './constants/translations';
 import InfoPage from './components/InfoPage';
@@ -73,6 +75,7 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
+  // Verwijder verstreken overschrijvingen
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date();
@@ -92,6 +95,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
+  // DE FIX: Sla op naar de Pi met 2000ms vertraging om terugspringen te voorkomen
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -109,11 +113,17 @@ export default function App() {
     }
 
     const timer = setTimeout(() => {
-      fetch(`${activeUrl}/save_settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }).catch(() => {});
-    }, 800);
+      fetch(`${activeUrl}/save_settings`, { 
+        method: 'POST', 
+        headers: {'Content-Type': 'application/json'}, 
+        body: JSON.stringify(payload) 
+      }).catch(() => {});
+    }, 2000); // <-- Aangepast naar 2 seconden
+    
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
+  // Zoek Raspberry Pi verbinding
   useEffect(() => {
     const find = async () => {
       for (const url of ENDPOINTS) { try { const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) }); if (res.ok) { setActiveUrl(url); setStatus('connected'); return; } } catch (e) {} }
@@ -122,6 +132,7 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
+  // Ping mechanisme
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
