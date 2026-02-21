@@ -99,6 +99,7 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
+  // 1. Verwijder verstreken overschrijvingen (Met 12s pauze bij activiteit)
   useEffect(() => {
     const interval = setInterval(() => {
       if (Date.now() - interactionTimer.current < 12000) return; 
@@ -125,11 +126,13 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // 2. Bewaak de knoppen: Zet in neutrale stand als data weg is
   useEffect(() => {
     if (activeTab === 'today' && !settings.overrides[todayStr]) setActiveTab('base');
     if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) setActiveTab('base');
   }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
 
+  // Opslaan naar Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -149,6 +152,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
+  // Pi Verbinding
   useEffect(() => {
     const find = async () => {
       for (const url of ENDPOINTS) { try { const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) }); if (res.ok) { setActiveUrl(url); setStatus('connected'); return; } } catch (e) {} }
@@ -157,12 +161,13 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
+  // Ping
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
       if (document.visibilityState === 'visible' && !settingsRef.current.vacationMode) {
         fetch(`${activeUrl}/ping`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) })
-        .catch(() => {}); 
+        .catch(() => {}); // Fouten negeren, ping is 'fire and forget'
       }
     };
     doPing(); const i = setInterval(doPing, 5000); document.addEventListener('visibilitychange', doPing);
@@ -170,7 +175,7 @@ export default function App() {
   }, [status, activeUrl]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
-    interactionTimer.current = Date.now(); 
+    interactionTimer.current = Date.now(); // Start de 12s genadetijd
     if (activeTab === type) { 
       setActiveTab('base'); 
       const newOverrides = {...settings.overrides};
@@ -187,7 +192,7 @@ export default function App() {
   };
 
   const updateOverrideTime = (field: 'start'|'end', val: string) => {
-    interactionTimer.current = Date.now(); 
+    interactionTimer.current = Date.now(); // Reset de 12s genadetijd bij elke toetsaanslag
     let currentTab = activeTab === 'base' ? 'today' : activeTab;
     if (activeTab === 'base') setActiveTab('today');
     const dStr = currentTab === 'today' ? todayStr : tomorrowStr; 
@@ -204,7 +209,8 @@ export default function App() {
   const displayStart = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].start : settings.schedules[activeDayIdx].startTime;
   const displayEnd = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].end : settings.schedules[activeDayIdx].endTime;
 
-  const isUserSet = settings.name && settings.name.trim().length > 0;
+  // Bepaal of ZOWEL de gebruikersnaam als minimaal 1 contactpersoon is ingesteld
+  const isUserSet = settings.name && settings.name.trim().length > 0 && settings.contacts && settings.contacts.length > 0;
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
@@ -213,7 +219,6 @@ export default function App() {
         .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* Nieuwe subtiele animaties voor het statusblok */
         @keyframes gentle-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
         .animate-gentle-bounce { animation: gentle-bounce 3s infinite ease-in-out; }
         
@@ -249,7 +254,11 @@ export default function App() {
               {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">Tik voor slaapstand</span></div></div>}
             </button>
             
-            <div className={`mt-5 px-6 py-4 rounded-2xl border shadow-sm flex items-center justify-center gap-4 transition-all duration-500 ${isUserSet ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-200'}`}>
+            {/* Statusblok is nu een knop als de gegevens ontbreken */}
+            <div 
+              onClick={() => { if (!isUserSet) setShowSettings(true); }}
+              className={`mt-5 w-full px-6 py-4 rounded-2xl border shadow-sm flex items-center justify-center gap-4 transition-all duration-500 ${isUserSet ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-200 cursor-pointer hover:bg-red-100/50 active:scale-[0.98]'}`}
+            >
               <div className={`p-3 rounded-full ${isUserSet ? 'bg-emerald-100 text-emerald-600 animate-gentle-bounce' : 'bg-red-100 text-red-600 animate-alert-pulse'}`}>
                 {isUserSet ? <UserCheck size={24} /> : <UserX size={24} />}
               </div>
@@ -258,7 +267,7 @@ export default function App() {
                   Contactpersoon
                 </p>
                 <p className={`text-sm font-black ${isUserSet ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {isUserSet ? "Baasje is gekoppeld" : "Wie is het baasje?"}
+                  {isUserSet ? "Baasje is gekoppeld" : "Waar is het baasje?"}
                 </p>
               </div>
             </div>
