@@ -10,7 +10,6 @@ import WeekPlanPage from './components/WeekPlanPage';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
-// Volledige alfabetisch gesorteerde lijst van landen en hun codes
 const COUNTRY_CALLING_CODES = [
   { name: "Afghanistan", code: "+93" }, { name: "Albanië", code: "+355" }, { name: "Algerije", code: "+213" },
   { name: "Amerikaanse Maagdeneilanden", code: "+1340" }, { name: "Andorra", code: "+376" }, { name: "Angola", code: "+244" },
@@ -133,7 +132,19 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // 1. Verwijder verstreken overschrijvingen uit het geheugen (Met 12s pauze bij activiteit)
+  // --- CACHE-KILLER EFFECT (Dwingt browser naar nieuwe versie zonder dataverlies) ---
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (let registration of registrations) {
+          registration.unregister();
+          console.log("🏁 Oude Service Worker verwijderd.");
+        }
+      });
+    }
+  }, []);
+
+  // 1. Verwijder verstreken overschrijvingen
   useEffect(() => {
     const interval = setInterval(() => {
       if (Date.now() - interactionTimer.current < 12000) return; 
@@ -154,7 +165,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Bewaak de knoppen: Zet in neutrale stand als de overschrijving niet meer bestaat
+  // 2. Bewaak de knoppen
   useEffect(() => {
     if (activeTab === 'today' && !settings.overrides[todayStr]) {
       setActiveTab('base');
@@ -222,7 +233,6 @@ export default function App() {
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
     interactionTimer.current = Date.now(); 
-    
     if (activeTab === type) { 
       setActiveTab('base'); 
       const newOverrides = {...settings.overrides};
@@ -241,7 +251,6 @@ export default function App() {
 
   const updateOverrideTime = (field: 'start'|'end', val: string) => {
     interactionTimer.current = Date.now(); 
-    
     let currentTab = activeTab;
     if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
     const dStr = currentTab === 'today' ? todayStr : tomorrowStr; 
@@ -274,24 +283,18 @@ export default function App() {
 
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm">
-            <Dog size={20} className="text-white" />
-          </div>
+          <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div>
           <div>
-            <h1 className="text-lg font-black tracking-tighter text-slate-800 uppercase">Digitale Waakhond</h1>
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
+            <h1 className="text-lg font-black tracking-tighter text-slate-800 uppercase leading-none">Digitale Waakhond</h1>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase mt-1">
               <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
               <span>{status === 'offline' ? t('offline', lang) : settings.vacationMode ? t('idle', lang) : t('vigilant', lang)}</span>
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
-            <Info size={20} className="text-slate-600"/>
-          </button>
-          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
-            <Settings size={20} className="text-slate-600"/>
-          </button>
+          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Info size={20} className="text-slate-600"/></button>
+          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Settings size={20} className="text-slate-600"/></button>
         </div>
       </header>
 
@@ -323,7 +326,6 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar"><header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            
             <div className="relative">
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label>
               <div className="relative">
@@ -337,14 +339,12 @@ export default function App() {
                 <ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} />
               </div>
             </div>
-            
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
           </div>
           <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label>
             <button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
             <div className="space-y-4">
               {settings.contacts.map((c: any, i: number) => {
-                
                 let code = c.phoneCode;
                 let num = c.phoneNumber;
                 if (code === undefined || num === undefined) {
@@ -352,20 +352,10 @@ export default function App() {
                     const cleanPhone = c.phone.replace(/\s+/g, '');
                     const sortedCodes = [...COUNTRY_CALLING_CODES].map(x => x.code).sort((a,b) => b.length - a.length);
                     const foundCode = sortedCodes.find(cc => cleanPhone.startsWith(cc));
-                    if (foundCode) {
-                      code = foundCode;
-                      num = cleanPhone.substring(foundCode.length);
-                      if (num.startsWith('0')) num = num.substring(1);
-                    } else {
-                      code = COUNTRIES[settings.country]?.prefix || '+31';
-                      num = cleanPhone;
-                    }
-                  } else {
-                    code = COUNTRIES[settings.country]?.prefix || '+31';
-                    num = '';
-                  }
+                    if (foundCode) { code = foundCode; num = cleanPhone.substring(foundCode.length); if (num.startsWith('0')) num = num.substring(1); } 
+                    else { code = COUNTRIES[settings.country]?.prefix || '+31'; num = cleanPhone; }
+                  } else { code = COUNTRIES[settings.country]?.prefix || '+31'; num = ''; }
                 }
-
                 return (
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
                     <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
@@ -380,11 +370,7 @@ export default function App() {
                           <select 
                             value={code} 
                             onChange={e => {
-                              const n = [...settings.contacts];
-                              n[i].phoneCode = e.target.value;
-                              n[i].phoneNumber = num;
-                              n[i].phone = e.target.value + num;
-                              setSettings({...settings, contacts: n});
+                              const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n});
                             }}
                             className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none"
                           >
@@ -392,21 +378,10 @@ export default function App() {
                           </select>
                           <ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} />
                         </div>
-                        <input 
-                          placeholder="612345678"
-                          value={num} 
-                          onChange={e => {
-                            let inputVal = e.target.value;
-                            if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); 
-                            
-                            const n = [...settings.contacts];
-                            n[i].phoneCode = code;
-                            n[i].phoneNumber = inputVal;
-                            n[i].phone = code + inputVal;
-                            setSettings({...settings, contacts: n});
-                          }}
-                          className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"
-                        />
+                        <input placeholder="612345678" value={num} onChange={e => {
+                          let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); 
+                          const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n});
+                        }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/>
                       </div>
                     </div>
                     <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button>
