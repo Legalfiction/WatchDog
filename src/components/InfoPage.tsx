@@ -44,9 +44,14 @@ export default function InfoPage({ onClose, lang, t }: InfoPageProps) {
         <p className="text-sm text-slate-600 leading-relaxed font-medium">{t('barkr_desc', lang)}</p>
       </section>
 
+      {/* VERNIEUWDE SECTIE: WAAROM DEZE APPLICATIE */}
       <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
         <h4 className="font-black text-orange-600 flex items-center gap-2 uppercase text-xs tracking-[0.15em]"><HeartPulse size={20}/> {t('why', lang)}</h4>
-        <div className="space-y-2"><p className="text-sm text-slate-600 leading-relaxed font-medium">{t('why_desc1', lang)}</p><p className="text-sm text-slate-600 leading-relaxed font-medium">{t('why_desc2', lang)}</p></div>
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600 leading-relaxed font-medium">{t('why_desc1', lang)}</p>
+          <p className="text-sm text-slate-600 leading-relaxed font-medium">{t('why_desc2', lang)}</p>
+          <p className="text-sm text-slate-600 leading-relaxed font-medium">{t('why_desc3', lang)}</p>
+        </div>
       </section>
 
       <section className="bg-orange-50 p-7 rounded-[40px] border border-orange-200 space-y-5">
