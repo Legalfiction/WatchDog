@@ -62,6 +62,11 @@ const COUNTRY_CALLING_CODES = [
   { name: "Zweden", code: "+46" }, { name: "Zwitserland", code: "+41" }
 ].sort((a, b) => a.name.localeCompare(b.name));
 
+const LANG_NAMES: any = {
+  nl: "Nederlands", en: "English", de: "Deutsch", fr: "Français", 
+  es: "Español", it: "Italiano", pl: "Polski", tr: "Türkçe"
+};
+
 const getLocalYYYYMMDD = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -79,6 +84,8 @@ export default function App() {
   const [showManual, setShowManual] = useState(false);
   const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
+  
+  const interactionTimer = useRef<number>(0); 
   
   const now = new Date();
   const todayStr = getLocalYYYYMMDD(now);
@@ -126,9 +133,11 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // 1. Verwijder verstreken overschrijvingen uit het geheugen
+  // 1. Verwijder verstreken overschrijvingen uit het geheugen (Met 12s pauze bij activiteit)
   useEffect(() => {
     const interval = setInterval(() => {
+      if (Date.now() - interactionTimer.current < 12000) return; 
+
       const d = new Date();
       const dStr = getLocalYYYYMMDD(d);
       const tStr = d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
@@ -141,7 +150,7 @@ export default function App() {
         }
         return prev;
       });
-    }, 5000);
+    }, 2000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -212,6 +221,8 @@ export default function App() {
   }, [status, activeUrl]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
+    interactionTimer.current = Date.now(); 
+    
     if (activeTab === type) { 
       setActiveTab('base'); 
       const newOverrides = {...settings.overrides};
@@ -229,6 +240,8 @@ export default function App() {
   };
 
   const updateOverrideTime = (field: 'start'|'end', val: string) => {
+    interactionTimer.current = Date.now(); 
+    
     let currentTab = activeTab;
     if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
     const dStr = currentTab === 'today' ? todayStr : tomorrowStr; 
@@ -260,22 +273,40 @@ export default function App() {
       `}</style>
 
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3"><div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div><div><h1 className="text-lg font-black italic tracking-tighter text-slate-800 uppercase">Barkr</h1><div className="flex items-center gap-1.5 text-[10px] font-bold uppercase"><div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} /><span>{status === 'offline' ? t('offline', lang) : settings.vacationMode ? t('idle', lang) : t('vigilant', lang)}</span></div></div></div>
-        <div className="flex gap-2"><button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Info size={20} className="text-slate-600"/></button><button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Settings size={20} className="text-slate-600"/></button></div>
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm">
+            <Dog size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black tracking-tighter text-slate-800 uppercase">Digitale Waakhond</h1>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
+              <span>{status === 'offline' ? t('offline', lang) : settings.vacationMode ? t('idle', lang) : t('vigilant', lang)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
+            <Info size={20} className="text-slate-600"/>
+          </button>
+          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
+            <Settings size={20} className="text-slate-600"/>
+          </button>
+        </div>
       </header>
 
       {!showSettings && !showManual && !showWeekPlan && (
-        <main className="flex-1 p-6 space-y-8 overflow-y-auto">
-          <div className="flex flex-col items-center pt-8">
+        <main className="flex-1 p-4 space-y-6 overflow-y-auto">
+          <div className="flex flex-col items-center pt-4">
             <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} disabled={status !== 'connected'} className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
               {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span></div></div>}
             </button>
-            <div className="mt-8 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
+            <div className="mt-5 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
           </div>
 
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
             <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><div className="flex items-center gap-2"><Clock size={16} className="text-orange-600" /><h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('smart_plan', lang)}</h3></div><button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95">{t('open_week_plan', lang).toUpperCase()}</button></header>
-            <div className="p-5 space-y-5">
+            <div className="p-4 space-y-4">
               <div className="flex gap-3"><button onClick={() => toggleOverride('today')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('today', lang)}</button><button onClick={() => toggleOverride('tomorrow')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('tomorrow', lang)}</button></div>
               <div className={`border rounded-2xl p-4 transition-all ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                 <div className="grid grid-cols-2 gap-4"><div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label><input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/></div><div><label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label><input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/></div></div>
@@ -292,7 +323,21 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar"><header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('country', lang)}</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {COUNTRIES[k].name} ({COUNTRIES[k].prefix})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
+            
+            <div className="relative">
+              <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label>
+              <div className="relative">
+                <select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">
+                  {Object.keys(COUNTRIES).map(k => (
+                    <option key={k} value={k}>
+                      {COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} />
+              </div>
+            </div>
+            
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
           </div>
           <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label>
@@ -300,7 +345,6 @@ export default function App() {
             <div className="space-y-4">
               {settings.contacts.map((c: any, i: number) => {
                 
-                // Zorg dat oude opgeslagen nummers netjes worden gesplitst in de nieuwe opmaak
                 let code = c.phoneCode;
                 let num = c.phoneNumber;
                 if (code === undefined || num === undefined) {
@@ -353,7 +397,6 @@ export default function App() {
                           value={num} 
                           onChange={e => {
                             let inputVal = e.target.value;
-                            // Haal de begin-nul direct weg (bijv. 06... wordt 6...)
                             if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); 
                             
                             const n = [...settings.contacts];
