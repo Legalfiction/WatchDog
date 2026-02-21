@@ -3,7 +3,6 @@ import {
   Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown
 } from 'lucide-react';
 
-// Modulaire imports (exact zoals in jouw mappenstructuur)
 import { COUNTRIES } from './constants/countries';
 import { t } from './constants/translations';
 import InfoPage from './components/InfoPage';
@@ -11,10 +10,57 @@ import WeekPlanPage from './components/WeekPlanPage';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
-// Een complete lijst van landcodes voor de dropdown
-const COUNTRY_CODES = [
-  "+1", "+7", "+20", "+27", "+30", "+31", "+32", "+33", "+34", "+36", "+39", "+40", "+41", "+43", "+44", "+45", "+46", "+47", "+48", "+49", "+51", "+52", "+53", "+54", "+55", "+56", "+57", "+58", "+60", "+61", "+62", "+63", "+64", "+65", "+66", "+81", "+82", "+84", "+86", "+90", "+91", "+92", "+93", "+94", "+95", "+98", "+212", "+213", "+216", "+218", "+220", "+221", "+222", "+223", "+224", "+225", "+226", "+227", "+228", "+229", "+230", "+231", "+232", "+233", "+234", "+235", "+236", "+237", "+238", "+239", "+240", "+241", "+242", "+243", "+244", "+245", "+246", "+248", "+249", "+250", "+251", "+252", "+253", "+254", "+255", "+256", "+257", "+258", "+260", "+261", "+262", "+263", "+264", "+265", "+266", "+267", "+268", "+269", "+290", "+291", "+297", "+298", "+299", "+350", "+351", "+352", "+353", "+354", "+355", "+356", "+357", "+358", "+359", "+370", "+371", "+372", "+373", "+374", "+375", "+376", "+377", "+378", "+379", "+380", "+381", "+382", "+385", "+386", "+387", "+389", "+420", "+421", "+423", "+500", "+501", "+502", "+503", "+504", "+505", "+506", "+507", "+508", "+509", "+590", "+591", "+592", "+593", "+594", "+595", "+596", "+597", "+598", "+599", "+670", "+672", "+673", "+674", "+675", "+676", "+677", "+678", "+679", "+680", "+681", "+682", "+683", "+685", "+686", "+687", "+688", "+689", "+690", "+691", "+692", "+850", "+852", "+853", "+855", "+856", "+880", "+886", "+960", "+961", "+962", "+963", "+964", "+965", "+966", "+967", "+968", "+970", "+971", "+972", "+973", "+974", "+975", "+976", "+977", "+992", "+993", "+994", "+995", "+996", "+998"
-];
+// Volledige alfabetisch gesorteerde lijst van landen en hun codes
+const COUNTRY_CALLING_CODES = [
+  { name: "Afghanistan", code: "+93" }, { name: "Albanië", code: "+355" }, { name: "Algerije", code: "+213" },
+  { name: "Amerikaanse Maagdeneilanden", code: "+1340" }, { name: "Andorra", code: "+376" }, { name: "Angola", code: "+244" },
+  { name: "Argentinië", code: "+54" }, { name: "Armenië", code: "+374" }, { name: "Aruba", code: "+297" },
+  { name: "Australië", code: "+61" }, { name: "Azerbeidzjan", code: "+994" }, { name: "Bahama's", code: "+1242" },
+  { name: "Bahrein", code: "+973" }, { name: "Bangladesh", code: "+880" }, { name: "Barbados", code: "+1246" },
+  { name: "België", code: "+32" }, { name: "Belize", code: "+501" }, { name: "Bermuda", code: "+1441" },
+  { name: "Bolivia", code: "+591" }, { name: "Bosnië en Herzegovina", code: "+387" }, { name: "Brazilië", code: "+55" },
+  { name: "Bulgarije", code: "+359" }, { name: "Cambodja", code: "+855" }, { name: "Canada", code: "+1" },
+  { name: "Chili", code: "+56" }, { name: "China", code: "+86" }, { name: "Colombia", code: "+57" },
+  { name: "Costa Rica", code: "+506" }, { name: "Cuba", code: "+53" }, { name: "Curaçao", code: "+599" },
+  { name: "Cyprus", code: "+357" }, { name: "Denemarken", code: "+45" }, { name: "Dominicaanse Republiek", code: "+1809" },
+  { name: "Duitsland", code: "+49" }, { name: "Ecuador", code: "+593" }, { name: "Egypte", code: "+20" },
+  { name: "El Salvador", code: "+503" }, { name: "Estland", code: "+372" }, { name: "Ethiopië", code: "+251" },
+  { name: "Fiji", code: "+679" }, { name: "Filipijnen", code: "+63" }, { name: "Finland", code: "+358" },
+  { name: "Frankrijk", code: "+33" }, { name: "Georgië", code: "+995" }, { name: "Ghana", code: "+233" },
+  { name: "Griekenland", code: "+30" }, { name: "Guatemala", code: "+502" }, { name: "Honduras", code: "+504" },
+  { name: "Hongarije", code: "+36" }, { name: "Hongkong", code: "+852" }, { name: "Ierland", code: "+353" },
+  { name: "IJsland", code: "+354" }, { name: "India", code: "+91" }, { name: "Indonesië", code: "+62" },
+  { name: "Irak", code: "+964" }, { name: "Iran", code: "+98" }, { name: "Israël", code: "+972" },
+  { name: "Italië", code: "+39" }, { name: "Ivoorkust", code: "+225" }, { name: "Jamaica", code: "+1876" },
+  { name: "Japan", code: "+81" }, { name: "Jemen", code: "+967" }, { name: "Jordanië", code: "+962" },
+  { name: "Kaapverdië", code: "+238" }, { name: "Kameroen", code: "+237" }, { name: "Kenia", code: "+254" },
+  { name: "Koeweit", code: "+965" }, { name: "Kroatië", code: "+385" }, { name: "Laos", code: "+856" },
+  { name: "Letland", code: "+371" }, { name: "Libanon", code: "+961" }, { name: "Libië", code: "+218" },
+  { name: "Liechtenstein", code: "+423" }, { name: "Litouwen", code: "+370" }, { name: "Luxemburg", code: "+352" },
+  { name: "Madagaskar", code: "+261" }, { name: "Maleisië", code: "+60" }, { name: "Mali", code: "+223" },
+  { name: "Malta", code: "+356" }, { name: "Marokko", code: "+212" }, { name: "Mauritius", code: "+230" },
+  { name: "Mexico", code: "+52" }, { name: "Moldavië", code: "+373" }, { name: "Monaco", code: "+377" },
+  { name: "Mongolië", code: "+976" }, { name: "Montenegro", code: "+382" }, { name: "Mozambique", code: "+258" },
+  { name: "Myanmar", code: "+95" }, { name: "Namibië", code: "+264" }, { name: "Nederland", code: "+31" },
+  { name: "Nepal", code: "+977" }, { name: "Nicaragua", code: "+505" }, { name: "Nieuw-Zeeland", code: "+64" },
+  { name: "Nigeria", code: "+234" }, { name: "Noord-Macedonië", code: "+389" }, { name: "Noorwegen", code: "+47" },
+  { name: "Oekraïne", code: "+380" }, { name: "Oezbekistan", code: "+998" }, { name: "Oman", code: "+968" },
+  { name: "Oostenrijk", code: "+43" }, { name: "Pakistan", code: "+92" }, { name: "Panama", code: "+507" },
+  { name: "Paraguay", code: "+595" }, { name: "Peru", code: "+51" }, { name: "Polen", code: "+48" },
+  { name: "Portugal", code: "+351" }, { name: "Puerto Rico", code: "+1787" }, { name: "Qatar", code: "+974" },
+  { name: "Roemenië", code: "+40" }, { name: "Rusland", code: "+7" }, { name: "Rwanda", code: "+250" },
+  { name: "Saoedi-Arabië", code: "+966" }, { name: "Senegal", code: "+221" }, { name: "Servië", code: "+381" },
+  { name: "Singapore", code: "+65" }, { name: "Slovenië", code: "+386" }, { name: "Slowakije", code: "+421" },
+  { name: "Spanje", code: "+34" }, { name: "Sri Lanka", code: "+94" }, { name: "Suriname", code: "+597" },
+  { name: "Syrië", code: "+963" }, { name: "Taiwan", code: "+886" }, { name: "Tanzania", code: "+255" },
+  { name: "Thailand", code: "+66" }, { name: "Trinidad en Tobago", code: "+1868" }, { name: "Tsjechië", code: "+420" },
+  { name: "Tunesië", code: "+216" }, { name: "Turkije", code: "+90" }, { name: "Uruguay", code: "+598" },
+  { name: "Venezuela", code: "+58" }, { name: "Verenigd Koninkrijk", code: "+44" },
+  { name: "Verenigde Arabische Emiraten", code: "+971" }, { name: "Verenigde Staten", code: "+1" },
+  { name: "Vietnam", code: "+84" }, { name: "Wit-Rusland", code: "+375" }, { name: "Zambia", code: "+260" },
+  { name: "Zimbabwe", code: "+263" }, { name: "Zuid-Afrika", code: "+27" }, { name: "Zuid-Korea", code: "+82" },
+  { name: "Zweden", code: "+46" }, { name: "Zwitserland", code: "+41" }
+].sort((a, b) => a.name.localeCompare(b.name));
 
 const getLocalYYYYMMDD = (d: Date) => {
   const y = d.getFullYear();
@@ -253,13 +299,14 @@ export default function App() {
             <button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
             <div className="space-y-4">
               {settings.contacts.map((c: any, i: number) => {
-                // Intelligent opsplitsen van oude nummers (backward compatibility)
+                
+                // Zorg dat oude opgeslagen nummers netjes worden gesplitst in de nieuwe opmaak
                 let code = c.phoneCode;
                 let num = c.phoneNumber;
                 if (code === undefined || num === undefined) {
                   if (c.phone) {
                     const cleanPhone = c.phone.replace(/\s+/g, '');
-                    const sortedCodes = [...COUNTRY_CODES].sort((a,b) => b.length - a.length);
+                    const sortedCodes = [...COUNTRY_CALLING_CODES].map(x => x.code).sort((a,b) => b.length - a.length);
                     const foundCode = sortedCodes.find(cc => cleanPhone.startsWith(cc));
                     if (foundCode) {
                       code = foundCode;
@@ -285,7 +332,7 @@ export default function App() {
                     <div>
                       <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label>
                       <div className="flex gap-2 relative">
-                        <div className="relative w-1/3">
+                        <div className="relative w-2/5">
                           <select 
                             value={code} 
                             onChange={e => {
@@ -295,9 +342,9 @@ export default function App() {
                               n[i].phone = e.target.value + num;
                               setSettings({...settings, contacts: n});
                             }}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none appearance-none"
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none"
                           >
-                            {COUNTRY_CODES.map(cc => <option key={cc} value={cc}>{cc}</option>)}
+                            {COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}
                           </select>
                           <ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} />
                         </div>
@@ -306,7 +353,7 @@ export default function App() {
                           value={num} 
                           onChange={e => {
                             let inputVal = e.target.value;
-                            // Verwijder de voorloopnul automatisch
+                            // Haal de begin-nul direct weg (bijv. 06... wordt 6...)
                             if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); 
                             
                             const n = [...settings.contacts];
@@ -315,7 +362,7 @@ export default function App() {
                             n[i].phone = code + inputVal;
                             setSettings({...settings, contacts: n});
                           }}
-                          className="w-2/3 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"
+                          className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"
                         />
                       </div>
                     </div>
