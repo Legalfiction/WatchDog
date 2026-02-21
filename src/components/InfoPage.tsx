@@ -59,7 +59,7 @@ export default function InfoPage({ onClose, lang, t }: InfoPageProps) {
           </div>
         </div>
 
-        {/* WANNEER GEBRUIK JE BARKR? (Nieuwe groepering) */}
+        {/* WANNEER GEBRUIK JE BARKR? */}
         <div>
           <div className="flex items-center gap-2 mb-4 px-1">
             <Zap size={14} className="text-slate-400" />
@@ -147,7 +147,12 @@ export default function InfoPage({ onClose, lang, t }: InfoPageProps) {
               <div className="w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center font-black text-xs shrink-0">2</div>
               <div>
                 <h5 className="text-sm font-bold text-orange-900 mb-1">Activering</h5>
-                <p className="text-xs text-orange-800/80 leading-relaxed">Open de app binnen je tijdvenster. Zolang de app op je scherm staat, wordt je hartslag geregistreerd.</p>
+                <p className="text-xs text-orange-800/80 leading-relaxed">
+                  Open de applicatie minimaal één keer binnen je tijdvenster. Hierna kan de app gewoon op de achtergrond blijven draaien zonder dat je verder iets hoeft te doen.
+                </p>
+                <p className="text-[10px] italic text-orange-700/70 mt-1.5 leading-snug">
+                  (Let op: in een volgende versie van Barkr maken we dit proces nog verder geautomatiseerd en eenvoudiger.)
+                </p>
               </div>
             </div>
 
