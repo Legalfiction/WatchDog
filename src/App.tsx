@@ -11,6 +11,11 @@ import WeekPlanPage from './components/WeekPlanPage';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
+// Een complete lijst van landcodes voor de dropdown
+const COUNTRY_CODES = [
+  "+1", "+7", "+20", "+27", "+30", "+31", "+32", "+33", "+34", "+36", "+39", "+40", "+41", "+43", "+44", "+45", "+46", "+47", "+48", "+49", "+51", "+52", "+53", "+54", "+55", "+56", "+57", "+58", "+60", "+61", "+62", "+63", "+64", "+65", "+66", "+81", "+82", "+84", "+86", "+90", "+91", "+92", "+93", "+94", "+95", "+98", "+212", "+213", "+216", "+218", "+220", "+221", "+222", "+223", "+224", "+225", "+226", "+227", "+228", "+229", "+230", "+231", "+232", "+233", "+234", "+235", "+236", "+237", "+238", "+239", "+240", "+241", "+242", "+243", "+244", "+245", "+246", "+248", "+249", "+250", "+251", "+252", "+253", "+254", "+255", "+256", "+257", "+258", "+260", "+261", "+262", "+263", "+264", "+265", "+266", "+267", "+268", "+269", "+290", "+291", "+297", "+298", "+299", "+350", "+351", "+352", "+353", "+354", "+355", "+356", "+357", "+358", "+359", "+370", "+371", "+372", "+373", "+374", "+375", "+376", "+377", "+378", "+379", "+380", "+381", "+382", "+385", "+386", "+387", "+389", "+420", "+421", "+423", "+500", "+501", "+502", "+503", "+504", "+505", "+506", "+507", "+508", "+509", "+590", "+591", "+592", "+593", "+594", "+595", "+596", "+597", "+598", "+599", "+670", "+672", "+673", "+674", "+675", "+676", "+677", "+678", "+679", "+680", "+681", "+682", "+683", "+685", "+686", "+687", "+688", "+689", "+690", "+691", "+692", "+850", "+852", "+853", "+855", "+856", "+880", "+886", "+960", "+961", "+962", "+963", "+964", "+965", "+966", "+967", "+968", "+970", "+971", "+972", "+973", "+974", "+975", "+976", "+977", "+992", "+993", "+994", "+995", "+996", "+998"
+];
+
 const getLocalYYYYMMDD = (d: Date) => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -75,7 +80,7 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // Verwijder verstreken overschrijvingen
+  // 1. Verwijder verstreken overschrijvingen uit het geheugen
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date();
@@ -86,16 +91,25 @@ export default function App() {
         if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
           const newOverrides = { ...prev.overrides };
           delete newOverrides[dStr];
-          if (activeTab === 'today') setActiveTab('base');
           return { ...prev, overrides: newOverrides };
         }
         return prev;
       });
     }, 5000);
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, []);
 
-  // DE FIX: Sla op naar de Pi met 2000ms vertraging om terugspringen te voorkomen
+  // 2. Bewaak de knoppen: Zet in neutrale stand als de overschrijving niet meer bestaat
+  useEffect(() => {
+    if (activeTab === 'today' && !settings.overrides[todayStr]) {
+      setActiveTab('base');
+    }
+    if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) {
+      setActiveTab('base');
+    }
+  }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
+
+  // Synchronisatie met de Raspberry Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -118,7 +132,7 @@ export default function App() {
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload) 
       }).catch(() => {});
-    }, 2000); // <-- Aangepast naar 2 seconden
+    }, 800); 
     
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
@@ -235,8 +249,81 @@ export default function App() {
             <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('country', lang)}</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {COUNTRIES[k].name} ({COUNTRIES[k].prefix})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
           </div>
-          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label><button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phone: COUNTRIES[settings.country].prefix}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
-            <div className="space-y-4">{settings.contacts.map((c: any, i: number) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><input value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div><button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button></div>))}</div>
+          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label>
+            <button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+            <div className="space-y-4">
+              {settings.contacts.map((c: any, i: number) => {
+                // Intelligent opsplitsen van oude nummers (backward compatibility)
+                let code = c.phoneCode;
+                let num = c.phoneNumber;
+                if (code === undefined || num === undefined) {
+                  if (c.phone) {
+                    const cleanPhone = c.phone.replace(/\s+/g, '');
+                    const sortedCodes = [...COUNTRY_CODES].sort((a,b) => b.length - a.length);
+                    const foundCode = sortedCodes.find(cc => cleanPhone.startsWith(cc));
+                    if (foundCode) {
+                      code = foundCode;
+                      num = cleanPhone.substring(foundCode.length);
+                      if (num.startsWith('0')) num = num.substring(1);
+                    } else {
+                      code = COUNTRIES[settings.country]?.prefix || '+31';
+                      num = cleanPhone;
+                    }
+                  } else {
+                    code = COUNTRIES[settings.country]?.prefix || '+31';
+                    num = '';
+                  }
+                }
+
+                return (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
+                    <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label>
+                      <input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label>
+                      <div className="flex gap-2 relative">
+                        <div className="relative w-1/3">
+                          <select 
+                            value={code} 
+                            onChange={e => {
+                              const n = [...settings.contacts];
+                              n[i].phoneCode = e.target.value;
+                              n[i].phoneNumber = num;
+                              n[i].phone = e.target.value + num;
+                              setSettings({...settings, contacts: n});
+                            }}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none appearance-none"
+                          >
+                            {COUNTRY_CODES.map(cc => <option key={cc} value={cc}>{cc}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} />
+                        </div>
+                        <input 
+                          placeholder="612345678"
+                          value={num} 
+                          onChange={e => {
+                            let inputVal = e.target.value;
+                            // Verwijder de voorloopnul automatisch
+                            if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); 
+                            
+                            const n = [...settings.contacts];
+                            n[i].phoneCode = code;
+                            n[i].phoneNumber = inputVal;
+                            n[i].phone = code + inputVal;
+                            setSettings({...settings, contacts: n});
+                          }}
+                          className="w-2/3 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
           <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl">{t('save', lang)}</button>
         </div>
