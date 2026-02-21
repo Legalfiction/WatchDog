@@ -125,19 +125,34 @@ export default function App() {
     if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) setActiveTab('base');
   }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
 
+  // --- HIER ZIT DE ESSENTIËLE FIX VOOR DE RASPBERRY PI ---
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
+    
     const payload: any = { ...settings };
     payload.useCustomSchedule = true;
     payload.activeDays = [0,1,2,3,4,5,6];
     payload.schedules = JSON.parse(JSON.stringify(settings.schedules)); 
+
+    const nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+
+    // Controleer of de window voor VANDAAG in het verleden ligt
     if (settings.overrides[todayStr]) {
-        payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
+        if (settings.overrides[todayStr].end > nowTime) {
+            payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
+        } else {
+            // Eindtijd is al voorbij? Vertel de Pi dat de dag klaar is (start=stop=nu)
+            payload.schedules[todayIdx] = { startTime: nowTime, endTime: nowTime };
+        }
+    } else {
+        // Controleer ook de basis-planning voor vandaag
+        if (payload.schedules[todayIdx].endTime < nowTime) {
+            // Als de basis-deadline (bijv 10:00) al voorbij is, zet hem op 'nu' om vals alarm te voorkomen
+            payload.schedules[todayIdx] = { startTime: nowTime, endTime: nowTime };
+        }
     }
-    if (settings.overrides[tomorrowStr]) {
-        payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
-    }
+
     const timer = setTimeout(() => {
       fetch(`${activeUrl}/save_settings`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) }).catch(() => {});
     }, 800); 
@@ -260,4 +275,45 @@ export default function App() {
             </div>
           </div>
 
-          <section className="bg-white rounded-3xl border
+          <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
+            <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><div className="flex items-center gap-2"><Clock size={16} className="text-orange-600" /><h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('smart_plan', lang)}</h3></div><button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95">{t('open_week_plan', lang).toUpperCase()}</button></header>
+            <div className="p-4 space-y-4">
+              <div className="flex gap-3"><button onClick={() => toggleOverride('today')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('today', lang)}</button><button onClick={() => toggleOverride('tomorrow')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('tomorrow', lang)}</button></div>
+              <div className={`border rounded-2xl p-4 transition-all ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
+                <div className="grid grid-cols-2 gap-4"><div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label><input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/></div><div><label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label><input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/></div></div>
+                <p className={`text-[9px] font-black uppercase tracking-widest text-center mt-4 ${!isBase ? 'text-orange-600' : 'text-slate-400'}`}>{getBottomStatus()}</p>
+              </div>
+            </div>
+          </section>
+        </main>
+      )}
+
+      {showWeekPlan && <WeekPlanPage onClose={() => setShowWeekPlan(false)} settings={settings} setSettings={setSettings} lang={lang} daysVoluit={daysVoluit} t={t} />}
+      {showManual && <InfoPage onClose={() => setShowManual(false)} lang={lang} t={t} />}
+
+      {showSettings && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar"><header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
+            <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
+          </div>
+          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label><button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+            <div className="space-y-4">
+              {settings.contacts.map((c: any, i: number) => {
+                let code = c.phoneCode; let num = c.phoneNumber;
+                return (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
+                    <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5"><select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >{COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}</select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div><input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div></div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl">{t('save', lang)}</button>
+        </div>
+      )}
+    </div>
+  );
+}
