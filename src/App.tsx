@@ -1,15 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown
+  Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown, UserCheck, UserX
 } from 'lucide-react';
 
-// Modulaire imports (exact zoals in jouw mappenstructuur)
 import { COUNTRIES } from './constants/countries';
 import { t } from './constants/translations';
 import InfoPage from './components/InfoPage';
 import WeekPlanPage from './components/WeekPlanPage';
 
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
+
+const COUNTRY_CALLING_CODES = [
+  { name: "Afghanistan", code: "+93" }, { name: "Albanië", code: "+355" }, { name: "Algerije", code: "+213" },
+  { name: "Andorra", code: "+376" }, { name: "Angola", code: "+244" }, { name: "Argentinië", code: "+54" },
+  { name: "Australië", code: "+61" }, { name: "België", code: "+32" }, { name: "Brazilië", code: "+55" },
+  { name: "Canada", code: "+1" }, { name: "Chili", code: "+56" }, { name: "China", code: "+86" },
+  { name: "Colombia", code: "+57" }, { name: "Costa Rica", code: "+506" }, { name: "Cuba", code: "+53" },
+  { name: "Curaçao", code: "+599" }, { name: "Denemarken", code: "+45" }, { name: "Duitsland", code: "+49" },
+  { name: "Egypte", code: "+20" }, { name: "Frankrijk", code: "+33" }, { name: "Griekenland", code: "+30" },
+  { name: "Hongkong", code: "+852" }, { name: "Ierland", code: "+353" }, { name: "IJsland", code: "+354" },
+  { name: "India", code: "+91" }, { name: "Indonesië", code: "+62" }, { name: "Israël", code: "+972" },
+  { name: "Italië", code: "+39" }, { name: "Japan", code: "+81" }, { name: "Luxemburg", code: "+352" },
+  { name: "Marokko", code: "+212" }, { name: "Mexico", code: "+52" }, { name: "Monaco", code: "+377" },
+  { name: "Nederland", code: "+31" }, { name: "Noorwegen", code: "+47" }, { name: "Oostenrijk", code: "+43" },
+  { name: "Polen", code: "+48" }, { name: "Portugal", code: "+351" }, { name: "Spanje", code: "+34" },
+  { name: "Suriname", code: "+597" }, { name: "Turkije", code: "+90" }, { name: "Verenigd Koninkrijk", code: "+44" },
+  { name: "Verenigde Staten", code: "+1" }, { name: "Zuid-Afrika", code: "+27" }, { name: "Zweden", code: "+46" },
+  { name: "Zwitserland", code: "+41" }
+].sort((a, b) => a.name.localeCompare(b.name));
+
+const LANG_NAMES: any = {
+  nl: "Nederlands", en: "English", de: "Deutsch", fr: "Français", 
+  es: "Español", it: "Italiano", pl: "Polski", tr: "Türkçe"
+};
 
 const getLocalYYYYMMDD = (d: Date) => {
   const y = d.getFullYear();
@@ -28,6 +51,8 @@ export default function App() {
   const [showManual, setShowManual] = useState(false);
   const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing, setLastPing] = useState('--:--');
+  
+  const interactionTimer = useRef<number>(0); 
   
   const now = new Date();
   const todayStr = getLocalYYYYMMDD(now);
@@ -75,9 +100,10 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // Verwijder verstreken overschrijvingen
   useEffect(() => {
     const interval = setInterval(() => {
+      if (Date.now() - interactionTimer.current < 12000) return; 
+
       const d = new Date();
       const dStr = getLocalYYYYMMDD(d);
       const tStr = d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
@@ -86,16 +112,20 @@ export default function App() {
         if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
           const newOverrides = { ...prev.overrides };
           delete newOverrides[dStr];
-          if (activeTab === 'today') setActiveTab('base');
           return { ...prev, overrides: newOverrides };
         }
         return prev;
       });
-    }, 5000);
+    }, 2000); 
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, []);
 
-  // DE FIX: Sla op naar de Pi met 2000ms vertraging om terugspringen te voorkomen
+  useEffect(() => {
+    if (activeTab === 'today' && !settings.overrides[todayStr]) setActiveTab('base');
+    if (activeTab === 'tomorrow' && !settings.overrides[tomorrowStr]) setActiveTab('base');
+  }, [settings.overrides, activeTab, todayStr, tomorrowStr]);
+
+  // Synchronisatie met de Raspberry Pi (Reverted naar de werkende versie)
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -118,12 +148,11 @@ export default function App() {
         headers: {'Content-Type': 'application/json'}, 
         body: JSON.stringify(payload) 
       }).catch(() => {});
-    }, 2000); // <-- Aangepast naar 2 seconden
+    }, 800); 
     
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
-  // Zoek Raspberry Pi verbinding
   useEffect(() => {
     const find = async () => {
       for (const url of ENDPOINTS) { try { const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) }); if (res.ok) { setActiveUrl(url); setStatus('connected'); return; } } catch (e) {} }
@@ -132,7 +161,7 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
-  // Ping mechanisme
+  // Ping mechanisme (Reverted naar de werkende versie)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
@@ -152,11 +181,11 @@ export default function App() {
   }, [status, activeUrl]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
+    interactionTimer.current = Date.now(); 
     if (activeTab === type) { 
       setActiveTab('base'); 
       const newOverrides = {...settings.overrides};
-      const dateStr = type === 'today' ? todayStr : tomorrowStr;
-      delete newOverrides[dateStr];
+      delete newOverrides[type === 'today' ? todayStr : tomorrowStr];
       setSettings({...settings, overrides: newOverrides});
     } else { 
       setActiveTab(type); 
@@ -169,8 +198,9 @@ export default function App() {
   };
 
   const updateOverrideTime = (field: 'start'|'end', val: string) => {
-    let currentTab = activeTab;
-    if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
+    interactionTimer.current = Date.now(); 
+    let currentTab = activeTab === 'base' ? 'today' : activeTab;
+    if (activeTab === 'base') setActiveTab('today');
     const dStr = currentTab === 'today' ? todayStr : tomorrowStr; 
     const dIdx = currentTab === 'today' ? todayIdx : tomorrowIdx;
     const newO = {...settings.overrides}; 
@@ -182,14 +212,8 @@ export default function App() {
   const isBase = activeTab === 'base';
   const activeDateStr = activeTab === 'today' ? todayStr : tomorrowStr;
   const activeDayIdx = activeTab === 'today' ? todayIdx : tomorrowIdx;
-  const hasOverride = !!settings.overrides[activeDateStr];
-  
-  let displayStart = settings.schedules[todayIdx]?.startTime || '06:00';
-  let displayEnd = settings.schedules[todayIdx]?.endTime || '10:00';
-  if (!isBase && hasOverride) {
-    displayStart = settings.overrides[activeDateStr].start;
-    displayEnd = settings.overrides[activeDateStr].end;
-  }
+  const displayStart = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].start : settings.schedules[activeDayIdx].startTime;
+  const displayEnd = (!isBase && settings.overrides[activeDateStr]) ? settings.overrides[activeDateStr].end : settings.schedules[activeDayIdx].endTime;
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
@@ -200,22 +224,34 @@ export default function App() {
       `}</style>
 
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3"><div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div><div><h1 className="text-lg font-black italic tracking-tighter text-slate-800 uppercase">Barkr</h1><div className="flex items-center gap-1.5 text-[10px] font-bold uppercase"><div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} /><span>{status === 'offline' ? t('offline', lang) : settings.vacationMode ? t('idle', lang) : t('vigilant', lang)}</span></div></div></div>
-        <div className="flex gap-2"><button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Info size={20} className="text-slate-600"/></button><button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Settings size={20} className="text-slate-600"/></button></div>
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-600 p-1.5 rounded-lg shadow-sm"><Dog size={20} className="text-white" /></div>
+          <div>
+            <h1 className="text-lg font-black tracking-tighter text-slate-800 uppercase leading-none">Digitale Waakhond</h1>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase mt-1">
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500') : 'bg-red-500'}`} />
+              <span>{status === 'offline' ? t('offline', lang) : settings.vacationMode ? t('idle', lang) : t('vigilant', lang)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Info size={20} className="text-slate-600"/></button>
+          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"><Settings size={20} className="text-slate-600"/></button>
+        </div>
       </header>
 
       {!showSettings && !showManual && !showWeekPlan && (
-        <main className="flex-1 p-6 space-y-8 overflow-y-auto">
-          <div className="flex flex-col items-center pt-8">
+        <main className="flex-1 p-4 space-y-6 overflow-y-auto">
+          <div className="flex flex-col items-center pt-4">
             <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} disabled={status !== 'connected'} className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
-              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Barkr Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">{t('tap_sleep', lang)}</span></div></div>}
+              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">Tik voor slaapstand</span></div></div>}
             </button>
-            <div className="mt-8 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
+            <div className="mt-5 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
           </div>
 
           <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
             <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><div className="flex items-center gap-2"><Clock size={16} className="text-orange-600" /><h3 className="font-black text-xs uppercase tracking-tight text-slate-800">{t('smart_plan', lang)}</h3></div><button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95">{t('open_week_plan', lang).toUpperCase()}</button></header>
-            <div className="p-5 space-y-5">
+            <div className="p-4 space-y-4">
               <div className="flex gap-3"><button onClick={() => toggleOverride('today')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('today', lang)}</button><button onClick={() => toggleOverride('tomorrow')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('tomorrow', lang)}</button></div>
               <div className={`border rounded-2xl p-4 transition-all ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                 <div className="grid grid-cols-2 gap-4"><div><label className="text-[9px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label><input type="time" value={displayStart} onChange={e=>updateOverrideTime('start', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`}/></div><div><label className="text-[9px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label><input type="time" value={displayEnd} onChange={e=>updateOverrideTime('end', e.target.value)} className={`w-full border rounded-xl p-3 font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`}/></div></div>
@@ -232,11 +268,22 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar"><header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('country', lang)}</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {COUNTRIES[k].name} ({COUNTRIES[k].prefix})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
+            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
           </div>
-          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label><button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phone: COUNTRIES[settings.country].prefix}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
-            <div className="space-y-4">{settings.contacts.map((c: any, i: number) => (<div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4"><button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div><div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><input value={c.phone} onChange={e=>{const n=[...settings.contacts]; n[i].phone=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div><button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button></div>))}</div>
+          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label><button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+            <div className="space-y-4">
+              {settings.contacts.map((c: any, i: number) => {
+                let code = c.phoneCode; let num = c.phoneNumber;
+                return (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
+                    <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5"><select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >{COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}</select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div><input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div></div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
           <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl">{t('save', lang)}</button>
         </div>
