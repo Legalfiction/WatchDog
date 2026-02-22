@@ -85,7 +85,6 @@ export default function App() {
     return `${t('planning_for', lang)} ${activeTab === 'today' ? t('today', lang).toLowerCase() : t('tomorrow', lang).toLowerCase()} (${dayName})`;
   };
 
-  // 1. Automatisch verlopen overrides opruimen
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date();
@@ -104,7 +103,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // 2. Synchronisatie met de Raspberry Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -127,7 +125,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
-  // 3. Verbinding zoeken
   useEffect(() => {
     const find = async () => {
       for (const url of ENDPOINTS) { try { const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) }); if (res.ok) { setActiveUrl(url); setStatus('connected'); return; } } catch (e) {} }
@@ -136,11 +133,9 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
-  // 4. DE PROFESSIONELE PING (Draait ook in de achtergrond)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
     const doPing = () => {
-      // De check op visibilityState is hier bewust weggehaald
       if (!settingsRef.current.vacationMode) {
         fetch(`${activeUrl}/ping`, { 
           method: 'POST', 
@@ -224,11 +219,27 @@ export default function App() {
         <main className="flex-1 p-4 space-y-6 overflow-y-auto">
           <div className="flex flex-col items-center pt-4">
             <button onClick={() => setSettings({...settings, vacationMode: !settings.vacationMode})} disabled={status !== 'connected'} className={`relative w-72 h-72 rounded-full flex flex-col items-center justify-center transition-all duration-500 shadow-2xl overflow-hidden border-[10px] ${status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed' : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
-              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? <div className="flex flex-col items-center justify-center relative w-full h-full"><div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" /></div> : <div className="flex flex-col items-center justify-center w-full h-full relative"><img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" /><div className="absolute bottom-6 inset-x-0 text-center"><span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">Tik voor slaapstand</span></div></div>}
+              {status !== 'connected' ? <Wifi size={80} className="text-slate-400 animate-pulse"/> : settings.vacationMode ? (
+                <div className="flex flex-col items-center justify-center relative w-full h-full">
+                  <div className="absolute top-16 right-20 flex font-black text-blue-300 pointer-events-none z-10"><span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span></div>
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
+                  <div className="absolute bottom-6 inset-x-0 text-center">
+                    <span className="text-[10px] font-black uppercase text-slate-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-widest text-center px-4 leading-tight italic">
+                      De mand roept! Geen gewaak of geblaf: ik slaap nu.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
+                  <div className="absolute bottom-6 inset-x-0 text-center">
+                    <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">Tik voor slaapstand</span>
+                  </div>
+                </div>
+              )}
             </button>
-            <div className="mt-5 bg-white px-8 py-3 rounded-2xl border border-slate-100 shadow-sm text-center"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{t('heartbeat', lang)}</p><p className="text-3xl font-black text-slate-800 tabular-nums">{lastPing}</p></div>
             
-            <div onClick={() => { if (!isUserSet) setShowSettings(true); }} className={`mt-5 w-full px-6 py-4 rounded-2xl border shadow-sm flex items-center justify-center gap-4 transition-all duration-500 ${isUserSet ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-200 cursor-pointer hover:bg-red-100/50 active:scale-[0.98]'}`}>
+            <div onClick={() => { if (!isUserSet) setShowSettings(true); }} className={`mt-8 w-full px-6 py-4 rounded-2xl border shadow-sm flex items-center justify-center gap-4 transition-all duration-500 ${isUserSet ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-200 cursor-pointer hover:bg-red-100/50 active:scale-[0.98]'}`}>
               <div className={`p-3 rounded-full ${isUserSet ? 'bg-emerald-100 text-emerald-600 animate-gentle-bounce' : 'bg-red-100 text-red-600 animate-alert-pulse'}`}>{isUserSet ? <UserCheck size={24} /> : <UserX size={24} />}</div>
               <div className="text-left"><p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${isUserSet ? 'text-emerald-500' : 'text-red-500'}`}>Contactpersoon</p><p className={`text-sm font-black ${isUserSet ? 'text-emerald-700' : 'text-red-700'}`}>{isUserSet ? "Baasje is gekoppeld" : "Waar is het baasje?"}</p></div>
             </div>
