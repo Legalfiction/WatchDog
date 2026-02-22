@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown, UserCheck, UserX
 } from 'lucide-react';
+import { App as NativeApp } from '@capacitor/app';
 
 import { COUNTRIES } from './constants/countries';
 import { t } from './constants/translations';
@@ -148,22 +149,41 @@ export default function App() {
     find(); const i = setInterval(find, 5000); return () => clearInterval(i);
   }, []);
 
+  // DE NATIVE PING INTEGRATIE
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
-    const doPing = () => {
+    
+    let intervalId: any;
+
+    const doPing = async () => {
       if (!settingsRef.current.vacationMode) {
-        fetch(`${activeUrl}/ping`, { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) 
-        })
-        .then(res => { if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})); });
+        try {
+          const res = await fetch(`${activeUrl}/ping`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ name: settingsRef.current.name, secret: 'BARKR_SECURE_V1' }) 
+          });
+          if(res.ok) setLastPing(new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+        } catch (e) {
+          // Stille faal bij tijdelijk netwerkverlies
+        }
       }
     };
+
     doPing();
-    const i = setInterval(doPing, 5000); 
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') doPing(); });
-    return () => { clearInterval(i); };
+    intervalId = setInterval(doPing, 5000); 
+    
+    // Native app luisteraar (Vervangt de oude browser visibilityState)
+    const stateChangeListener = NativeApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        doPing(); // Direct pingen als de app weer geopend wordt
+      }
+    });
+
+    return () => { 
+      clearInterval(intervalId); 
+      stateChangeListener.then(listener => listener.remove());
+    };
   }, [status, activeUrl]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
