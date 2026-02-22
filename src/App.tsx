@@ -11,8 +11,22 @@ import WeekPlanPage from './components/WeekPlanPage';
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 
 const COUNTRY_CALLING_CODES = [
-  { name: "Nederland", code: "+31" }, { name: "België", code: "+32" }, { name: "Duitsland", code: "+49" },
-  { name: "Frankrijk", code: "+33" }, { name: "Spanje", code: "+34" }, { name: "Verenigd Koninkrijk", code: "+44" }
+  { name: "Afghanistan", code: "+93" }, { name: "Albanië", code: "+355" }, { name: "Algerije", code: "+213" },
+  { name: "Andorra", code: "+376" }, { name: "Angola", code: "+244" }, { name: "Argentinië", code: "+54" },
+  { name: "Australië", code: "+61" }, { name: "België", code: "+32" }, { name: "Brazilië", code: "+55" },
+  { name: "Canada", code: "+1" }, { name: "Chili", code: "+56" }, { name: "China", code: "+86" },
+  { name: "Colombia", code: "+57" }, { name: "Costa Rica", code: "+506" }, { name: "Cuba", code: "+53" },
+  { name: "Curaçao", code: "+599" }, { name: "Denemarken", code: "+45" }, { name: "Duitsland", code: "+49" },
+  { name: "Egypte", code: "+20" }, { name: "Frankrijk", code: "+33" }, { name: "Griekenland", code: "+30" },
+  { name: "Hongkong", code: "+852" }, { name: "Ierland", code: "+353" }, { name: "IJsland", code: "+354" },
+  { name: "India", code: "+91" }, { name: "Indonesië", code: "+62" }, { name: "Israël", code: "+972" },
+  { name: "Italië", code: "+39" }, { name: "Japan", code: "+81" }, { name: "Luxemburg", code: "+352" },
+  { name: "Marokko", code: "+212" }, { name: "Mexico", code: "+52" }, { name: "Monaco", code: "+377" },
+  { name: "Nederland", code: "+31" }, { name: "Noorwegen", code: "+47" }, { name: "Oostenrijk", code: "+43" },
+  { name: "Polen", code: "+48" }, { name: "Portugal", code: "+351" }, { name: "Spanje", code: "+34" },
+  { name: "Suriname", code: "+597" }, { name: "Turkije", code: "+90" }, { name: "Verenigd Koninkrijk", code: "+44" },
+  { name: "Verenigde Staten", code: "+1" }, { name: "Zuid-Afrika", code: "+27" }, { name: "Zweden", code: "+46" },
+  { name: "Zwitserland", code: "+41" }
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const LANG_NAMES: any = {
@@ -61,6 +75,7 @@ export default function App() {
     const p = saved ? JSON.parse(saved) : {};
     let defaultCountry = 'NL';
     if (p.country && COUNTRIES[p.country]) defaultCountry = p.country;
+    else if (p.language && COUNTRIES[p.language]) defaultCountry = p.language;
 
     return { 
       name: p.name || '', 
@@ -225,7 +240,7 @@ export default function App() {
                   <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
                   <div className="absolute bottom-6 inset-x-0 text-center">
                     <span className="text-[10px] font-black uppercase text-slate-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-widest text-center px-4 leading-tight italic">
-                      De mand roept! Geen gewaak of geblaf: ik slaap nu.
+                      App gepauzeerd. Geen bewaking.
                     </span>
                   </div>
                 </div>
@@ -264,8 +279,32 @@ export default function App() {
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar"><header className="flex justify-between items-center mb-4"><h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2><button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full shadow-sm"><X size={20}/></button></header>
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {COUNTRIES[k].name}</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
+            <div className="relative"><label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Taal / Language</label><div className="relative"><select value={settings.country} onChange={e=>setSettings({...settings, country: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">{Object.keys(COUNTRIES).map(k => (<option key={k} value={k}>{COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})</option>))}</select><ChevronDown className="absolute right-4 top-3.5 text-slate-400 pointer-events-none" size={18} /></div></div>
             <div><label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label><input value={settings.name} onChange={e=>setSettings({...settings, name:e.target.value})} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"/></div>
+          </div>
+          <div><label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label><button onClick={()=> setSettings({...settings, contacts:[...settings.contacts, {name:'', phoneCode: COUNTRIES[settings.country]?.prefix || '+31', phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31'}]})} className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"><Plus size={20}/></button>
+            <div className="space-y-4">
+              {settings.contacts.map((c: any, i: number) => {
+                let code = c.phoneCode; let num = c.phoneNumber;
+                if (code === undefined || num === undefined) {
+                  if (c.phone) {
+                    const cleanPhone = c.phone.replace(/\s+/g, '');
+                    const sortedCodes = [...COUNTRY_CALLING_CODES].map(x => x.code).sort((a,b) => b.length - a.length);
+                    const foundCode = sortedCodes.find(cc => cleanPhone.startsWith(cc));
+                    if (foundCode) { code = foundCode; num = cleanPhone.substring(foundCode.length); if (num.startsWith('0')) num = num.substring(1); } 
+                    else { code = COUNTRIES[settings.country]?.prefix || '+31'; num = cleanPhone; }
+                  } else { code = COUNTRIES[settings.country]?.prefix || '+31'; num = ''; }
+                }
+                return (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
+                    <button onClick={()=> {const n=[...settings.contacts]; n.splice(i,1); setSettings({...settings, contacts:n})}} className="absolute top-4 right-4 text-slate-300"><Trash2 size={18}/></button>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label><input placeholder={t('c_name', lang)} value={c.name} onChange={e=>{const n=[...settings.contacts]; n[i].name=e.target.value; setSettings({...settings, contacts:n})}} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"/></div>
+                    <div><label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label><div className="flex gap-2 relative"><div className="relative w-2/5"><select value={code} onChange={e => { const n = [...settings.contacts]; n[i].phoneCode = e.target.value; n[i].phoneNumber = num; n[i].phone = e.target.value + num; setSettings({...settings, contacts: n}); }} className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none" >{COUNTRY_CALLING_CODES.map(c => <option key={c.name+c.code} value={c.code}>{c.name} ({c.code})</option>)}</select><ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} /></div><input placeholder="612345678" value={num} onChange={e => { let inputVal = e.target.value; if (inputVal.startsWith('0')) inputVal = inputVal.substring(1); const n = [...settings.contacts]; n[i].phoneCode = code; n[i].phoneNumber = inputVal; n[i].phone = code + inputVal; setSettings({...settings, contacts: n}); }} className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"/></div></div>
+                    <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(c)})} className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"><ShieldCheck size={14}/> {t('test', lang)}</button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
           <button onClick={() => setShowSettings(false)} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl">{t('save', lang)}</button>
         </div>
