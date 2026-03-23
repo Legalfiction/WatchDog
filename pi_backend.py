@@ -1,157 +1,82 @@
-
-import json
-import os
-import time
-import requests
-import logging
-from datetime import datetime
+pi_backend.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import sqlite3, time, threading
+import requests
 
 app = Flask(__name__)
 CORS(app)
+DB = "monitor.db"
 
-# --- CONFIGURATIE ---
-DATA_FILE = "safeguard_users.json"
-TEXTMEBOT_URL = "http://api.textmebot.com/send.php"
-TEXTMEBOT_APIKEY = "ojtHErzSmwgW" 
+# ---------------- CONFIGURATIE ----------------
+TIMEOUT_SEC = 180   
+GRACE_PERIOD = 30   
 
-# Logging stil houden
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
+# ---------------- DATABASE INITIALISATIE ----------------
+def init_db():
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY, name TEXT, api_key TEXT UNIQUE)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS devices (
+        id INTEGER PRIMARY KEY, user_id INTEGER, device_id TEXT UNIQUE, 
+        last_seen REAL, status TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY, device_id TEXT, timestamp REAL, event TEXT)''')
+    # Maak een standaard gebruiker aan voor nu
+    c.execute("INSERT OR IGNORE INTO users (id, name, api_key) VALUES (1, 'Admin', 'default_key')")
+    conn.commit()
+    conn.close()
 
-def load_db():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+init_db()
 
-def save_db(db):
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(db, f, indent=4)
-    except:
-        pass
+def log_event(device_id, event):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("INSERT INTO logs (device_id, timestamp, event) VALUES (?, ?, ?)",
+              (device_id, time.time(), event))
+    conn.commit()
+    conn.close()
+    print(f"[{time.strftime('%H:%M:%S')}] {event} -> Device: {device_id}")
 
-def format_phone(phone):
-    """
-    Normaliseert telefoonnummers streng naar het +316... formaat
-    """
-    if not phone: return ""
-    p = str(phone).replace(' ', '').replace('-', '').strip()
-    
-    # 0031 -> +31
-    if p.startswith('0031'): p = '+' + p[2:]
-    
-    # Als het al met + begint, aannemen dat het goed is
-    if p.startswith('+'): return p
-    
-    # 06 -> +316
-    if p.startswith('06') and len(p) == 10: return '+316' + p[2:]
-    
-    # 316 -> +316
-    if p.startswith('316') and len(p) == 11: return '+' + p
-    
-    return p
-
-def send_whatsapp(phone, text):
-    p = format_phone(phone)
-    if not p: return False
-    params = {"recipient": p, "apikey": TEXTMEBOT_APIKEY, "text": text}
-    try:
-        r = requests.get(TEXTMEBOT_URL, params=params, timeout=10)
-        return r.status_code == 200
-    except Exception as e:
-        print(f"WhatsApp Fout: {e}")
-        return False
-
-@app.route('/status', methods=['GET'])
-def get_status():
-    return jsonify({"status": "online", "version": "11.2.3"})
-
-@app.route('/test_contact', methods=['POST'])
-def test_contact():
+@app.route("/ping", methods=["POST"])
+def ping():
     data = request.json
-    phone = format_phone(data.get('phone'))
-    name = data.get('name', 'Contact')
-    if not phone: return jsonify({"status": "error"}), 400
-    msg = f"🔔 *BARKR TESTBERICHT*\n\nDit is een test voor *{name}*. Uw Barkr waakhond is correct gekoppeld op dit nummer: {phone}"
-    if send_whatsapp(phone, msg):
-        return jsonify({"status": "success"})
-    return jsonify({"status": "error"}), 500
+    api_key = data.get("api_key", "default_key")
+    device_id = data.get("device_id", "unknown_device")
 
-@app.route('/save_settings', methods=['POST'])
-def save_settings():
-    data = request.json
-    phone = format_phone(data.get('myPhone', ''))
-    if not phone: return jsonify({"status": "error"}), 400
-    db = load_db()
-    data['myPhone'] = phone
-    db[phone] = data
-    save_db(db)
-    return jsonify({"status": "success"})
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO devices (user_id, device_id, last_seen, status) VALUES (1, ?, ?, ?)",
+              (device_id, time.time(), "online"))
+    conn.commit()
+    conn.close()
 
-@app.route('/ping', methods=['POST'])
-def handle_ping():
-    data = request.json
-    phone = format_phone(data.get('phone', ''))
-    if not phone: return jsonify({"status": "error"}), 400
-    db = load_db()
-    if phone not in db: db[phone] = {}
-    db[phone]["last_ping"] = time.time()
-    db[phone]["last_battery"] = data.get('battery', '?')
-    db[phone]["alarm_sent_today"] = False 
-    save_db(db)
-    return jsonify({"status": "success"})
+    log_event(device_id, "✅ PING ONTVANGEN")
+    return jsonify({"ok": True})
 
-@app.route('/get_settings', methods=['GET'])
-def get_settings():
-    phone = format_phone(request.args.get('phone'))
-    db = load_db()
-    if phone and phone in db: return jsonify(db[phone])
-    return jsonify({}), 404
+def monitor_devices():
+    while True:
+        conn = sqlite3.connect(DB)
+        c = conn.cursor()
+        c.execute("SELECT device_id, last_seen, status FROM devices")
+        all_devices = c.fetchall()
+        now = time.time()
 
-@app.route('/check_all', methods=['POST', 'GET'])
-def run_security_check():
-    db = load_db()
-    now = datetime.now()
-    current_weekday = now.weekday()
-    
-    for phone, info in db.items():
-        if info.get("vacationMode") or current_weekday not in info.get("activeDays", [0,1,2,3,4,5,6]):
-            continue
-        
-        et = info.get("endTime", "08:30")
-        if info.get("useCustomSchedule"):
-            sched = info.get("schedules", {}).get(str(current_weekday))
-            if sched: et = sched.get("endTime", et)
+        for device_id, last_seen, current_status in all_devices:
+            diff = now - last_seen
+            if diff > (TIMEOUT_SEC + GRACE_PERIOD) and current_status != "offline":
+                log_event(device_id, "🚨 ALARM: TOESTEL VERLOREN")
+                c.execute("UPDATE devices SET status='offline' WHERE device_id=?", (device_id,))
+                conn.commit()
+            elif diff < 10 and current_status == "offline":
+                log_event(device_id, "🔄 TOESTEL HERSTELD")
+                c.execute("UPDATE devices SET status='online' WHERE device_id=?", (device_id,))
+                conn.commit()
+        conn.close()
+        time.sleep(10)
 
-        try:
-            eh, em = map(int, et.split(':'))
-            deadline_ts = now.replace(hour=eh, minute=em, second=0).timestamp()
-            
-            if now.timestamp() > deadline_ts:
-                last_ping = info.get("last_ping", 0)
-                if last_ping < deadline_ts and not info.get("alarm_sent_today"):
-                    name = info.get('email', 'Gebruiker')
-                    msg = f"🚨 *BARKR NOODGEVAL* 🚨\n\nGebruiker: *{name}*\nGeen levensteken gedetecteerd voor de deadline van {et}.\n\nNeem direct contact op met de gebruiker op {phone}."
-                    
-                    success = False
-                    for c in info.get("contacts", []):
-                        if send_whatsapp(c.get('phone'), msg):
-                            success = True
-                    
-                    if success:
-                        info["alarm_sent_today"] = True
-        except Exception as e:
-            pass
-    
-    save_db(db)
-    return jsonify({"status": "ok", "processed_at": now.isoformat()})
+threading.Thread(target=monitor_devices, daemon=True).start()
 
-if __name__ == '__main__':
-    print("Barkr Backend v11.2.3 gestart...")
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
