@@ -39,6 +39,14 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Inject native Android bestanden
+        run: |
+          mkdir -p android/app/src/main/java/nl/barkr/app
+          cp BarkrService.java   android/app/src/main/java/nl/barkr/app/BarkrService.java
+          cp BootReceiver.java   android/app/src/main/java/nl/barkr/app/BootReceiver.java
+          cp AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          echo "✅ Native bestanden geïnjecteerd"
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
