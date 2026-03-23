@@ -1,605 +1,676 @@
-import os
-import json
-import sqlite3
-import time
-import threading
-import logging
-import requests
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from datetime import datetime
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog,
+  Clock, Info, ChevronDown, Wifi, MessageCircle, CheckCircle2,
+} from 'lucide-react';
 
-# ============================================================
-#   BARKR BACKEND v8.6 — PRODUCTIE
-#
-#   Nieuw in v8.6:
-#   - whatsapp_opted_in tabel: bijhoudt per telefoonnummer
-#     of de opt-in ooit is verstuurd.
-#   - /check_optin endpoint: app vraagt of nummer bekend is
-#   - /send_optin endpoint: verstuurt opt-in bericht en
-#     registreert het nummer als opted-in
-#   - Slim: één opt-in geldt voor alle Barkr gebruikers
-#     die datzelfde nummer als contact hebben
-# ============================================================
+import { TRANSLATIONS } from './constants/translations';
+import { COUNTRIES } from './constants/countries';
+import { InfoPage } from './components/InfoPage';
 
-DB_FILE       = os.path.expanduser("~/barkr/barkr_users.db")
-APP_SECRET    = "BARKR_SECURE_V1"
-TEXTMEBOT_KEY = "ojtHErzSmwgW"
-TEXTMEBOT_URL = "https://api.textmebot.com/send.php"
-PING_TIMEOUT  = 90
+// ============================================================
+//   CONSTANTEN
+// ============================================================
 
-app = Flask(__name__)
-CORS(app)
-logging.getLogger('werkzeug').setLevel(logging.ERROR)
+const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
+const APP_KEY   = 'BARKR_SECURE_V1';
 
-user_states: dict = {}
+const getLocalYYYYMMDD = (d: Date) => {
+  const y   = d.getFullYear();
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
+const t = (key: string, lang: string) =>
+  TRANSLATIONS[lang]?.[key] || TRANSLATIONS['nl']?.[key] || key;
 
-# ============================================================
-#   LOGGING
-# ============================================================
+const defaultSchedules: any = {};
+for (let i = 0; i < 7; i++) {
+  defaultSchedules[i] = { startTime: '06:00', endTime: '10:00' };
+}
 
-def log_status(msg: str):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+// ============================================================
+//   COMPONENT
+// ============================================================
 
+export default function App() {
+  const [activeUrl,    setActiveUrl]    = useState<string | null>(null);
+  const [status,       setStatus]       = useState<'searching' | 'connected' | 'offline'>('searching');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showManual,   setShowManual]   = useState(false);
+  const [showWeekPlan, setShowWeekPlan] = useState(false);
+  const [lastPing,     setLastPing]     = useState('--:--');
 
-# ============================================================
-#   DATABASE
-# ============================================================
+  // Opt-in status per telefoonnummer: { [phone]: 'unknown' | 'pending' | 'opted_in' }
+  const [optInStatus, setOptInStatus] = useState<Record<string, 'unknown' | 'pending' | 'opted_in'>>({});
 
-def init_db():
-    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
+  const now         = new Date();
+  const todayStr    = getLocalYYYYMMDD(now);
+  const todayIdx    = (now.getDay() + 6) % 7;
+  const tomorrow    = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = getLocalYYYYMMDD(tomorrow);
+  const tomorrowIdx = (tomorrow.getDay() + 6) % 7;
 
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_name           TEXT PRIMARY KEY,
-            contacts            TEXT    DEFAULT '[]',
-            active_days         TEXT    DEFAULT '[]',
-            schedules           TEXT    DEFAULT '{}',
-            use_custom_schedule INTEGER DEFAULT 1,
-            vacation_mode       INTEGER DEFAULT 0,
-            last_ping_time      TEXT    DEFAULT "",
-            active_window_start TEXT    DEFAULT "",
-            active_window_end   TEXT    DEFAULT ""
-        )
-    ''')
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS alarm_log (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_name    TEXT,
-            alarm_date   TEXT,
-            window_start TEXT,
-            window_end   TEXT,
-            fired_at     TEXT,
-            UNIQUE(user_name, alarm_date, window_start, window_end)
-        )
-    ''')
-
-    # Nieuw in v8.6: opt-in registratie per telefoonnummer
-    # Een opt-in geldt globaal — als nummer X bij gebruiker A
-    # al opt-in heeft, hoeft gebruiker B het niet opnieuw te doen
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS whatsapp_opted_in (
-            phone       TEXT PRIMARY KEY,
-            opted_in_at TEXT,
-            opted_in_by TEXT
-        )
-    ''')
-
-    migrations = [
-        "ALTER TABLE users ADD COLUMN vacation_mode INTEGER DEFAULT 0",
-        "ALTER TABLE users ADD COLUMN active_window_start TEXT DEFAULT ''",
-        "ALTER TABLE users ADD COLUMN active_window_end TEXT DEFAULT ''",
-    ]
-    for sql in migrations:
-        try:
-            c.execute(sql)
-        except sqlite3.OperationalError:
-            pass
-
-    conn.commit()
-    conn.close()
-    log_status("✅ DATABASE GEREED")
-
-
-def normalize_phone(phone: str) -> str:
-    """Normaliseert telefoonnummer naar consistente opslag: alleen cijfers met +."""
-    return phone.replace(' ', '').replace('-', '').strip()
-
-
-def is_opted_in(phone: str) -> bool:
-    """Controleert of een telefoonnummer ooit een opt-in heeft ontvangen."""
-    clean = normalize_phone(phone)
-    conn  = sqlite3.connect(DB_FILE)
-    c     = conn.cursor()
-    c.execute("SELECT phone FROM whatsapp_opted_in WHERE phone = ?", (clean,))
-    found = c.fetchone() is not None
-    conn.close()
-    return found
-
-
-def register_opt_in(phone: str, opted_in_by: str):
-    """Registreert een telefoonnummer als opted-in."""
-    clean = normalize_phone(phone)
-    conn  = sqlite3.connect(DB_FILE)
-    c     = conn.cursor()
-    c.execute("""INSERT OR IGNORE INTO whatsapp_opted_in (phone, opted_in_at, opted_in_by)
-                 VALUES (?, ?, ?)""",
-              (clean, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), opted_in_by))
-    conn.commit()
-    conn.close()
-
-
-def upsert_user(user_name: str, fields: dict):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-
-    c.execute("""SELECT last_ping_time, active_window_start, active_window_end
-                 FROM users WHERE user_name = ?""", (user_name,))
-    existing  = c.fetchone()
-    last_ping = existing[0] if existing else ""
-    win_start = existing[1] if existing else ""
-    win_end   = existing[2] if existing else ""
-
-    c.execute('''
-        INSERT INTO users (
-            user_name, contacts, active_days, schedules,
-            use_custom_schedule, vacation_mode,
-            last_ping_time, active_window_start, active_window_end
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(user_name) DO UPDATE SET
-            contacts            = excluded.contacts,
-            active_days         = excluded.active_days,
-            schedules           = excluded.schedules,
-            use_custom_schedule = excluded.use_custom_schedule,
-            vacation_mode       = excluded.vacation_mode
-    ''', (
-        user_name,
-        fields.get('contacts', '[]'),
-        fields.get('active_days', json.dumps([0,1,2,3,4,5,6])),
-        fields.get('schedules', '{}'),
-        int(fields.get('use_custom_schedule', True)),
-        int(fields.get('vacation_mode', False)),
-        last_ping,
-        win_start,
-        win_end,
-    ))
-    conn.commit()
-    conn.close()
-
-
-def reset_ping(user_name: str):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""UPDATE users SET
-                    last_ping_time      = '',
-                    active_window_start = '',
-                    active_window_end   = ''
-                 WHERE user_name = ?""", (user_name,))
-    conn.commit()
-    conn.close()
-
-
-def update_ping(user_name: str, timestamp: str,
-                win_start: str, win_end: str) -> bool:
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""UPDATE users SET
-                    last_ping_time      = ?,
-                    active_window_start = ?,
-                    active_window_end   = ?
-                 WHERE user_name = ?""",
-              (timestamp, win_start, win_end, user_name))
-    updated = c.rowcount
-    conn.commit()
-    conn.close()
-    return updated > 0
-
-
-def alarm_already_fired(user_name: str, alarm_date: str,
-                        window_start: str, window_end: str) -> bool:
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""SELECT id FROM alarm_log
-                 WHERE user_name=? AND alarm_date=?
-                 AND window_start=? AND window_end=?""",
-              (user_name, alarm_date, window_start, window_end))
-    found = c.fetchone() is not None
-    conn.close()
-    return found
-
-
-def mark_alarm_fired(user_name: str, alarm_date: str,
-                     window_start: str, window_end: str):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("""INSERT OR IGNORE INTO alarm_log
-                 (user_name, alarm_date, window_start, window_end, fired_at)
-                 VALUES (?, ?, ?, ?, ?)""",
-              (user_name, alarm_date, window_start, window_end,
-               datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-    conn.commit()
-    conn.close()
-
-
-# ============================================================
-#   AUTHENTICATIE
-# ============================================================
-
-def authenticate(data: dict) -> bool:
-    return (
-        data.get('app_key') == APP_SECRET or
-        data.get('secret')  == APP_SECRET
-    )
-
-
-# ============================================================
-#   WHATSAPP
-# ============================================================
-
-def send_whatsapp(phone: str, message: str) -> bool:
-    clean_phone = normalize_phone(phone).replace('+', '')
-    if not clean_phone:
-        return False
-    params = {
-        "recipient": clean_phone,
-        "apikey":    TEXTMEBOT_KEY,
-        "text":      message,
+  const [activeTab, setActiveTab] = useState<'base' | 'today' | 'tomorrow'>(() => {
+    const saved = localStorage.getItem('barkr_v16_data');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.overrides && parsed.overrides[todayStr])    return 'today';
+      if (parsed.overrides && parsed.overrides[tomorrowStr]) return 'tomorrow';
     }
-    try:
-        r = requests.get(TEXTMEBOT_URL, params=params, timeout=15)
-        return r.status_code == 200
-    except Exception as e:
-        log_status(f"⚠️ WhatsApp fout ({clean_phone}): {e}")
-        return False
+    return 'base';
+  });
 
+  const [settings, setSettings] = useState(() => {
+    const saved   = localStorage.getItem('barkr_v16_data');
+    const parsed  = saved ? JSON.parse(saved) : {};
+    let defaultCountry = 'NL';
+    if (parsed.country && COUNTRIES[parsed.country])        defaultCountry = parsed.country;
+    else if (parsed.language && COUNTRIES[parsed.language]) defaultCountry = parsed.language;
+    return {
+      name:         parsed.name         || '',
+      vacationMode: parsed.vacationMode || false,
+      country:      defaultCountry,
+      overrides:    parsed.overrides    || {},
+      contacts:     parsed.contacts     || [],
+      schedules:    (parsed.schedules && Object.keys(parsed.schedules).length > 0)
+                      ? parsed.schedules : defaultSchedules,
+    };
+  });
 
-def escalate_user(user: dict, start_str: str, end_str: str):
-    user_name = user['user_name']
-    contacts  = json.loads(user['contacts']) if user['contacts'] else []
+  const countryObj = COUNTRIES[settings.country] || COUNTRIES['NL'];
+  const lang       = countryObj?.lang || 'nl';
+  const daysVoluit = countryObj?.days || ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
 
-    message = (
-        f"🚨 *BARKR ALARM* 🚨\n\n"
-        f"Gebruiker: *{user_name}*\n"
-        f"Tijdvenster: {start_str} – {end_str}\n\n"
-        f"De ingestelde eindtijd is verstreken zonder dat er gebruik van het "
-        f"toestel is geregistreerd. Een mogelijke oorzaak is een lege batterij.\n\n"
-        f"Neem voor de zekerheid contact op met de gebruiker."
-    )
+  const isBase        = activeTab === 'base';
+  const activeDateStr = activeTab === 'today' ? todayStr   : tomorrowStr;
+  const activeDayIdx  = activeTab === 'today' ? todayIdx   : tomorrowIdx;
 
-    log_status(
-        f"📢 ALARM VERSTUURD → Gebruiker: {user_name} | "
-        f"Venster: {start_str}–{end_str} | Contacten: {len(contacts)}"
-    )
+  let displayStart = settings.schedules[todayIdx]?.startTime || '06:00';
+  let displayEnd   = settings.schedules[todayIdx]?.endTime   || '10:00';
+  if (!isBase && settings.overrides[activeDateStr]) {
+    displayStart = settings.overrides[activeDateStr].start;
+    displayEnd   = settings.overrides[activeDateStr].end;
+  }
 
-    for contact in contacts:
-        phone = contact.get('phone', '')
-        if phone:
-            success = send_whatsapp(phone, message)
-            if success:
-                log_status(f"✅ Alarm verzonden → {phone} ({contact.get('name', '?')})")
-            else:
-                log_status(f"❌ Verzenden mislukt → {phone} ({contact.get('name', '?')})")
-            time.sleep(6)
+  // ---- Opt-in check bij nieuw telefoonnummer ----
+  const checkOptIn = useCallback(async (phone: string) => {
+    if (!activeUrl || !phone || phone.length < 6) return;
+    setOptInStatus(prev => ({ ...prev, [phone]: 'unknown' }));
+    try {
+      const res = await fetch(`${activeUrl}/check_optin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ app_key: APP_KEY, phone }),
+      });
+      const data = await res.json();
+      setOptInStatus(prev => ({
+        ...prev,
+        [phone]: data.opted_in ? 'opted_in' : 'pending',
+      }));
+    } catch (e) {
+      // Stille faal bij netwerkverlies
+    }
+  }, [activeUrl]);
 
+  // Check opt-in voor alle bestaande contacten bij laden
+  useEffect(() => {
+    if (!activeUrl) return;
+    settings.contacts.forEach((c: any) => {
+      if (c.phone) checkOptIn(c.phone);
+    });
+  }, [activeUrl]);
 
-# ============================================================
-#   MONITORING LOOP
-# ============================================================
+  // ---- Opt-in bericht versturen ----
+  const sendOptIn = async (phone: string, contactName: string) => {
+    if (!activeUrl) return;
+    setOptInStatus(prev => ({ ...prev, [phone]: 'unknown' }));
+    try {
+      const res = await fetch(`${activeUrl}/send_optin`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          app_key:      APP_KEY,
+          phone,
+          contact_name: contactName,
+          user_name:    settings.name,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'sent') {
+        setOptInStatus(prev => ({ ...prev, [phone]: 'opted_in' }));
+      }
+    } catch (e) {
+      setOptInStatus(prev => ({ ...prev, [phone]: 'pending' }));
+    }
+  };
 
-def get_active_window(user: dict, day_idx: int) -> tuple[str, str]:
-    win_start = user.get('active_window_start', '')
-    win_end   = user.get('active_window_end',   '')
-    if win_start and win_end and win_start != '??:??' and win_end != '??:??':
-        return win_start, win_end
+  // ---- Automatisch vervallen overrides ----
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const d    = new Date();
+      const dStr = getLocalYYYYMMDD(d);
+      const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      setSettings((prev: any) => {
+        if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
+          const newOverrides = { ...prev.overrides };
+          delete newOverrides[dStr];
+          if (activeTab === 'today') setActiveTab('base');
+          return { ...prev, overrides: newOverrides };
+        }
+        return prev;
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
-    schedules = {}
-    if user.get('schedules'):
-        try:
-            schedules = json.loads(user['schedules'])
-        except Exception:
-            pass
-    day_sched = schedules.get(str(day_idx), {})
-    return day_sched.get('startTime', ''), day_sched.get('endTime', '')
+  // ---- Instellingen opslaan & naar server pushen ----
+  useEffect(() => {
+    localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
+    if (!activeUrl) return;
 
+    const payload: any = { ...settings };
+    payload.app_key           = APP_KEY;
+    payload.useCustomSchedule = true;
+    payload.activeDays        = [0, 1, 2, 3, 4, 5, 6];
+    payload.schedules         = JSON.parse(JSON.stringify(settings.schedules));
 
-def monitoring_loop():
-    log_status(
-        f"🚀 BARKR ENGINE v8.6 GESTART | "
-        f"Ping timeout: {PING_TIMEOUT}s | "
-        f"WhatsApp Opt-In Tracking Actief"
-    )
-
-    while True:
-        try:
-            current_time = time.time()
-
-            for uname, state in list(user_states.items()):
-                if (state["status"] == "online" and
-                        (current_time - state["last_ping"]) > PING_TIMEOUT):
-                    user_states[uname]["status"] = "offline"
-                    log_status(
-                        f"📵 TOESTEL OFFLINE → Gebruiker: {uname} | "
-                        f"Tijdvenster was: {state['window']}"
-                    )
-
-            conn = sqlite3.connect(DB_FILE)
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            c.execute("SELECT * FROM users")
-            users = c.fetchall()
-            conn.close()
-
-            now       = datetime.now()
-            today_str = now.strftime("%Y-%m-%d")
-            day_idx   = now.weekday()
-
-            for row in users:
-                user      = dict(row)
-                user_name = user['user_name']
-
-                if user.get('vacation_mode'):
-                    continue
-
-                active_days = []
-                if user.get('active_days'):
-                    try:
-                        active_days = json.loads(user['active_days'])
-                    except Exception:
-                        pass
-
-                if day_idx not in active_days:
-                    continue
-
-                start_str, end_str = get_active_window(user, day_idx)
-
-                if not start_str or not end_str:
-                    continue
-
-                try:
-                    start_dt = datetime.combine(
-                        now.date(),
-                        datetime.strptime(start_str, "%H:%M").time()
-                    )
-                    end_dt = datetime.combine(
-                        now.date(),
-                        datetime.strptime(end_str, "%H:%M").time()
-                    )
-                except ValueError:
-                    continue
-
-                if start_dt >= end_dt:
-                    continue
-
-                if now <= end_dt:
-                    continue
-
-                if alarm_already_fired(user_name, today_str, start_str, end_str):
-                    continue
-
-                log_status(
-                    f"🏁 Deadline {end_str} bereikt voor {user_name}. Beoordelen..."
-                )
-
-                last_ping_dt = None
-                if user.get('last_ping_time'):
-                    try:
-                        last_ping_dt = datetime.strptime(
-                            user['last_ping_time'], "%Y-%m-%d %H:%M:%S"
-                        )
-                    except ValueError:
-                        pass
-
-                was_actief = (
-                    last_ping_dt is not None and
-                    start_dt <= last_ping_dt < end_dt
-                )
-
-                if was_actief:
-                    log_status(f"✅ {user_name} was veilig actief. Geen alarm.")
-                else:
-                    escalate_user(user, start_str, end_str)
-
-                mark_alarm_fired(user_name, today_str, start_str, end_str)
-
-        except Exception as e:
-            log_status(f"⚠️ LOOP FOUT: {e}")
-
-        time.sleep(5)
-
-
-# ============================================================
-#   API ENDPOINTS
-# ============================================================
-
-@app.route('/status', methods=['GET'])
-def status():
-    return jsonify({"status": "online", "version": "8.6-PRODUCTIE"}), 200
-
-
-@app.route('/save_settings', methods=['POST'])
-def save_settings():
-    data = request.get_json(silent=True)
-    if not data or not authenticate(data):
-        log_status("🚫 /save_settings: Onbevoegd verzoek geweigerd")
-        return jsonify({"status": "error", "message": "Unauthorized"}), 403
-
-    user_name = (data.get('name') or '').strip()
-    if not user_name:
-        return jsonify({"status": "error", "message": "Naam ontbreekt"}), 400
-
-    upsert_user(user_name, {
-        'contacts':            json.dumps(data.get('contacts', [])),
-        'active_days':         json.dumps(data.get('activeDays', [0,1,2,3,4,5,6])),
-        'schedules':           json.dumps(data.get('schedules', {})),
-        'use_custom_schedule': data.get('useCustomSchedule', True),
-        'vacation_mode':       data.get('vacationMode', False),
-    })
-
-    reset_ping(user_name)
-    log_status(f"💾 INSTELLINGEN OPGESLAGEN → '{user_name}'")
-    return jsonify({"status": "ok"}), 200
-
-
-@app.route('/ping', methods=['POST'])
-def ping():
-    data = request.get_json(silent=True)
-    if not data or not authenticate(data):
-        return jsonify({"status": "error", "message": "Unauthorized"}), 403
-
-    user_name = (data.get('name') or '').strip()
-    if not user_name:
-        return jsonify({"status": "error", "message": "Naam ontbreekt"}), 400
-
-    active_window = data.get('active_window', {})
-    win_start     = active_window.get('start', '??:??')
-    win_end       = active_window.get('end',   '??:??')
-    window_str    = f"{win_start}–{win_end}"
-    now_str       = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    current_time  = time.time()
-
-    state = user_states.get(
-        user_name, {"status": "offline", "last_ping": 0, "window": ""}
-    )
-    if state["status"] == "offline":
-        log_status(f"📱 TOESTEL ONLINE → {user_name} | Venster: {window_str}")
-
-    user_states[user_name] = {
-        "status":    "online",
-        "last_ping": current_time,
-        "window":    window_str,
+    if (settings.overrides[todayStr]) {
+      payload.schedules[todayIdx] = {
+        startTime: settings.overrides[todayStr].start,
+        endTime:   settings.overrides[todayStr].end,
+      };
+    }
+    if (settings.overrides[tomorrowStr]) {
+      payload.schedules[tomorrowIdx] = {
+        startTime: settings.overrides[tomorrowStr].start,
+        endTime:   settings.overrides[tomorrowStr].end,
+      };
     }
 
-    user_updated = update_ping(user_name, now_str, win_start, win_end)
+    const timer = setTimeout(() => {
+      fetch(`${activeUrl}/save_settings`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
-    if not user_updated:
-        upsert_user(user_name, {
-            'contacts':            '[]',
-            'active_days':         json.dumps([0,1,2,3,4,5,6]),
-            'schedules':           '{}',
-            'use_custom_schedule': True,
-            'vacation_mode':       False,
+  // ---- Endpoint-detectie ----
+  const findConnection = useCallback(async () => {
+    for (const url of ENDPOINTS) {
+      try {
+        const res = await fetch(`${url}/status`, { signal: AbortSignal.timeout(1500) });
+        if (res.ok) { setActiveUrl(url); setStatus('connected'); return; }
+      } catch (e) {}
+    }
+    setStatus('offline');
+  }, []);
+
+  useEffect(() => {
+    findConnection();
+    const interval = setInterval(findConnection, 5000);
+    return () => clearInterval(interval);
+  }, [findConnection]);
+
+  // ---- PING ----
+  useEffect(() => {
+    if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
+
+    const sendPing = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetch(`${activeUrl}/ping`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:          settings.name,
+          app_key:       APP_KEY,
+          active_window: { start: displayStart, end: displayEnd },
+        }),
+      })
+        .then(res => {
+          if (res.ok) setLastPing(
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          );
         })
-        update_ping(user_name, now_str, win_start, win_end)
-        log_status(f"👤 NIEUWE GEBRUIKER → '{user_name}'")
+        .catch(() => {});
+    };
 
-    return jsonify({"status": "received"}), 200
+    if (document.visibilityState === 'visible') sendPing();
+    const pingInterval = setInterval(sendPing, 5000);
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') sendPing();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
-@app.route('/check_optin', methods=['POST'])
-def check_optin():
-    """
-    Controleert of een telefoonnummer al een WhatsApp opt-in
-    heeft ontvangen. De app roept dit aan zodra een nieuw
-    nummer wordt ingevoerd.
+    return () => {
+      clearInterval(pingInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [status, activeUrl, settings.vacationMode, settings.name, displayStart, displayEnd]);
 
-    Payload: { app_key, phone }
-    Response: { opted_in: true/false }
-    """
-    data = request.get_json(silent=True)
-    if not data or not authenticate(data):
-        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+  // ---- Override-beheer ----
+  const toggleOverride = (type: 'today' | 'tomorrow') => {
+    if (activeTab === type) {
+      setActiveTab('base');
+      const newOverrides = { ...settings.overrides };
+      delete newOverrides[type === 'today' ? todayStr : tomorrowStr];
+      setSettings({ ...settings, overrides: newOverrides });
+    } else {
+      setActiveTab(type);
+      const targetStr = type === 'today' ? todayStr   : tomorrowStr;
+      const targetIdx = type === 'today' ? todayIdx   : tomorrowIdx;
+      if (!settings.overrides[targetStr]) {
+        setSettings({
+          ...settings,
+          overrides: {
+            ...settings.overrides,
+            [targetStr]: {
+              start: settings.schedules[targetIdx]?.startTime || '06:00',
+              end:   settings.schedules[targetIdx]?.endTime   || '10:00',
+            },
+          },
+        });
+      }
+    }
+  };
 
-    phone = (data.get('phone') or '').strip()
-    if not phone:
-        return jsonify({"status": "error", "message": "Geen telefoonnummer"}), 400
+  const updateOverrideTime = (field: 'start' | 'end', value: string) => {
+    let currentTab = activeTab;
+    if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
+    const dateStr = currentTab === 'today' ? todayStr   : tomorrowStr;
+    const dayIdx  = currentTab === 'today' ? todayIdx   : tomorrowIdx;
+    const newOverrides = { ...settings.overrides };
+    if (!newOverrides[dateStr]) {
+      newOverrides[dateStr] = {
+        start: settings.schedules[dayIdx]?.startTime || '06:00',
+        end:   settings.schedules[dayIdx]?.endTime   || '10:00',
+      };
+    }
+    newOverrides[dateStr][field] = value;
+    setSettings({ ...settings, overrides: newOverrides });
+  };
 
-    opted_in = is_opted_in(phone)
-    log_status(
-        f"🔍 OPT-IN CHECK → {phone} | "
-        f"{'✅ Bekend' if opted_in else '❌ Nog niet aangemeld'}"
-    )
-    return jsonify({"opted_in": opted_in}), 200
+  // ============================================================
+  //   RENDER
+  // ============================================================
 
+  return (
+    <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-hidden">
+      <style>{`
+        @keyframes bounce-zz {
+          0%, 100% { transform: translateY(0);     opacity: 0.4; }
+          50%       { transform: translateY(-15px); opacity: 1;   }
+        }
+        .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        * { box-shadow: none !important; text-shadow: none !important; }
+      `}</style>
 
-@app.route('/send_optin', methods=['POST'])
-def send_optin():
-    """
-    Verstuurt het TextMeBot opt-in bericht naar een nieuw nummer
-    en registreert het als opted-in in de database.
+      {/* ---- HEADER ---- */}
+      <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-600 p-1.5 rounded-lg">
+            <Dog size={20} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black italic tracking-tighter text-slate-800 uppercase">Barkr</h1>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
+              <div className={`w-2 h-2 rounded-full ${
+                status === 'connected'
+                  ? (settings.vacationMode ? 'bg-blue-500' : 'bg-emerald-500')
+                  : 'bg-red-500'
+              }`} />
+              <span className={
+                status === 'connected'
+                  ? (settings.vacationMode ? 'text-blue-600' : 'text-emerald-600')
+                  : 'text-red-500'
+              }>
+                {status === 'offline'    ? t('offline',  lang) :
+                 status === 'searching' ? '...'                :
+                 settings.vacationMode  ? t('idle',     lang) :
+                                          t('vigilant', lang)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowManual(true)}
+            className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
+            <Info size={20} className="text-slate-600" />
+          </button>
+          <button onClick={() => setShowSettings(true)}
+            className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
+            <Settings size={20} className="text-slate-600" />
+          </button>
+        </div>
+      </header>
 
-    Payload: { app_key, phone, contact_name, user_name }
-    """
-    data = request.get_json(silent=True)
-    if not data or not authenticate(data):
-        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+      {/* ---- HOOFDSCHERM ---- */}
+      {!showSettings && !showManual && !showWeekPlan && (
+        <main className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar">
+          <div className="flex flex-col items-center pt-2">
+            <button
+              onClick={() => setSettings({ ...settings, vacationMode: !settings.vacationMode })}
+              disabled={status !== 'connected'}
+              className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 overflow-hidden border-[8px] ${
+                status !== 'connected'
+                  ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
+                  : settings.vacationMode
+                    ? 'bg-slate-900 border-slate-700'
+                    : 'bg-orange-600 border-orange-700'
+              }`}
+            >
+              {status !== 'connected' ? (
+                <Wifi size={60} className="text-slate-400 animate-pulse" />
+              ) : settings.vacationMode ? (
+                <div className="flex flex-col items-center justify-center relative w-full h-full">
+                  <div className="absolute top-12 right-16 flex font-black text-blue-300 pointer-events-none z-10">
+                    <span className="text-3xl animate-zz">Z</span>
+                    <span className="text-2xl animate-zz ml-1">z</span>
+                    <span className="text-xl animate-zz ml-1">z</span>
+                  </div>
+                  <img src="/logo.png" alt="Barkr Logo"
+                    className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center w-full h-full relative">
+                  <img src="/logo.png" alt="Barkr Logo"
+                    className="w-full h-full object-cover scale-[1.02]" />
+                  <div className="absolute bottom-5 inset-x-0 text-center">
+                    <span className="text-[10px] font-black uppercase text-white tracking-widest px-4 leading-tight italic">
+                      {t('tap_sleep', lang)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </button>
 
-    phone        = (data.get('phone')        or '').strip()
-    contact_name = (data.get('contact_name') or 'Contact').strip()
-    user_name    = (data.get('user_name')    or 'Barkr gebruiker').strip()
+            <div className="mt-4 w-full bg-white px-6 py-3 rounded-[20px] border border-slate-100 text-center flex flex-col items-center">
+              <div className="flex items-center gap-2 mb-1">
+                <Activity size={14} className="text-slate-400" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  {status === 'connected' ? t('heartbeat', lang) : t('last_check', lang)}
+                </p>
+              </div>
+              <p className="text-sm font-black text-slate-800 tabular-nums tracking-tight">{lastPing}</p>
+            </div>
+          </div>
 
-    if not phone:
-        return jsonify({"status": "error", "message": "Geen telefoonnummer"}), 400
+          <section className="bg-white rounded-[24px] border border-slate-100 overflow-hidden">
+            <header className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-orange-600" />
+                <h3 className="font-black text-[10px] uppercase tracking-tight text-slate-800">
+                  {t('week_plan', lang)}
+                </h3>
+              </div>
+              <button onClick={() => setShowWeekPlan(true)}
+                className="text-[9px] font-black px-3 py-1.5 rounded-full bg-slate-800 text-white active:scale-95">
+                {t('week_plan', lang).toUpperCase()}
+              </button>
+            </header>
 
-    # Stuur het TextMeBot activatiebericht
-    # De ontvanger moet zelf antwoorden op +34 623 78 95 80
-    # maar dit bericht legt uit wat ze moeten doen
-    message = (
-        f"👋 Hallo {contact_name}!\n\n"
-        f"*{user_name}* heeft je toegevoegd als noodcontact in de Barkr app "
-        f"— een digitale waakhond die alarmeert als er iets mis gaat.\n\n"
-        f"Om alarmmeldingen te kunnen ontvangen, moet je WhatsApp eenmalig "
-        f"worden geactiveerd. Stuur hiervoor het volgende bericht naar "
-        f"*+34 623 78 95 80*:\n\n"
-        f"`I allow callmebot to send me messages`\n\n"
-        f"Na activatie ontvang je automatisch een bevestiging. "
-        f"Je hoeft verder niets te doen. 🐾"
-    )
+            <div className="p-4 space-y-4">
+              <div className="flex gap-2">
+                <button onClick={() => toggleOverride('today')}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                    activeTab === 'today'
+                      ? 'bg-orange-600 border-orange-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-500'
+                  }`}>
+                  {t('today', lang)}
+                </button>
+                <button onClick={() => toggleOverride('tomorrow')}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                    activeTab === 'tomorrow'
+                      ? 'bg-orange-600 border-orange-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-500'
+                  }`}>
+                  {t('tomorrow', lang)}
+                </button>
+              </div>
 
-    success = send_whatsapp(phone, message)
+              <div className={`border rounded-xl p-3 transition-all ${
+                !isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'
+              }`}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black text-slate-400 uppercase ml-1">
+                      {t('start', lang)}
+                    </label>
+                    <input type="time" value={displayStart}
+                      onChange={e => updateOverrideTime('start', e.target.value)}
+                      className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${
+                        !isBase ? 'bg-white border-orange-200 text-orange-900'
+                                : 'bg-white border-slate-200 text-slate-700'
+                      }`} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-black text-red-400 uppercase ml-1">
+                      {t('deadline', lang)}
+                    </label>
+                    <input type="time" value={displayEnd}
+                      onChange={e => updateOverrideTime('end', e.target.value)}
+                      className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${
+                        !isBase ? 'bg-white border-orange-200 text-red-600'
+                                : 'bg-white border-slate-200 text-red-600'
+                      }`} />
+                  </div>
+                </div>
+                <p className={`text-[8px] font-black uppercase tracking-widest text-center mt-3 ${
+                  !isBase ? 'text-orange-600' : 'text-slate-400'
+                }`}>
+                  {isBase
+                    ? t('base_active', lang)
+                    : `${t('planning_for', lang)} ${
+                        activeTab === 'today' ? t('today', lang) : t('tomorrow', lang)
+                      } (${daysVoluit[activeDayIdx]})`
+                  }
+                </p>
+              </div>
+            </div>
+          </section>
+        </main>
+      )}
 
-    if success:
-        register_opt_in(phone, user_name)
-        log_status(
-            f"✅ OPT-IN VERSTUURD → {phone} ({contact_name}) "
-            f"namens '{user_name}'"
-        )
-        return jsonify({"status": "sent"}), 200
-    else:
-        log_status(f"❌ OPT-IN MISLUKT → {phone} ({contact_name})")
-        return jsonify({"status": "error", "message": "Verzenden mislukt"}), 500
+      {/* ---- WEEKPLANNING MODAL ---- */}
+      {showWeekPlan && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar">
+          <header className="flex justify-between items-center mb-2">
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-800">
+              {t('week_plan', lang)}
+            </h2>
+            <button onClick={() => setShowWeekPlan(false)} className="p-2 bg-white rounded-full border border-slate-200">
+              <X size={24} />
+            </button>
+          </header>
+          <div className="space-y-3">
+            {daysVoluit.map((dayName: string, d: number) => (
+              <div key={d} className="flex items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+                <span className="w-24 text-[11px] font-black text-slate-700 uppercase">{dayName}</span>
+                <input type="time"
+                  value={settings.schedules[d]?.startTime || '06:00'}
+                  onChange={e => setSettings({
+                    ...settings,
+                    schedules: { ...settings.schedules, [d]: { ...settings.schedules[d], startTime: e.target.value } },
+                  })}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-sm font-black text-center outline-none" />
+                <input type="time"
+                  value={settings.schedules[d]?.endTime || '10:00'}
+                  onChange={e => setSettings({
+                    ...settings,
+                    schedules: { ...settings.schedules, [d]: { ...settings.schedules[d], endTime: e.target.value } },
+                  })}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-2 text-sm font-black text-red-600 text-center outline-none" />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setShowWeekPlan(false)}
+            className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-[28px] tracking-[0.2em] active:scale-95 transition-all">
+            {t('save', lang)}
+          </button>
+        </div>
+      )}
 
+      {/* ---- INFO PAGINA ---- */}
+      {showManual && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto no-scrollbar">
+          <InfoPage onClose={() => setShowManual(false)} lang={lang} />
+        </div>
+      )}
 
-@app.route('/test_contact', methods=['POST'])
-def test_contact():
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"status": "error"}), 400
+      {/* ---- INSTELLINGEN ---- */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar">
+          <header className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">
+              {t('setup', lang)}
+            </h2>
+            <button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full border border-slate-200">
+              <X size={20} />
+            </button>
+          </header>
 
-    contact_name = data.get('name', 'Contact')
-    phone        = data.get('phone', '')
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div className="relative">
+              <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
+                {t('country', lang)}
+              </label>
+              <select value={settings.country}
+                onChange={e => setSettings({ ...settings, country: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">
+                {Object.keys(COUNTRIES).map(key => (
+                  <option key={key} value={key}>
+                    {COUNTRIES[key].flag} {COUNTRIES[key].name} ({COUNTRIES[key].prefix})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-4 top-8 text-slate-400 pointer-events-none" size={18} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                {t('user_name', lang)}
+              </label>
+              <input value={settings.name}
+                onChange={e => setSettings({ ...settings, name: e.target.value })}
+                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700" />
+            </div>
+          </div>
 
-    if not phone:
-        return jsonify({"status": "error", "message": "Geen telefoonnummer"}), 400
+          {/* ---- CONTACTENBEHEER ---- */}
+          <div>
+            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">
+              {t('contacts', lang)}
+            </label>
+            <button
+              onClick={() => setSettings({
+                ...settings,
+                contacts: [...settings.contacts, {
+                  name: '', phone: COUNTRIES[settings.country]?.prefix || '',
+                }],
+              })}
+              className="w-full bg-orange-600 text-white p-3 rounded-xl flex justify-center mb-4">
+              <Plus size={20} />
+            </button>
 
-    message = (
-        f"🔔 *BARKR TESTBERICHT*\n\n"
-        f"Hallo {contact_name}! Dit is een testbericht van Barkr.\n"
-        f"Uw nummer is succesvol gekoppeld als noodcontact.\n\n"
-        f"U hoeft niets te doen."
-    )
+            <div className="space-y-4">
+              {settings.contacts.map((c: any, i: number) => {
+                const phone      = c.phone || '';
+                const optin      = phone ? (optInStatus[phone] || 'unknown') : 'unknown';
+                const isOptedIn  = optin === 'opted_in';
+                const isPending  = optin === 'pending';
 
-    success = send_whatsapp(phone, message)
-    log_status(
-        f"{'✅' if success else '❌'} TESTBERICHT → "
-        f"{contact_name} ({phone}) — {'OK' if success else 'MISLUKT'}"
-    )
+                return (
+                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 relative space-y-4">
+                    <button
+                      onClick={() => {
+                        const n = [...settings.contacts]; n.splice(i, 1);
+                        setSettings({ ...settings, contacts: n });
+                      }}
+                      className="absolute top-4 right-4 text-slate-300">
+                      <Trash2 size={18} />
+                    </button>
 
-    if success:
-        return jsonify({"status": "success"}), 200
-    return jsonify({"status": "error", "message": "Verzenden mislukt"}), 500
+                    {/* NAAM */}
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">
+                        {t('c_name', lang)}
+                      </label>
+                      <input placeholder={t('c_name', lang)} value={c.name}
+                        onChange={e => {
+                          const n = [...settings.contacts]; n[i].name = e.target.value;
+                          setSettings({ ...settings, contacts: n });
+                        }}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none" />
+                    </div>
 
+                    {/* TELEFOONNUMMER */}
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">
+                        {t('c_phone', lang)}
+                      </label>
+                      <input value={c.phone}
+                        onChange={e => {
+                          const n = [...settings.contacts];
+                          n[i].phone = e.target.value;
+                          setSettings({ ...settings, contacts: n });
+                          // Check opt-in zodra nummer lang genoeg is
+                          if (e.target.value.length >= 8) {
+                            checkOptIn(e.target.value);
+                          }
+                        }}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none" />
+                    </div>
 
-# ============================================================
-#   OPSTARTEN
-# ============================================================
+                    {/* OPT-IN STATUS & KNOP */}
+                    {phone && phone.length >= 8 && (
+                      isOptedIn ? (
+                        // Nummer is al bekend — groene check tonen
+                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5">
+                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                          <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wide">
+                            WhatsApp actief
+                          </p>
+                        </div>
+                      ) : isPending ? (
+                        // Nummer nog niet bekend — activatieknop tonen
+                        <button
+                          onClick={() => sendOptIn(phone, c.name || 'Contact')}
+                          className="w-full bg-green-500 text-white text-[11px] font-black py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all">
+                          <MessageCircle size={16} />
+                          WHATSAPP ACTIVEREN
+                        </button>
+                      ) : null
+                    )}
 
-if __name__ == '__main__':
-    init_db()
-    threading.Thread(target=monitoring_loop, daemon=True).start()
-    log_status("🌐 WEBSERVER GESTART OP POORT 5000")
-    app.run(host='0.0.0.0', port=5000)
+                    {/* TEST KNOP */}
+                    <button
+                      onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body:    JSON.stringify(c),
+                      })}
+                      className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2">
+                      <ShieldCheck size={14} /> {t('test', lang)}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <button onClick={() => setShowSettings(false)}
+            className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em]">
+            {t('save', lang)}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
