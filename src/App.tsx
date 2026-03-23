@@ -15,8 +15,7 @@ import WeekPlanPage from './components/WeekPlanPage';
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 const APP_KEY   = 'BARKR_SECURE_V1';
 
-// Capacitor wordt alleen geladen als het beschikbaar is (native Android/iOS app).
-// In de Vercel web-omgeving is het niet aanwezig en wordt het veilig overgeslagen.
+// Capacitor alleen laden in native app, niet in browser (Vercel)
 const NativeApp = (() => {
   try { return (require('@capacitor/app') as any).App; } catch { return null; }
 })();
@@ -71,14 +70,8 @@ const COUNTRY_CALLING_CODES = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const LANG_NAMES: any = {
-  nl: "Nederlands",
-  en: "English",
-  de: "Deutsch",
-  fr: "Français",
-  es: "Español",
-  it: "Italiano",
-  pl: "Polski",
-  tr: "Türkçe",
+  nl: "Nederlands", en: "English", de: "Deutsch", fr: "Français",
+  es: "Español",   it: "Italiano", pl: "Polski",  tr: "Türkçe",
 };
 
 // ============================================================
@@ -109,6 +102,11 @@ export default function App() {
   const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing,     setLastPing]     = useState('--:--');
 
+  // Bijhouden of de pagina zichtbaar is (voorgrond) of niet (achtergrond)
+  // Dit is de kern van de dead man's switch:
+  // ping ALLEEN als de pagina zichtbaar is
+  const isVisibleRef = useRef<boolean>(true);
+
   const now         = new Date();
   const todayStr    = getLocalYYYYMMDD(now);
   const todayIdx    = (now.getDay() + 6) % 7;
@@ -131,7 +129,6 @@ export default function App() {
     let defaultCountry = 'NL';
     if (p.country && COUNTRIES[p.country])        defaultCountry = p.country;
     else if (p.language && COUNTRIES[p.language]) defaultCountry = p.language;
-
     return {
       name:         p.name         || '',
       vacationMode: p.vacationMode || false,
@@ -139,15 +136,14 @@ export default function App() {
       overrides:    p.overrides    || {},
       contacts:     p.contacts     || [],
       schedules:    (p.schedules && Object.keys(p.schedules).length > 0)
-                      ? p.schedules
-                      : defaultSchedules,
+                      ? p.schedules : defaultSchedules,
     };
   });
 
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-  // ---- Afleiding van actief tijdvenster ----
+  // ---- Actief tijdvenster ----
   const isBase        = activeTab === 'base';
   const activeDateStr = activeTab === 'today' ? todayStr    : tomorrowStr;
   const activeDayIdx  = activeTab === 'today' ? todayIdx    : tomorrowIdx;
@@ -163,16 +159,14 @@ export default function App() {
     activeWindowRef.current = { start: displayStart, end: displayEnd };
   }, [displayStart, displayEnd]);
 
-  // ---- Taal & vertalingen ----
+  // ---- Taal ----
   const countryObj = COUNTRIES[settings.country] || COUNTRIES['NL'];
   const lang       = countryObj.lang;
   const daysVoluit = countryObj.days;
 
   const getBottomStatus = () => {
     if (activeTab === 'base') return t('base_active', lang);
-    const dayName = activeTab === 'today'
-      ? daysVoluit[todayIdx]
-      : daysVoluit[tomorrowIdx];
+    const dayName = activeTab === 'today' ? daysVoluit[todayIdx] : daysVoluit[tomorrowIdx];
     return `${t('planning_for', lang)} ${
       activeTab === 'today'
         ? t('today',    lang).toLowerCase()
@@ -249,49 +243,73 @@ export default function App() {
   }, []);
 
   // ---- PING (hartslag) ----
+  // KERNLOGICA: ping stopt zodra de pagina naar de achtergrond gaat.
+  // Zonder ping denkt de server dat de gebruiker niet actief is → alarm.
+  // Dit is de dead man's switch.
   useEffect(() => {
     if (status !== 'connected' || !activeUrl) return;
 
     let intervalId: any;
 
     const doPing = async () => {
-      if (!settingsRef.current.vacationMode) {
-        try {
-          const res = await fetch(`${activeUrl}/ping`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name:          settingsRef.current.name,
-              app_key:       APP_KEY,
-              secret:        APP_KEY,
-              active_window: {
-                start: activeWindowRef.current.start,
-                end:   activeWindowRef.current.end,
-              },
-            }),
-          });
-          if (res.ok) {
-            setLastPing(
-              new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            );
-          }
-        } catch (e) {}
+      // Geen ping als:
+      // 1. Vakantie-modus aan
+      // 2. Pagina niet zichtbaar (achtergrond/scherm uit)
+      if (settingsRef.current.vacationMode) return;
+      if (!isVisibleRef.current) return;
+
+      try {
+        const res = await fetch(`${activeUrl}/ping`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name:          settingsRef.current.name,
+            app_key:       APP_KEY,
+            secret:        APP_KEY,
+            active_window: {
+              start: activeWindowRef.current.start,
+              end:   activeWindowRef.current.end,
+            },
+          }),
+        });
+        if (res.ok) {
+          setLastPing(
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          );
+        }
+      } catch (e) {
+        // Stille faal bij netwerkverlies
       }
     };
 
+    // Luister naar zichtbaarheid van de pagina (browser voorgrond/achtergrond)
+    const handleVisibilityChange = () => {
+      isVisibleRef.current = document.visibilityState === 'visible';
+      // Direct pingen zodra app weer voorgrond komt
+      if (isVisibleRef.current) doPing();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Native Capacitor luisteraar (Android/iOS app)
+    let stateChangeListener: any = null;
+    if (NativeApp) {
+      stateChangeListener = NativeApp.addListener(
+        'appStateChange',
+        ({ isActive }: any) => {
+          isVisibleRef.current = isActive;
+          if (isActive) doPing();
+        }
+      );
+    }
+
+    // Start ping interval
+    isVisibleRef.current = document.visibilityState === 'visible';
     doPing();
     intervalId = setInterval(doPing, 5000);
 
-    // Native app luisteraar — alleen actief in Capacitor (Android/iOS), niet in browser
-    let stateChangeListener: any = null;
-    if (NativeApp) {
-      stateChangeListener = NativeApp.addListener('appStateChange', ({ isActive }: any) => {
-        if (isActive) doPing();
-      });
-    }
-
     return () => {
       clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (stateChangeListener) {
         stateChangeListener.then((listener: any) => listener.remove());
       }
@@ -399,16 +417,12 @@ export default function App() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowManual(true)}
-            className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
-          >
+          <button onClick={() => setShowManual(true)}
+            className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
             <Info size={20} className="text-slate-600" />
           </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
-          >
+          <button onClick={() => setShowSettings(true)}
+            className="p-2.5 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
             <Settings size={20} className="text-slate-600" />
           </button>
         </div>
@@ -440,18 +454,20 @@ export default function App() {
                     <span className="text-2xl animate-zz ml-1">z</span>
                     <span className="text-xl animate-zz ml-1">z</span>
                   </div>
-                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
+                  <img src="/logo.png" alt="Logo"
+                    className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
                   <div className="absolute bottom-6 inset-x-0 text-center">
-                    <span className="text-[10px] font-black uppercase text-slate-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-widest text-center px-4 leading-tight italic">
+                    <span className="text-[10px] font-black uppercase text-slate-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-widest px-4 leading-tight italic">
                       App gepauzeerd. Geen bewaking.
                     </span>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
-                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
+                  <img src="/logo.png" alt="Logo"
+                    className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
                   <div className="absolute bottom-6 inset-x-0 text-center">
-                    <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">
+                    <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest px-4 leading-tight italic">
                       Tik voor slaapstand
                     </span>
                   </div>
@@ -478,9 +494,7 @@ export default function App() {
               <div className="text-left">
                 <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5 ${
                   isUserSet ? 'text-emerald-500' : 'text-red-500'
-                }`}>
-                  Contactpersoon
-                </p>
+                }`}>Contactpersoon</p>
                 <p className={`text-sm font-black ${
                   isUserSet ? 'text-emerald-700' : 'text-red-700'
                 }`}>
@@ -490,8 +504,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* WEEKPLANNING KNOP + VANDAAG/MORGEN + TIJDSVENSTER KAART */}
-          <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden transition-all">
+          {/* WEEKPLANNING KNOP + VANDAAG/MORGEN + TIJDSVENSTER */}
+          <section className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
             <header className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Clock size={16} className="text-orange-600" />
@@ -499,40 +513,32 @@ export default function App() {
                   {t('smart_plan', lang)}
                 </h3>
               </div>
-              <button
-                onClick={() => setShowWeekPlan(true)}
-                className="text-[9px] font-black px-3 py-1.5 rounded-full transition-all bg-slate-800 text-white shadow-sm active:scale-95"
-              >
+              <button onClick={() => setShowWeekPlan(true)}
+                className="text-[9px] font-black px-3 py-1.5 rounded-full bg-slate-800 text-white shadow-sm active:scale-95">
                 {t('open_week_plan', lang).toUpperCase()}
               </button>
             </header>
 
             <div className="p-4 space-y-4">
-              {/* VANDAAG / MORGEN KNOPPEN NAAST ELKAAR */}
               <div className="flex gap-3">
-                <button
-                  onClick={() => toggleOverride('today')}
+                <button onClick={() => toggleOverride('today')}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${
                     activeTab === 'today'
                       ? 'bg-orange-600 border-orange-700 text-white shadow-md'
                       : 'bg-slate-50 border-slate-200 text-slate-500'
-                  }`}
-                >
+                  }`}>
                   {t('today', lang)}
                 </button>
-                <button
-                  onClick={() => toggleOverride('tomorrow')}
+                <button onClick={() => toggleOverride('tomorrow')}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all border ${
                     activeTab === 'tomorrow'
                       ? 'bg-orange-600 border-orange-700 text-white shadow-md'
                       : 'bg-slate-50 border-slate-200 text-slate-500'
-                  }`}
-                >
+                  }`}>
                   {t('tomorrow', lang)}
                 </button>
               </div>
 
-              {/* TIJDSVENSTER KAART */}
               <div className={`border rounded-2xl p-4 transition-all ${
                 !isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'
               }`}>
@@ -541,31 +547,25 @@ export default function App() {
                     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">
                       {t('start', lang)}
                     </label>
-                    <input
-                      type="time"
-                      value={displayStart}
+                    <input type="time" value={displayStart}
                       onChange={e => updateOverrideTime('start', e.target.value)}
                       className={`w-full border rounded-xl p-3 font-black text-center outline-none ${
                         !isBase
                           ? 'bg-white border-orange-200 text-orange-900'
                           : 'bg-white border-slate-200 text-slate-700'
-                      }`}
-                    />
+                      }`} />
                   </div>
                   <div>
                     <label className="text-[9px] font-black text-red-400 uppercase ml-1">
                       {t('deadline', lang)}
                     </label>
-                    <input
-                      type="time"
-                      value={displayEnd}
+                    <input type="time" value={displayEnd}
                       onChange={e => updateOverrideTime('end', e.target.value)}
                       className={`w-full border rounded-xl p-3 font-black text-center outline-none ${
                         !isBase
                           ? 'bg-white border-orange-200 text-red-600'
                           : 'bg-white border-slate-200 text-red-600'
-                      }`}
-                    />
+                      }`} />
                   </div>
                 </div>
                 <p className={`text-[9px] font-black uppercase tracking-widest text-center mt-4 ${
@@ -579,23 +579,12 @@ export default function App() {
         </main>
       )}
 
-      {/* ---- SUBPAGINA'S ---- */}
       {showWeekPlan && (
-        <WeekPlanPage
-          onClose={() => setShowWeekPlan(false)}
-          settings={settings}
-          setSettings={setSettings}
-          lang={lang}
-          daysVoluit={daysVoluit}
-          t={t}
-        />
+        <WeekPlanPage onClose={() => setShowWeekPlan(false)} settings={settings}
+          setSettings={setSettings} lang={lang} daysVoluit={daysVoluit} t={t} />
       )}
       {showManual && (
-        <InfoPage
-          onClose={() => setShowManual(false)}
-          lang={lang}
-          t={t}
-        />
+        <InfoPage onClose={() => setShowManual(false)} lang={lang} t={t} />
       )}
 
       {/* ---- INSTELLINGEN ---- */}
@@ -610,18 +599,15 @@ export default function App() {
             </button>
           </header>
 
-          {/* TAAL & NAAM */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <div className="relative">
               <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">
                 Taal / Language
               </label>
               <div className="relative">
-                <select
-                  value={settings.country}
+                <select value={settings.country}
                   onChange={e => setSettings({ ...settings, country: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none"
-                >
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">
                   {Object.keys(COUNTRIES).map(k => (
                     <option key={k} value={k}>
                       {COUNTRIES[k].flag} {LANG_NAMES[COUNTRIES[k].lang] || COUNTRIES[k].name} ({COUNTRIES[k].name})
@@ -635,15 +621,12 @@ export default function App() {
               <label className="text-[10px] font-bold text-slate-400 uppercase">
                 {t('user_name', lang)}
               </label>
-              <input
-                value={settings.name}
+              <input value={settings.name}
                 onChange={e => setSettings({ ...settings, name: e.target.value })}
-                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700"
-              />
+                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700" />
             </div>
           </div>
 
-          {/* CONTACTENBEHEER */}
           <div>
             <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">
               {t('contacts', lang)}
@@ -651,18 +634,12 @@ export default function App() {
             <button
               onClick={() => setSettings({
                 ...settings,
-                contacts: [
-                  ...settings.contacts,
-                  {
-                    name:        '',
-                    phoneCode:   COUNTRIES[settings.country]?.prefix || '+31',
-                    phoneNumber: '',
-                    phone:       COUNTRIES[settings.country]?.prefix || '+31',
-                  },
-                ],
+                contacts: [...settings.contacts, {
+                  name: '', phoneCode: COUNTRIES[settings.country]?.prefix || '+31',
+                  phoneNumber: '', phone: COUNTRIES[settings.country]?.prefix || '+31',
+                }],
               })}
-              className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4"
-            >
+              className="w-full bg-orange-600 text-white p-3 rounded-xl shadow-md flex justify-center mb-4">
               <Plus size={20} />
             </button>
 
@@ -670,12 +647,10 @@ export default function App() {
               {settings.contacts.map((c: any, i: number) => {
                 let code = c.phoneCode;
                 let num  = c.phoneNumber;
-
                 if (code === undefined || num === undefined) {
                   if (c.phone) {
                     const cleanPhone  = c.phone.replace(/\s+/g, '');
-                    const sortedCodes = [...COUNTRY_CALLING_CODES]
-                      .map(x => x.code)
+                    const sortedCodes = [...COUNTRY_CALLING_CODES].map(x => x.code)
                       .sort((a, b) => b.length - a.length);
                     const foundCode = sortedCodes.find(cc => cleanPhone.startsWith(cc));
                     if (foundCode) {
@@ -691,53 +666,41 @@ export default function App() {
                     num  = '';
                   }
                 }
-
                 return (
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
                     <button
                       onClick={() => {
-                        const n = [...settings.contacts];
-                        n.splice(i, 1);
+                        const n = [...settings.contacts]; n.splice(i, 1);
                         setSettings({ ...settings, contacts: n });
                       }}
-                      className="absolute top-4 right-4 text-slate-300"
-                    >
+                      className="absolute top-4 right-4 text-slate-300">
                       <Trash2 size={18} />
                     </button>
-
                     <div>
                       <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">
                         {t('c_name', lang)}
                       </label>
-                      <input
-                        placeholder={t('c_name', lang)}
-                        value={c.name}
+                      <input placeholder={t('c_name', lang)} value={c.name}
                         onChange={e => {
-                          const n = [...settings.contacts];
-                          n[i].name = e.target.value;
+                          const n = [...settings.contacts]; n[i].name = e.target.value;
                           setSettings({ ...settings, contacts: n });
                         }}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none"
-                      />
+                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none" />
                     </div>
-
                     <div>
                       <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">
                         {t('c_phone', lang)}
                       </label>
-                      <div className="flex gap-2 relative">
+                      <div className="flex gap-2">
                         <div className="relative w-2/5">
-                          <select
-                            value={code}
+                          <select value={code}
                             onChange={e => {
                               const n = [...settings.contacts];
-                              n[i].phoneCode   = e.target.value;
-                              n[i].phoneNumber = num;
-                              n[i].phone       = e.target.value + num;
+                              n[i].phoneCode = e.target.value; n[i].phoneNumber = num;
+                              n[i].phone = e.target.value + num;
                               setSettings({ ...settings, contacts: n });
                             }}
-                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none"
-                          >
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold text-slate-700 outline-none appearance-none">
                             {COUNTRY_CALLING_CODES.map(cc => (
                               <option key={cc.name + cc.code} value={cc.code}>
                                 {cc.name} ({cc.code})
@@ -746,36 +709,25 @@ export default function App() {
                           </select>
                           <ChevronDown className="absolute right-2 top-3.5 text-slate-400 pointer-events-none" size={14} />
                         </div>
-                        <input
-                          placeholder="612345678"
-                          value={num}
+                        <input placeholder="612345678" value={num}
                           onChange={e => {
-                            let inputVal = e.target.value;
-                            if (inputVal.startsWith('0')) inputVal = inputVal.substring(1);
+                            let v = e.target.value;
+                            if (v.startsWith('0')) v = v.substring(1);
                             const n = [...settings.contacts];
-                            n[i].phoneCode   = code;
-                            n[i].phoneNumber = inputVal;
-                            n[i].phone       = code + inputVal;
+                            n[i].phoneCode = code; n[i].phoneNumber = v;
+                            n[i].phone = code + v;
                             setSettings({ ...settings, contacts: n });
                           }}
-                          className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none"
-                        />
+                          className="w-3/5 bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none" />
                       </div>
                     </div>
-
                     <button
-                      onClick={() =>
-                        activeUrl &&
-                        fetch(`${activeUrl}/test_contact`, {
-                          method:  'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body:    JSON.stringify(c),
-                        })
-                      }
-                      className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2"
-                    >
-                      <ShieldCheck size={14} />
-                      {t('test', lang)}
+                      onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(c),
+                      })}
+                      className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2">
+                      <ShieldCheck size={14} /> {t('test', lang)}
                     </button>
                   </div>
                 );
@@ -783,10 +735,8 @@ export default function App() {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowSettings(false)}
-            className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl"
-          >
+          <button onClick={() => setShowSettings(false)}
+            className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl">
             {t('save', lang)}
           </button>
         </div>
