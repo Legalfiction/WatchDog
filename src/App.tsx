@@ -2,9 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown, UserCheck, UserX
 } from 'lucide-react';
-const NativeApp = (() => {
-  try { return require('@capacitor/app').App; } catch { return null; }
-})();
 
 import { COUNTRIES } from './constants/countries';
 import { t } from './constants/translations';
@@ -18,53 +15,59 @@ import WeekPlanPage from './components/WeekPlanPage';
 const ENDPOINTS = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 const APP_KEY   = 'BARKR_SECURE_V1';
 
+// Capacitor wordt alleen geladen als het beschikbaar is (native Android/iOS app).
+// In de Vercel web-omgeving is het niet aanwezig en wordt het veilig overgeslagen.
+const NativeApp = (() => {
+  try { return (require('@capacitor/app') as any).App; } catch { return null; }
+})();
+
 const COUNTRY_CALLING_CODES = [
-  { name: "Afghanistan",        code: "+93"  },
-  { name: "Albanië",            code: "+355" },
-  { name: "Algerije",           code: "+213" },
-  { name: "Andorra",            code: "+376" },
-  { name: "Angola",             code: "+244" },
-  { name: "Argentinië",         code: "+54"  },
-  { name: "Australië",          code: "+61"  },
-  { name: "België",             code: "+32"  },
-  { name: "Brazilië",           code: "+55"  },
-  { name: "Canada",             code: "+1"   },
-  { name: "Chili",              code: "+56"  },
-  { name: "China",              code: "+86"  },
-  { name: "Colombia",           code: "+57"  },
-  { name: "Costa Rica",         code: "+506" },
-  { name: "Cuba",               code: "+53"  },
-  { name: "Curaçao",            code: "+599" },
-  { name: "Denemarken",         code: "+45"  },
-  { name: "Duitsland",          code: "+49"  },
-  { name: "Egypte",             code: "+20"  },
-  { name: "Frankrijk",          code: "+33"  },
-  { name: "Griekenland",        code: "+30"  },
-  { name: "Hongkong",           code: "+852" },
-  { name: "Ierland",            code: "+353" },
-  { name: "IJsland",            code: "+354" },
-  { name: "India",              code: "+91"  },
-  { name: "Indonesië",          code: "+62"  },
-  { name: "Israël",             code: "+972" },
-  { name: "Italië",             code: "+39"  },
-  { name: "Japan",              code: "+81"  },
-  { name: "Luxemburg",          code: "+352" },
-  { name: "Marokko",            code: "+212" },
-  { name: "Mexico",             code: "+52"  },
-  { name: "Monaco",             code: "+377" },
-  { name: "Nederland",          code: "+31"  },
-  { name: "Noorwegen",          code: "+47"  },
-  { name: "Oostenrijk",         code: "+43"  },
-  { name: "Polen",              code: "+48"  },
-  { name: "Portugal",           code: "+351" },
-  { name: "Spanje",             code: "+34"  },
-  { name: "Suriname",           code: "+597" },
-  { name: "Turkije",            code: "+90"  },
-  { name: "Verenigd Koninkrijk",code: "+44"  },
-  { name: "Verenigde Staten",   code: "+1"   },
-  { name: "Zuid-Afrika",        code: "+27"  },
-  { name: "Zweden",             code: "+46"  },
-  { name: "Zwitserland",        code: "+41"  },
+  { name: "Afghanistan",         code: "+93"  },
+  { name: "Albanië",             code: "+355" },
+  { name: "Algerije",            code: "+213" },
+  { name: "Andorra",             code: "+376" },
+  { name: "Angola",              code: "+244" },
+  { name: "Argentinië",          code: "+54"  },
+  { name: "Australië",           code: "+61"  },
+  { name: "België",              code: "+32"  },
+  { name: "Brazilië",            code: "+55"  },
+  { name: "Canada",              code: "+1"   },
+  { name: "Chili",               code: "+56"  },
+  { name: "China",               code: "+86"  },
+  { name: "Colombia",            code: "+57"  },
+  { name: "Costa Rica",          code: "+506" },
+  { name: "Cuba",                code: "+53"  },
+  { name: "Curaçao",             code: "+599" },
+  { name: "Denemarken",          code: "+45"  },
+  { name: "Duitsland",           code: "+49"  },
+  { name: "Egypte",              code: "+20"  },
+  { name: "Frankrijk",           code: "+33"  },
+  { name: "Griekenland",         code: "+30"  },
+  { name: "Hongkong",            code: "+852" },
+  { name: "Ierland",             code: "+353" },
+  { name: "IJsland",             code: "+354" },
+  { name: "India",               code: "+91"  },
+  { name: "Indonesië",           code: "+62"  },
+  { name: "Israël",              code: "+972" },
+  { name: "Italië",              code: "+39"  },
+  { name: "Japan",               code: "+81"  },
+  { name: "Luxemburg",           code: "+352" },
+  { name: "Marokko",             code: "+212" },
+  { name: "Mexico",              code: "+52"  },
+  { name: "Monaco",              code: "+377" },
+  { name: "Nederland",           code: "+31"  },
+  { name: "Noorwegen",           code: "+47"  },
+  { name: "Oostenrijk",          code: "+43"  },
+  { name: "Polen",               code: "+48"  },
+  { name: "Portugal",            code: "+351" },
+  { name: "Spanje",              code: "+34"  },
+  { name: "Suriname",            code: "+597" },
+  { name: "Turkije",             code: "+90"  },
+  { name: "Verenigd Koninkrijk", code: "+44"  },
+  { name: "Verenigde Staten",    code: "+1"   },
+  { name: "Zuid-Afrika",         code: "+27"  },
+  { name: "Zweden",              code: "+46"  },
+  { name: "Zwitserland",         code: "+41"  },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const LANG_NAMES: any = {
@@ -106,11 +109,9 @@ export default function App() {
   const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing,     setLastPing]     = useState('--:--');
 
-  const interactionTimer = useRef<number>(0);
-
-  const now        = new Date();
-  const todayStr   = getLocalYYYYMMDD(now);
-  const todayIdx   = (now.getDay() + 6) % 7;
+  const now         = new Date();
+  const todayStr    = getLocalYYYYMMDD(now);
+  const todayIdx    = (now.getDay() + 6) % 7;
   const tomorrowStr = getLocalYYYYMMDD(new Date(now.getTime() + 86400000));
   const tomorrowIdx = (todayIdx + 1) % 7;
 
@@ -128,29 +129,28 @@ export default function App() {
     const saved = localStorage.getItem('barkr_v16_data');
     const p     = saved ? JSON.parse(saved) : {};
     let defaultCountry = 'NL';
-    if (p.country && COUNTRIES[p.country])       defaultCountry = p.country;
+    if (p.country && COUNTRIES[p.country])        defaultCountry = p.country;
     else if (p.language && COUNTRIES[p.language]) defaultCountry = p.language;
 
     return {
-      name:        p.name        || '',
+      name:         p.name         || '',
       vacationMode: p.vacationMode || false,
-      country:     defaultCountry,
-      overrides:   p.overrides   || {},
-      contacts:    p.contacts    || [],
-      schedules:   (p.schedules && Object.keys(p.schedules).length > 0)
-                     ? p.schedules
-                     : defaultSchedules,
+      country:      defaultCountry,
+      overrides:    p.overrides    || {},
+      contacts:     p.contacts     || [],
+      schedules:    (p.schedules && Object.keys(p.schedules).length > 0)
+                      ? p.schedules
+                      : defaultSchedules,
     };
   });
 
-  // Ref zodat de ping-closure altijd de laatste settings leest
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
   // ---- Afleiding van actief tijdvenster ----
   const isBase        = activeTab === 'base';
-  const activeDateStr = activeTab === 'today' ? todayStr   : tomorrowStr;
-  const activeDayIdx  = activeTab === 'today' ? todayIdx   : tomorrowIdx;
+  const activeDateStr = activeTab === 'today' ? todayStr    : tomorrowStr;
+  const activeDayIdx  = activeTab === 'today' ? todayIdx    : tomorrowIdx;
   const displayStart  = (!isBase && settings.overrides[activeDateStr])
     ? settings.overrides[activeDateStr].start
     : settings.schedules[activeDayIdx]?.startTime ?? '06:00';
@@ -158,16 +158,15 @@ export default function App() {
     ? settings.overrides[activeDateStr].end
     : settings.schedules[activeDayIdx]?.endTime   ?? '10:00';
 
-  // Ref voor het actieve tijdvenster — beschikbaar in de ping-closure
   const activeWindowRef = useRef({ start: displayStart, end: displayEnd });
   useEffect(() => {
     activeWindowRef.current = { start: displayStart, end: displayEnd };
   }, [displayStart, displayEnd]);
 
   // ---- Taal & vertalingen ----
-  const countryObj  = COUNTRIES[settings.country] || COUNTRIES['NL'];
-  const lang        = countryObj.lang;
-  const daysVoluit  = countryObj.days;
+  const countryObj = COUNTRIES[settings.country] || COUNTRIES['NL'];
+  const lang       = countryObj.lang;
+  const daysVoluit = countryObj.days;
 
   const getBottomStatus = () => {
     if (activeTab === 'base') return t('base_active', lang);
@@ -187,7 +186,6 @@ export default function App() {
       const d    = new Date();
       const dStr = getLocalYYYYMMDD(d);
       const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-
       setSettings((prev: any) => {
         if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
           const newOverrides = { ...prev.overrides };
@@ -206,12 +204,11 @@ export default function App() {
     if (!activeUrl) return;
 
     const payload: any = { ...settings };
-    payload.app_key           = APP_KEY;                  // ← BEVEILIGINGSSLEUTEL
+    payload.app_key           = APP_KEY;
     payload.useCustomSchedule = true;
     payload.activeDays        = [0, 1, 2, 3, 4, 5, 6];
     payload.schedules         = JSON.parse(JSON.stringify(settings.schedules));
 
-    // Overrides verwerken in schedules-payload voor de server
     if (settings.overrides[todayStr]) {
       payload.schedules[todayIdx] = {
         startTime: settings.overrides[todayStr].start,
@@ -265,9 +262,9 @@ export default function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name:          settingsRef.current.name,
-              app_key:       APP_KEY,                       // ← BEVEILIGINGSSLEUTEL
-              secret:        APP_KEY,                       // ← achterwaartse compatibiliteit
-              active_window: {                              // ← ACTIEF TIJDVENSTER
+              app_key:       APP_KEY,
+              secret:        APP_KEY,
+              active_window: {
                 start: activeWindowRef.current.start,
                 end:   activeWindowRef.current.end,
               },
@@ -278,28 +275,27 @@ export default function App() {
               new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             );
           }
-        } catch (e) {
-          // Stille faal bij tijdelijk netwerkverlies
-        }
+        } catch (e) {}
       }
     };
 
     doPing();
     intervalId = setInterval(doPing, 5000);
 
-    // Native app luisteraar
+    // Native app luisteraar — alleen actief in Capacitor (Android/iOS), niet in browser
     let stateChangeListener: any = null;
-if (NativeApp) {
-  stateChangeListener = NativeApp.addListener('appStateChange', ({ isActive }: any) => {
-    if (isActive) doPing();
-  });
-}
-return () => {
-  clearInterval(intervalId);
-  if (stateChangeListener) {
-    stateChangeListener.then((listener: any) => listener.remove());
-  }
-};
+    if (NativeApp) {
+      stateChangeListener = NativeApp.addListener('appStateChange', ({ isActive }: any) => {
+        if (isActive) doPing();
+      });
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      if (stateChangeListener) {
+        stateChangeListener.then((listener: any) => listener.remove());
+      }
+    };
   }, [status, activeUrl]);
 
   // ---- Override-beheer ----
@@ -358,7 +354,7 @@ return () => {
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col overflow-x-hidden">
       <style>{`
         @keyframes bounce-zz {
-          0%, 100% { transform: translateY(0);    opacity: 0.4; }
+          0%, 100% { transform: translateY(0);     opacity: 0.4; }
           50%       { transform: translateY(-15px); opacity: 1;   }
         }
         .animate-zz { animation: bounce-zz 2.5s infinite ease-in-out; }
@@ -444,11 +440,7 @@ return () => {
                     <span className="text-2xl animate-zz ml-1">z</span>
                     <span className="text-xl animate-zz ml-1">z</span>
                   </div>
-                  <img
-                    src="/logo.png"
-                    alt="Logo"
-                    className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale"
-                  />
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
                   <div className="absolute bottom-6 inset-x-0 text-center">
                     <span className="text-[10px] font-black uppercase text-slate-300 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] tracking-widest text-center px-4 leading-tight italic">
                       App gepauzeerd. Geen bewaking.
@@ -457,11 +449,7 @@ return () => {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
-                  <img
-                    src="/logo.png"
-                    alt="Logo"
-                    className="w-full h-full object-cover scale-[1.02] drop-shadow-xl"
-                  />
+                  <img src="/logo.png" alt="Logo" className="w-full h-full object-cover scale-[1.02] drop-shadow-xl" />
                   <div className="absolute bottom-6 inset-x-0 text-center">
                     <span className="text-[11px] font-black uppercase text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)] tracking-widest text-center px-4 leading-tight italic">
                       Tik voor slaapstand
@@ -689,7 +677,7 @@ return () => {
                     const sortedCodes = [...COUNTRY_CALLING_CODES]
                       .map(x => x.code)
                       .sort((a, b) => b.length - a.length);
-                    const foundCode   = sortedCodes.find(cc => cleanPhone.startsWith(cc));
+                    const foundCode = sortedCodes.find(cc => cleanPhone.startsWith(cc));
                     if (foundCode) {
                       code = foundCode;
                       num  = cleanPhone.substring(foundCode.length);
@@ -706,7 +694,6 @@ return () => {
 
                 return (
                   <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative space-y-4">
-                    {/* PRULLENBAK */}
                     <button
                       onClick={() => {
                         const n = [...settings.contacts];
@@ -718,7 +705,6 @@ return () => {
                       <Trash2 size={18} />
                     </button>
 
-                    {/* NAAM */}
                     <div>
                       <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">
                         {t('c_name', lang)}
@@ -735,7 +721,6 @@ return () => {
                       />
                     </div>
 
-                    {/* TELEFOONNUMMER */}
                     <div>
                       <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">
                         {t('c_phone', lang)}
@@ -778,7 +763,6 @@ return () => {
                       </div>
                     </div>
 
-                    {/* TEST KNOP */}
                     <button
                       onClick={() =>
                         activeUrl &&
@@ -799,7 +783,6 @@ return () => {
             </div>
           </div>
 
-          {/* OPSLAAN KNOP */}
           <button
             onClick={() => setShowSettings(false)}
             className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] shadow-2xl"
