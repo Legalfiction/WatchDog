@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, Plus, Trash2, X, Dog, Clock, Info, Wifi, ShieldCheck, ChevronDown, UserCheck, UserX
 } from 'lucide-react';
-import { App as NativeApp } from '@capacitor/app';
+const NativeApp = (() => {
+  try { return require('@capacitor/app').App; } catch { return null; }
+})();
 
 import { COUNTRIES } from './constants/countries';
 import { t } from './constants/translations';
@@ -286,14 +288,18 @@ export default function App() {
     intervalId = setInterval(doPing, 5000);
 
     // Native app luisteraar
-    const stateChangeListener = NativeApp.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) doPing();
-    });
-
-    return () => {
-      clearInterval(intervalId);
-      stateChangeListener.then(listener => listener.remove());
-    };
+    let stateChangeListener: any = null;
+if (NativeApp) {
+  stateChangeListener = NativeApp.addListener('appStateChange', ({ isActive }: any) => {
+    if (isActive) doPing();
+  });
+}
+return () => {
+  clearInterval(intervalId);
+  if (stateChangeListener) {
+    stateChangeListener.then((listener: any) => listener.remove());
+  }
+};
   }, [status, activeUrl]);
 
   // ---- Override-beheer ----
