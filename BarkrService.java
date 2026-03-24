@@ -29,8 +29,9 @@ public class BarkrService extends Service {
     private static final String TAG             = "BarkrService";
     private static final String CHANNEL_ID      = "barkr_foreground";
     private static final int    NOTIFICATION_ID = 1001;
-    private static final long   PING_INTERVAL   = 60_000; // 60 seconden
+    private static final long   PING_INTERVAL   = 60_000;
     private static final String APP_KEY         = "BARKR_SECURE_V1";
+    private static final String SERVER_URL      = "https://barkr.nl";
     private static final String PREFS_NAME      = "BarkrPrefs";
 
     private Handler               handler;
@@ -46,12 +47,11 @@ public class BarkrService extends Service {
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BarkrApp::WakeLock");
         wakeLock.acquire();
-        Log.d(TAG, "BarkrService aangemaakt");
+        Log.d(TAG, "BarkrService gestart");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "BarkrService gestart");
         try {
             startForeground(NOTIFICATION_ID, buildNotification());
         } catch (Exception e) {
@@ -91,7 +91,6 @@ public class BarkrService extends Service {
                 }
             }
         };
-        // Direct eerste ping bij start
         handler.post(pingRunnable);
     }
 
@@ -101,32 +100,22 @@ public class BarkrService extends Service {
             public void run() {
                 try {
                     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                    String  userName     = prefs.getString("user_name",    "");
-                    String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
-                    String  windowStart  = prefs.getString("window_start",  "00:00");
-                    String  windowEnd    = prefs.getString("window_end",    "00:00");
-                    boolean vacationMode = prefs.getBoolean("vacation_mode", false);
+                    String userName = prefs.getString("user_name", "");
 
-                    // Ping altijd als naam bekend is, ook als vacation mode aan
-                    // De server beslist wat er met de ping gebeurt
-                    if (userName.isEmpty() || userName.length() < 3) {
-                        Log.d(TAG, "Ping overgeslagen: naam niet ingesteld in SharedPreferences");
+                    // Ping alleen als naam minimaal 3 tekens is
+                    if (userName.length() < 3) {
+                        Log.d(TAG, "Ping overgeslagen: naam te kort of leeg");
                         return;
                     }
 
-                    JSONObject activeWindow = new JSONObject();
-                    activeWindow.put("start", windowStart);
-                    activeWindow.put("end",   windowEnd);
-
+                    // Stuur alleen naam - Pi zoekt zelf tijdvenster op
                     JSONObject payload = new JSONObject();
-                    payload.put("name",          userName);
-                    payload.put("app_key",        APP_KEY);
-                    payload.put("secret",         APP_KEY);
-                    payload.put("active_window",  activeWindow);
-                    payload.put("vacation_mode",  vacationMode);
-                    payload.put("source",         "background_service");
+                    payload.put("name",    userName);
+                    payload.put("app_key", APP_KEY);
+                    payload.put("secret",  APP_KEY);
+                    payload.put("source",  "background_service");
 
-                    URL url = new URL(serverUrl + "/ping");
+                    URL url = new URL(SERVER_URL + "/heartbeat");
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("Content-Type", "application/json");
@@ -142,13 +131,10 @@ public class BarkrService extends Service {
                     int code = conn.getResponseCode();
                     conn.disconnect();
 
-                    Log.d(TAG, "✅ Ping → " + userName +
-                        " | " + windowStart + "–" + windowEnd +
-                        " | vacation=" + vacationMode +
-                        " | HTTP " + code);
+                    Log.d(TAG, "✅ Heartbeat → " + userName + " | HTTP " + code);
 
                 } catch (Exception e) {
-                    Log.w(TAG, "Ping mislukt: " + e.getMessage());
+                    Log.w(TAG, "Heartbeat mislukt: " + e.getMessage());
                 }
             }
         }).start();
@@ -180,7 +166,6 @@ public class BarkrService extends Service {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
-            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build();
     }
