@@ -26,16 +26,16 @@ import java.nio.charset.StandardCharsets;
 
 public class BarkrService extends Service {
 
-    private static final String TAG             = "BarkrService";
-    private static final String CHANNEL_ID      = "barkr_foreground";
+    private static final String TAG            = "BarkrService";
+    private static final String CHANNEL_ID     = "barkr_foreground";
     private static final int    NOTIFICATION_ID = 1001;
-    private static final long   PING_INTERVAL   = 60_000;
-    private static final String APP_KEY         = "BARKR_SECURE_V1";
-    private static final String PREFS_NAME      = "BarkrPrefs";
+    private static final long   PING_INTERVAL  = 60_000;
+    private static final String APP_KEY        = "BARKR_SECURE_V1";
+    private static final String PREFS_NAME     = "BarkrPrefs";
 
-    private Handler           handler;
-    private Runnable          pingRunnable;
-    private boolean           isRunning = false;
+    private Handler              handler;
+    private Runnable             pingRunnable;
+    private boolean              isRunning = false;
     private PowerManager.WakeLock wakeLock;
 
     @Override
@@ -44,14 +44,9 @@ public class BarkrService extends Service {
         handler = new Handler(Looper.getMainLooper());
         createNotificationChannel();
 
-        // Wake lock voorkomt dat Android de CPU sloopt en de service killt
-        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "BarkrApp::BarkrWakeLock"
-        );
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BarkrApp::WakeLock");
         wakeLock.acquire();
-        Log.d(TAG, "✅ WakeLock verkregen");
     }
 
     @Override
@@ -69,7 +64,6 @@ public class BarkrService extends Service {
             startPingLoop();
         }
 
-        // START_STICKY herstart de service automatisch als Android hem toch killt
         return START_STICKY;
     }
 
@@ -87,20 +81,9 @@ public class BarkrService extends Service {
             handler.removeCallbacks(pingRunnable);
         }
 
-        // Geef wake lock vrij
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
-            Log.d(TAG, "WakeLock vrijgegeven");
         }
-
-        // Herstart de service onmiddellijk als hij gestopt wordt
-        Intent restartIntent = new Intent(getApplicationContext(), BarkrService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(restartIntent);
-        } else {
-            startService(restartIntent);
-        }
-        Log.d(TAG, "Service herstart na onDestroy");
     }
 
     private void startPingLoop() {
@@ -117,46 +100,51 @@ public class BarkrService extends Service {
     }
 
     private void sendPingInBackground() {
-        new Thread(() -> {
-            try {
-                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                String  userName     = prefs.getString("user_name",    "");
-                String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
-                String  windowStart  = prefs.getString("window_start",  "00:00");
-                String  windowEnd    = prefs.getString("window_end",    "00:00");
-                boolean vacationMode = prefs.getBoolean("vacation_mode", false);
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                    String  userName     = prefs.getString("user_name",    "");
+                    String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
+                    String  windowStart  = prefs.getString("window_start",  "00:00");
+                    String  windowEnd    = prefs.getString("window_end",    "00:00");
+                    boolean vacationMode = prefs.getBoolean("vacation_mode", false);
 
-                if (userName.isEmpty() || vacationMode) return;
+                    if (userName.isEmpty() || vacationMode) {
+                        return;
+                    }
 
-                JSONObject activeWindow = new JSONObject();
-                activeWindow.put("start", windowStart);
-                activeWindow.put("end",   windowEnd);
+                    JSONObject activeWindow = new JSONObject();
+                    activeWindow.put("start", windowStart);
+                    activeWindow.put("end",   windowEnd);
 
-                JSONObject payload = new JSONObject();
-                payload.put("name",          userName);
-                payload.put("app_key",       APP_KEY);
-                payload.put("secret",        APP_KEY);
-                payload.put("active_window", activeWindow);
+                    JSONObject payload = new JSONObject();
+                    payload.put("name",          userName);
+                    payload.put("app_key",       APP_KEY);
+                    payload.put("secret",        APP_KEY);
+                    payload.put("active_window", activeWindow);
 
-                URL url = new URL(serverUrl + "/ping");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(10_000);
-                conn.setReadTimeout(10_000);
+                    URL url = new URL(serverUrl + "/ping");
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setDoOutput(true);
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(10000);
 
-                byte[] body = payload.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] body = payload.toString().getBytes(StandardCharsets.UTF_8);
+                    OutputStream os = conn.getOutputStream();
                     os.write(body);
+                    os.close();
+
+                    int code = conn.getResponseCode();
+                    conn.disconnect();
+                    Log.d(TAG, "Ping OK: " + userName + " HTTP " + code);
+
+                } catch (Exception e) {
+                    Log.w(TAG, "Ping mislukt: " + e.getMessage());
                 }
-
-                int code = conn.getResponseCode();
-                conn.disconnect();
-                Log.d(TAG, "Ping → " + userName + " | HTTP " + code);
-
-            } catch (Exception e) {
-                Log.w(TAG, "Ping mislukt: " + e.getMessage());
             }
         }).start();
     }
