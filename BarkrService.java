@@ -86,7 +86,7 @@ public class BarkrService extends Service {
             @Override
             public void run() {
                 if (isRunning) {
-                    sendPing();
+                    sendHeartbeat();
                     handler.postDelayed(this, PING_INTERVAL);
                 }
             }
@@ -94,26 +94,26 @@ public class BarkrService extends Service {
         handler.post(pingRunnable);
     }
 
-    private void sendPing() {
+    private void sendHeartbeat() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+                    String ownPhone = prefs.getString("own_phone", "");
                     String userName = prefs.getString("user_name", "");
 
-                    // Ping alleen als naam minimaal 3 tekens is
-                    if (userName.length() < 3) {
-                        Log.d(TAG, "Ping overgeslagen: naam te kort of leeg");
+                    if (ownPhone.isEmpty()) {
+                        Log.d(TAG, "Heartbeat overgeslagen: telefoonnummer niet ingesteld");
                         return;
                     }
 
-                    // Stuur alleen naam - Pi zoekt zelf tijdvenster op
                     JSONObject payload = new JSONObject();
-                    payload.put("name",    userName);
-                    payload.put("app_key", APP_KEY);
-                    payload.put("secret",  APP_KEY);
-                    payload.put("source",  "background_service");
+                    payload.put("own_phone", ownPhone);
+                    payload.put("name",      userName);
+                    payload.put("app_key",   APP_KEY);
+                    payload.put("secret",    APP_KEY);
+                    payload.put("source",    "background_service");
 
                     URL url = new URL(SERVER_URL + "/heartbeat");
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -131,7 +131,7 @@ public class BarkrService extends Service {
                     int code = conn.getResponseCode();
                     conn.disconnect();
 
-                    Log.d(TAG, "✅ Heartbeat → " + userName + " | HTTP " + code);
+                    Log.d(TAG, "Heartbeat OK: " + userName + " (" + ownPhone + ") HTTP " + code);
 
                 } catch (Exception e) {
                     Log.w(TAG, "Heartbeat mislukt: " + e.getMessage());
@@ -155,9 +155,9 @@ public class BarkrService extends Service {
     }
 
     private Notification buildNotification() {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
+        Intent intent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE
         );
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Barkr is waakzaam")
