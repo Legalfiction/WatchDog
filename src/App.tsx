@@ -126,8 +126,9 @@ export default function App() {
 
   // Sla credentials op in Android bij elke wijziging van naam of telefoonnummer
   useEffect(() => {
-    if (settings.ownPhone && settings.name) {
-      saveToAndroid(settings.ownPhone, settings.name);
+    const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
+    if (contactPhone) {
+      saveToAndroid(contactPhone, settings.name);
     }
   }, [settings.ownPhone, settings.name]);
 
@@ -553,7 +554,7 @@ export default function App() {
               </div>
             </div>
 
-            <button onClick={() => { saveToAndroid(settings.ownPhone, settings.name); setShowSettings(false); }}
+            <button onClick={() => { const contactPhone = settings.contacts[0]?.phone || settings.ownPhone; saveToAndroid(contactPhone, settings.name); setShowSettings(false); }}
               className="w-full py-4 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] text-sm">
               {t('save', lang)}
             </button>
