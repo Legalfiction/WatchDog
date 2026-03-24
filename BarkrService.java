@@ -26,16 +26,16 @@ import java.nio.charset.StandardCharsets;
 
 public class BarkrService extends Service {
 
-    private static final String TAG            = "BarkrService";
-    private static final String CHANNEL_ID     = "barkr_foreground";
+    private static final String TAG             = "BarkrService";
+    private static final String CHANNEL_ID      = "barkr_foreground";
     private static final int    NOTIFICATION_ID = 1001;
-    private static final long   PING_INTERVAL  = 60_000;
-    private static final String APP_KEY        = "BARKR_SECURE_V1";
-    private static final String PREFS_NAME     = "BarkrPrefs";
+    private static final long   PING_INTERVAL   = 60_000;
+    private static final String APP_KEY         = "BARKR_SECURE_V1";
+    private static final String PREFS_NAME      = "BarkrPrefs";
 
-    private Handler              handler;
-    private Runnable             pingRunnable;
-    private boolean              isRunning = false;
+    private Handler               handler;
+    private Runnable              pingRunnable;
+    private boolean               isRunning = false;
     private PowerManager.WakeLock wakeLock;
 
     @Override
@@ -47,6 +47,7 @@ public class BarkrService extends Service {
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BarkrApp::WakeLock");
         wakeLock.acquire();
+        Log.d(TAG, "BarkrService aangemaakt, WakeLock verkregen");
     }
 
     @Override
@@ -84,6 +85,8 @@ public class BarkrService extends Service {
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
+
+        Log.d(TAG, "BarkrService gestopt — START_STICKY herstart hem");
     }
 
     private void startPingLoop() {
@@ -96,6 +99,7 @@ public class BarkrService extends Service {
                 }
             }
         };
+        // Direct eerste ping sturen
         handler.post(pingRunnable);
     }
 
@@ -104,6 +108,9 @@ public class BarkrService extends Service {
             @Override
             public void run() {
                 try {
+                    // Lees altijd verse instellingen uit SharedPreferences
+                    // Die worden bijgewerkt door de JavaScript bridge
+                    // in MainActivity elke keer als de gebruiker iets wijzigt
                     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
                     String  userName     = prefs.getString("user_name",    "");
                     String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
@@ -111,7 +118,18 @@ public class BarkrService extends Service {
                     String  windowEnd    = prefs.getString("window_end",    "00:00");
                     boolean vacationMode = prefs.getBoolean("vacation_mode", false);
 
-                    if (userName.isEmpty() || vacationMode) {
+                    // Geen ping als naam leeg, vacation mode aan,
+                    // of tijdvenster staat op 00:00 (geen bewaking)
+                    if (userName.isEmpty()) {
+                        Log.d(TAG, "Ping overgeslagen: naam niet ingesteld");
+                        return;
+                    }
+                    if (vacationMode) {
+                        Log.d(TAG, "Ping overgeslagen: vacation mode");
+                        return;
+                    }
+                    if (windowStart.equals("00:00") && windowEnd.equals("00:00")) {
+                        Log.d(TAG, "Ping overgeslagen: geen tijdvenster");
                         return;
                     }
 
@@ -140,7 +158,10 @@ public class BarkrService extends Service {
 
                     int code = conn.getResponseCode();
                     conn.disconnect();
-                    Log.d(TAG, "Ping OK: " + userName + " HTTP " + code);
+
+                    Log.d(TAG, "✅ Ping → " + userName +
+                        " | " + windowStart + "–" + windowEnd +
+                        " | HTTP " + code);
 
                 } catch (Exception e) {
                     Log.w(TAG, "Ping mislukt: " + e.getMessage());
