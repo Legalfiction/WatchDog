@@ -29,7 +29,7 @@ public class BarkrService extends Service {
     private static final String TAG             = "BarkrService";
     private static final String CHANNEL_ID      = "barkr_foreground";
     private static final int    NOTIFICATION_ID = 1001;
-    private static final long   PING_INTERVAL   = 60_000;
+    private static final long   PING_INTERVAL   = 20_000; // 20 seconden
     private static final String APP_KEY         = "BARKR_SECURE_V1";
     private static final String SERVER_URL      = "https://barkr.nl";
     private static final String PREFS_NAME      = "BarkrPrefs";
