@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.24
+#   BARKR BACKEND v10.2
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -250,7 +250,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.24 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.25 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -343,7 +343,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.24"}), 200
+    return jsonify({"status": "online", "version": "10.25"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -386,6 +386,7 @@ def heartbeat():
         except Exception:
             pass
 
+    source = data.get('source', 'webview')
     log_status(f"💓 PING → {user_name} ({own_phone}) | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
@@ -457,6 +458,7 @@ def ping():
         except Exception:
             pass
 
+    source = data.get('source', 'webview')
     log_status(f"💓 PING → {user_name} ({own_phone}) | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
