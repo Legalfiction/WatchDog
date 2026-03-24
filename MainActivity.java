@@ -9,18 +9,16 @@ import android.webkit.JavascriptInterface;
 
 import com.getcapacitor.BridgeActivity;
 
-import org.json.JSONObject;
-
 public class MainActivity extends BridgeActivity {
 
-    private static final String TAG        = "BarkrMainActivity";
+    private static final String TAG        = "BarkrMain";
     private static final String PREFS_NAME = "BarkrPrefs";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Registreer de bridge VOOR het laden van de WebView
+        // Registreer bridge zodat App.tsx het telefoonnummer kan opslaan
         getBridge().getWebView().addJavascriptInterface(
             new BarkrBridge(), "BarkrAndroid"
         );
@@ -42,7 +40,6 @@ public class MainActivity extends BridgeActivity {
             } else {
                 startService(serviceIntent);
             }
-            Log.d(TAG, "BarkrService gestart");
         } catch (Exception e) {
             Log.e(TAG, "Service start fout: " + e.getMessage());
         }
@@ -50,48 +47,23 @@ public class MainActivity extends BridgeActivity {
 
     public class BarkrBridge {
 
+        // App.tsx roept dit aan als gebruiker instellingen opslaat
+        // Enige doel: telefoonnummer en naam opslaan zodat BarkrService
+        // deze kan gebruiken voor de heartbeat naar de Pi
         @JavascriptInterface
-        public void updateSettings(String settingsJson) {
-            try {
-                JSONObject s = new JSONObject(settingsJson);
-
-                String name         = s.optString("name",         "");
-                String windowStart  = s.optString("window_start", "00:00");
-                String windowEnd    = s.optString("window_end",   "00:00");
-                boolean vacationMode = s.optBoolean("vacation_mode", false);
-
-                SharedPreferences.Editor prefs =
-                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
-
-                prefs.putString("user_name",    name);
-                prefs.putString("window_start", windowStart);
-                prefs.putString("window_end",   windowEnd);
-                prefs.putBoolean("vacation_mode", vacationMode);
-                prefs.putString("server_url",   "https://barkr.nl");
-                prefs.apply();
-
-                Log.d(TAG, "✅ Bridge: " + name +
-                    " | " + windowStart + "–" + windowEnd +
-                    " | vacation=" + vacationMode);
-
-            } catch (Exception e) {
-                Log.e(TAG, "Bridge fout: " + e.getMessage());
-            }
+        public void saveCredentials(String ownPhone, String userName) {
+            SharedPreferences.Editor prefs =
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+            prefs.putString("own_phone", ownPhone);
+            prefs.putString("user_name", userName);
+            prefs.apply();
+            Log.d(TAG, "Credentials opgeslagen: " + userName + " (" + ownPhone + ")");
         }
 
         @JavascriptInterface
-        public String getSettings() {
+        public String getCredentials() {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            try {
-                JSONObject r = new JSONObject();
-                r.put("name",          prefs.getString("user_name",    ""));
-                r.put("window_start",  prefs.getString("window_start", "00:00"));
-                r.put("window_end",    prefs.getString("window_end",   "00:00"));
-                r.put("vacation_mode", prefs.getBoolean("vacation_mode", false));
-                return r.toString();
-            } catch (Exception e) {
-                return "{}";
-            }
+            return prefs.getString("own_phone", "") + "|" + prefs.getString("user_name", "");
         }
     }
 }
