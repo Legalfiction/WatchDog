@@ -517,22 +517,12 @@ def save_settings():
         if contact_phone and len(contact_phone) >= 8 and not is_opted_in(contact_phone):
             wa_link = f"https://wa.me/34623789580?text=I%20allow%20callmebot%20to%20send%20me%20messages"
             msg = (
-                f"👋 Hallo {contact_name}!
-
-"
-                f"Hallo! Je bent door *{user_name}* toegevoegd als noodcontact in *Barkr*.
-
-"
-                f"Barkr bewaakt het welzijn van {user_name}. Als {user_name} binnen een ingesteld tijdvenster niet actief is, ontvang jij automatisch een bericht.
-
-"
-                f"Tik op de onderstaande link om je te activeren. WhatsApp opent automatisch met het juiste bericht — tik alleen nog op verzenden:
-
-"
-                f"{wa_link}
-
-"
-                f"Na activatie ben je direct bereikbaar als noodcontact. 🐾"
+                "\U0001f44b Hallo " + contact_name + "!\n\n"
+                "Je bent door *" + user_name + "* toegevoegd als noodcontact in *Barkr*.\n\n"
+                "Barkr bewaakt het welzijn van " + user_name + ". Als " + user_name + " binnen een ingesteld tijdvenster niet actief is, ontvang jij automatisch een bericht.\n\n"
+                "Tik op de link hieronder om je te activeren. WhatsApp opent met het juiste bericht klaar — tik alleen op verzenden:\n\n"
+                + wa_link + "\n\n"
+                "Na activatie ben je direct bereikbaar als noodcontact. \U0001f43e"
             )
             def send_async(p=contact_phone, m=msg, cn=contact_name, un=user_name, op=own_phone):
                 time.sleep(2)
@@ -543,13 +533,8 @@ def save_settings():
                     # Bevestiging naar gebruiker
                     time.sleep(6)
                     send_whatsapp(op,
-                        f"✅ *Barkr*
-
-Activatielink verstuurd naar *{cn}*.
-
-"
-                        f"Zodra {cn} op de link tikt is het contact actief. 🐾",
-                        context=f"auto_optin_confirm:{op}")
+                        "\u2705 *Barkr*\n\nActivatielink verstuurd naar *" + cn + "*.\n\nZodra " + cn + " op de link tikt is het contact actief. \U0001f43e",
+                        context="auto_optin_confirm:" + op)
             import threading
             threading.Thread(target=send_async, daemon=True).start()
 
