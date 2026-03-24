@@ -190,14 +190,15 @@ export default function App() {
   // Instellingen opslaan naar Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
-    if (!activeUrl || !settings.ownPhone) return;
+    if (!activeUrl) return;
+    const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
 
     const payload: any = {
       ...settings,
       app_key: APP_KEY,
       useCustomSchedule: true,
       activeDays: [0,1,2,3,4,5,6],
-      ownPhone: settings.ownPhone,
+      ownPhone: contactPhone,
     };
     payload.schedules = JSON.parse(JSON.stringify(settings.schedules));
     if (settings.overrides[todayStr]) {
@@ -235,14 +236,14 @@ export default function App() {
 
   // WebView ping — stuurt ook own_phone mee
   useEffect(() => {
-    if (status !== 'connected' || !activeUrl || settings.vacationMode || !settings.ownPhone) return;
+    if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
     const sendPing = () => {
       if (document.visibilityState !== 'visible' || !todayHasWindow) return;
       fetch(`${activeUrl}/ping`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: settings.name,
-          own_phone: settings.ownPhone,
+          own_phone: settings.contacts[0]?.phone || settings.ownPhone,
           app_key: APP_KEY,
           active_window: { start: todayWindowStart, end: todayWindowEnd },
         }),
