@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.3
+#   BARKR BACKEND v10.2
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -212,8 +212,8 @@ def escalate_user(user: dict, start_str: str, end_str: str):
         f"🚨 *BARKR ALARM* 🚨\n\n"
         f"Gebruiker: *{user_name}*\n"
         f"Tijdvenster: {start_str} – {end_str}\n\n"
-        f"De ingestelde eindtijd is verstreken zonder activiteit.\n\n"
-        f"Neem contact op met de gebruiker."
+        f"De ingestelde eindtijd is verstreken zonder dat er gebruik van het toestel is geregistreerd. Een mogelijke oorzaak is een lege batterij.\n\n"
+        f"Neem voor de zekerheid contact op met de gebruiker."
     )
     log_status(f"📢 ALARM → {user_name} ({own_phone}) | {start_str}–{end_str} | {len(contacts)} contacten")
     for contact in contacts:
@@ -251,7 +251,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.30 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.34 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -354,7 +354,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.30"}), 200
+    return jsonify({"status": "online", "version": "10.34"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -436,16 +436,6 @@ def ping():
     own_phone = normalize_phone(data.get('own_phone', ''))
     user_name = (data.get('name') or '').strip()
 
-    # Fallback: als geen own_phone dan probeer via naam te vinden
-    if not own_phone and user_name:
-        conn = sqlite3.connect(DB_FILE)
-        c = conn.cursor()
-        c.execute("SELECT own_phone FROM users WHERE user_name=? LIMIT 1", (user_name,))
-        row = c.fetchone()
-        conn.close()
-        if row:
-            own_phone = row[0]
-
     if not own_phone or len(own_phone) < 8:
         return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
@@ -487,9 +477,10 @@ def ping():
         })
         update_ping(own_phone, now_str)
 
+    # WebView ping = gebruiker heeft toestel open = altijd IN GEBRUIK
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("UPDATE users SET user_name=? WHERE own_phone=?", (user_name, own_phone))
+    c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE own_phone=?", (user_name, now_str, own_phone))
     conn.commit()
     conn.close()
 
@@ -508,13 +499,60 @@ def save_settings():
     if not own_phone or len(own_phone) < 8:
         return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
+    contacts = data.get('contacts', [])
+
     upsert_user(own_phone, {
         'user_name':    user_name,
-        'contacts':     json.dumps(data.get('contacts', [])),
+        'contacts':     json.dumps(contacts),
         'schedules':    json.dumps(data.get('schedules', {})),
         'vacation_mode': data.get('vacationMode', False),
         'notify_self':  data.get('notifySelf', True),
     })
+
+    # Automatisch activatiebericht sturen naar nieuwe contacten
+    # die nog niet in de opted_in tabel staan
+    for contact in contacts:
+        contact_phone = normalize_phone(contact.get('phone', ''))
+        contact_name  = contact.get('name', 'Contact')
+        if contact_phone and len(contact_phone) >= 8 and not is_opted_in(contact_phone):
+            wa_link = f"https://wa.me/34623789580?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+            msg = (
+                f"👋 Hallo {contact_name}!
+
+"
+                f"Hallo! Je bent door *{user_name}* toegevoegd als noodcontact in *Barkr*.
+
+"
+                f"Barkr bewaakt het welzijn van {user_name}. Als {user_name} binnen een ingesteld tijdvenster niet actief is, ontvang jij automatisch een bericht.
+
+"
+                f"Tik op de onderstaande link om je te activeren. WhatsApp opent automatisch met het juiste bericht — tik alleen nog op verzenden:
+
+"
+                f"{wa_link}
+
+"
+                f"Na activatie ben je direct bereikbaar als noodcontact. 🐾"
+            )
+            def send_async(p=contact_phone, m=msg, cn=contact_name, un=user_name, op=own_phone):
+                time.sleep(2)
+                ok = send_whatsapp(p, m, context=f"auto_optin:{op}")
+                if ok:
+                    register_opt_in(p, un)
+                    log_status(f"✅ AUTO OPT-IN VERSTUURD → {cn} ({p})")
+                    # Bevestiging naar gebruiker
+                    time.sleep(6)
+                    send_whatsapp(op,
+                        f"✅ *Barkr*
+
+Activatielink verstuurd naar *{cn}*.
+
+"
+                        f"Zodra {cn} op de link tikt is het contact actief. 🐾",
+                        context=f"auto_optin_confirm:{op}")
+            import threading
+            threading.Thread(target=send_async, daemon=True).start()
+
     log_status(f"💾 OPGESLAGEN → {user_name} ({own_phone})")
     return jsonify({"status": "ok"}), 200
 
@@ -540,7 +578,7 @@ def send_optin():
     if not phone:
         return jsonify({"status": "error"}), 400
     msg = (
-        f"👋 Hallo {contact_name}!\n\n*{user_name}* heeft je toegevoegd als noodcontact in *Barkr*.\n\n"
+        f"👋 Hallo {contact_name}!\n\nJe bent door *{user_name}* toegevoegd als noodcontact in *Barkr*.\n\n"
         f"Activeer WhatsApp via *+34 623 78 95 80*:\n\n"
         f"`I allow callmebot to send me messages`\n\nJe hoeft verder niets te doen. 🐾"
     )
