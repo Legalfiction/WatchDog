@@ -109,7 +109,7 @@ public class BarkrService extends Service {
 
                     // Ping altijd als naam bekend is, ook als vacation mode aan
                     // De server beslist wat er met de ping gebeurt
-                    if (userName.isEmpty()) {
+                    if (userName.isEmpty() || userName.length() < 3) {
                         Log.d(TAG, "Ping overgeslagen: naam niet ingesteld in SharedPreferences");
                         return;
                     }
