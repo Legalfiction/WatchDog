@@ -18,9 +18,8 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
-        // Zorg dat de service ook herstart als de app weer naar voorgrond komt
         startBarkrService();
     }
 
