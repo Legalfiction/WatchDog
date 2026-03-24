@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.23
+#   BARKR BACKEND v10.24
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -250,7 +250,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.2 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.24 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -343,7 +343,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.2"}), 200
+    return jsonify({"status": "online", "version": "10.24"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -367,8 +367,27 @@ def heartbeat():
     if state["status"] == "offline":
         log_status(f"📱 ONLINE → {user_name} ({own_phone}) | bron: {source}")
 
+    # Haal tijdvenster op voor logging
+    conn_tmp = sqlite3.connect(DB_FILE)
+    c_tmp = conn_tmp.cursor()
+    c_tmp.execute("SELECT schedules FROM users WHERE own_phone=?", (own_phone,))
+    row_tmp = c_tmp.fetchone()
+    conn_tmp.close()
+    window_info = "geen venster"
+    if row_tmp and row_tmp[0]:
+        try:
+            scheds = json.loads(row_tmp[0])
+            day_idx = datetime.now().weekday()
+            sched = scheds.get(str(day_idx), {})
+            ws = sched.get('startTime', '00:00')
+            we = sched.get('endTime', '00:00')
+            if ws != '00:00' or we != '00:00':
+                window_info = f"{ws}–{we}"
+        except Exception:
+            pass
+
+    log_status(f"💓 PING → {user_name} ({own_phone}) | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
-    source = data.get('source', 'webview')
 
     updated = update_ping(own_phone, now_str)
     if not updated:
@@ -419,8 +438,27 @@ def ping():
     if state["status"] == "offline":
         log_status(f"📱 ONLINE → {user_name} ({own_phone}) | bron: webview")
 
+    # Haal tijdvenster op voor logging
+    conn_tmp = sqlite3.connect(DB_FILE)
+    c_tmp = conn_tmp.cursor()
+    c_tmp.execute("SELECT schedules FROM users WHERE own_phone=?", (own_phone,))
+    row_tmp = c_tmp.fetchone()
+    conn_tmp.close()
+    window_info = "geen venster"
+    if row_tmp and row_tmp[0]:
+        try:
+            scheds = json.loads(row_tmp[0])
+            day_idx = datetime.now().weekday()
+            sched = scheds.get(str(day_idx), {})
+            ws = sched.get('startTime', '00:00')
+            we = sched.get('endTime', '00:00')
+            if ws != '00:00' or we != '00:00':
+                window_info = f"{ws}–{we}"
+        except Exception:
+            pass
+
+    log_status(f"💓 PING → {user_name} ({own_phone}) | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
-    source = data.get('source', 'webview')
 
     updated = update_ping(own_phone, now_str)
     if not updated:
