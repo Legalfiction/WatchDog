@@ -1,201 +1,163 @@
-package nl.barkr.app;
+name: Build Barkr APK
 
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.app.Service;
-import android.content.Context;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.os.Build;
-import android.os.Handler;
-import android.os.IBinder;
-import android.os.Looper;
-import android.os.PowerManager;
-import android.util.Log;
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-import androidx.core.app.NotificationCompat;
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-import org.json.JSONObject;
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-public class BarkrService extends Service {
+      - name: Install dependencies
+        run: npm install
 
-    private static final String TAG             = "BarkrService";
-    private static final String CHANNEL_ID      = "barkr_foreground";
-    private static final int    NOTIFICATION_ID = 1001;
-    private static final long   PING_INTERVAL   = 60_000;
-    private static final String APP_KEY         = "BARKR_SECURE_V1";
-    private static final String PREFS_NAME      = "BarkrPrefs";
+      - name: Build Vite app
+        run: npm run build
 
-    private Handler           handler;
-    private Runnable          pingRunnable;
-    private boolean           isRunning = false;
-    private PowerManager.WakeLock wakeLock;
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    @Override
-    public void onCreate() {
-        super.onCreate();
-        handler = new Handler(Looper.getMainLooper());
-        createNotificationChannel();
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-        // Wake lock voorkomt dat Android de CPU sloopt en de service killt
-        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "BarkrApp::BarkrWakeLock"
-        );
-        wakeLock.acquire();
-        Log.d(TAG, "✅ WakeLock verkregen");
-    }
+      - name: Add Android platform
+        run: npx cap add android
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "BarkrService gestart");
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-        try {
-            startForeground(NOTIFICATION_ID, buildNotification());
-        } catch (Exception e) {
-            Log.e(TAG, "startForeground fout: " + e.getMessage());
-        }
+      - name: Inject native Android bestanden
+        run: |
+          mkdir -p android/app/src/main/java/nl/barkr/app
+          cp BarkrService.java    android/app/src/main/java/nl/barkr/app/BarkrService.java
+          cp BootReceiver.java    android/app/src/main/java/nl/barkr/app/BootReceiver.java
+          cp MainActivity.java    android/app/src/main/java/nl/barkr/app/MainActivity.java
+          cp AndroidManifest.xml  android/app/src/main/AndroidManifest.xml
+          echo "✅ Native bestanden geïnjecteerd"
 
-        if (!isRunning) {
-            isRunning = true;
-            startPingLoop();
-        }
+      - name: Installeer ImageMagick
+        run: sudo apt-get install -y imagemagick
 
-        // START_STICKY herstart de service automatisch als Android hem toch killt
-        return START_STICKY;
-    }
+      - name: Genereer iconen en overschrijf Capacitor iconen
+        run: |
+          echo "=== LOGO VERIFICATIE ==="
+          ls -la *.png 2>/dev/null || echo "Geen PNG in root"
 
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
+          if [ -f "img/logo1.jpg" ]; then
+            LOGO="img/logo1.jpg"
+          elif [ -f "logoApp.png" ]; then
+            LOGO="logoApp.png"
+          elif [ -f "logo.png" ]; then
+            LOGO="logo.png"
+          else
+            echo "❌ FOUT: geen logo gevonden!"
+            exit 1
+          fi
 
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        isRunning = false;
+          echo "✅ Logo: $LOGO ($(wc -c < $LOGO) bytes)"
 
-        if (handler != null && pingRunnable != null) {
-            handler.removeCallbacks(pingRunnable);
-        }
+          # Genereer voor alle dichtheden
+          for DENSITY in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            case $DENSITY in
+              mdpi)    SIZE=48  ;;
+              hdpi)    SIZE=72  ;;
+              xhdpi)   SIZE=96  ;;
+              xxhdpi)  SIZE=144 ;;
+              xxxhdpi) SIZE=192 ;;
+            esac
 
-        // Geef wake lock vrij
-        if (wakeLock != null && wakeLock.isHeld()) {
-            wakeLock.release();
-            Log.d(TAG, "WakeLock vrijgegeven");
-        }
+            DIR="android/app/src/main/res/mipmap-${DENSITY}"
+            mkdir -p "$DIR"
 
-        // Herstart de service onmiddellijk als hij gestopt wordt
-        Intent restartIntent = new Intent(getApplicationContext(), BarkrService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(restartIntent);
-        } else {
-            startService(restartIntent);
-        }
-        Log.d(TAG, "Service herstart na onDestroy");
-    }
+            convert "$LOGO" -resize ${SIZE}x${SIZE} "$DIR/ic_launcher.png"
+            convert "$LOGO" -resize ${SIZE}x${SIZE} "$DIR/ic_launcher_round.png"
 
-    private void startPingLoop() {
-        pingRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (isRunning) {
-                    sendPingInBackground();
-                    handler.postDelayed(this, PING_INTERVAL);
-                }
-            }
-        };
-        handler.post(pingRunnable);
-    }
+            # Overschrijf ook foreground indien aanwezig
+            if [ -f "$DIR/ic_launcher_foreground.png" ]; then
+              convert "$LOGO" -resize ${SIZE}x${SIZE} "$DIR/ic_launcher_foreground.png"
+            fi
 
-    private void sendPingInBackground() {
-        new Thread(() -> {
-            try {
-                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                String  userName     = prefs.getString("user_name",    "");
-                String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
-                String  windowStart  = prefs.getString("window_start",  "00:00");
-                String  windowEnd    = prefs.getString("window_end",    "00:00");
-                boolean vacationMode = prefs.getBoolean("vacation_mode", false);
+            echo "✅ $DENSITY (${SIZE}px): $(wc -c < $DIR/ic_launcher.png) bytes"
+          done
 
-                if (userName.isEmpty() || vacationMode) return;
+          # CRUCIAAL: verwijder adaptive icon XML bestanden
+          # Deze overschrijven anders onze PNG iconen op Android 8+
+          rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          echo "✅ Adaptive icon XML verwijderd"
 
-                JSONObject activeWindow = new JSONObject();
-                activeWindow.put("start", windowStart);
-                activeWindow.put("end",   windowEnd);
+          # Preview voor verificatie
+          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png /tmp/barkr_preview.png
 
-                JSONObject payload = new JSONObject();
-                payload.put("name",          userName);
-                payload.put("app_key",       APP_KEY);
-                payload.put("secret",        APP_KEY);
-                payload.put("active_window", activeWindow);
+          echo "=== OVERZICHT GEGENEREERDE ICONEN ==="
+          find android/app/src/main/res -name "ic_launcher.png" | sort
+          echo "✅ Klaar"
 
-                URL url = new URL(serverUrl + "/ping");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(10_000);
-                conn.setReadTimeout(10_000);
+      - name: Upload icoon preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: barkr-icon-preview
+          path: /tmp/barkr_preview.png
+          retention-days: 7
 
-                byte[] body = payload.toString().getBytes(StandardCharsets.UTF_8);
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(body);
-                }
+      - name: Genereer keystore voor signing
+        run: |
+          keytool -genkey -v \
+            -keystore android/app/barkr-release.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias ${{ secrets.KEY_ALIAS }} \
+            -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
+            -keypass ${{ secrets.KEY_PASSWORD }} \
+            -dname "CN=Barkr, OU=Barkr, O=Barkr, L=Netherlands, ST=Netherlands, C=NL"
+          echo "✅ Keystore gegenereerd"
 
-                int code = conn.getResponseCode();
-                conn.disconnect();
-                Log.d(TAG, "Ping → " + userName + " | HTTP " + code);
+      - name: Configureer signing in build.gradle
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
 
-            } catch (Exception e) {
-                Log.w(TAG, "Ping mislukt: " + e.getMessage());
-            }
-        }).start();
-    }
+          android.signingConfigs {
+              release {
+                  storeFile file("barkr-release.jks")
+                  storePassword System.getenv("KEYSTORE_PASSWORD")
+                  keyAlias System.getenv("KEY_ALIAS")
+                  keyPassword System.getenv("KEY_PASSWORD")
+              }
+          }
+          android.buildTypes.release.signingConfig = android.signingConfigs.release
+          android.buildTypes.debug.signingConfig = android.signingConfigs.release
+          EOF
+          echo "✅ Signing geconfigureerd"
 
-    private void createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
-                "Barkr Bewaking",
-                NotificationManager.IMPORTANCE_LOW
-            );
-            channel.setDescription("Barkr bewaakt je welzijn op de achtergrond");
-            channel.setShowBadge(false);
-            channel.enableVibration(false);
-            channel.enableLights(false);
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
-            }
-        }
-    }
+      - name: Build signed APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd android
+          ./gradlew assembleDebug
 
-    private Notification buildNotification() {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent,
-            PendingIntent.FLAG_IMMUTABLE
-        );
-
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Barkr is waakzaam")
-            .setContentText("Digitale waakhond actief")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentIntent(pendingIntent)
-            .setOngoing(true)
-            .setSilent(true)
-            .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build();
-    }
-}
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: barkr-signed-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
