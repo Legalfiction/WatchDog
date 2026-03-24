@@ -51,75 +51,50 @@ jobs:
       - name: Installeer ImageMagick
         run: sudo apt-get install -y imagemagick
 
-      - name: Verifieer logo aanwezig en maak iconen
+      - name: Verifieer logo en genereer iconen
         run: |
           echo "=== LOGO VERIFICATIE ==="
-          echo "Bestanden in root:"
           ls -la *.png 2>/dev/null || echo "Geen PNG in root"
-          echo "Bestanden in public/:"
           ls -la public/*.png 2>/dev/null || echo "Geen PNG in public/"
 
-          # Bepaal locatie
-          if [ -f "logo.png" ]; then
+          if [ -f "logoApp.png" ]; then
+            LOGO="logoApp.png"
+          elif [ -f "logo.png" ]; then
             LOGO="logo.png"
           elif [ -f "public/logo.png" ]; then
             LOGO="public/logo.png"
           else
-            echo "❌ FOUT: logo.png niet gevonden!"
+            echo "❌ FOUT: geen logo bestand gevonden!"
             exit 1
           fi
 
-          echo "✅ Logo gevonden: $LOGO"
-          echo "Logo bestandsgrootte: $(wc -c < $LOGO) bytes"
+          echo "✅ Logo gevonden: $LOGO ($(wc -c < $LOGO) bytes)"
 
-          # Maak icoon met BARKR tekst onderaan
-          # Eerst logo verkleinen naar 80% van het icoon formaat
-          # Dan BARKR tekst toevoegen aan de onderkant
-
-          mkdir -p /tmp/barkr_icons
-
-          # Genereer basisicoon 192x192 met BARKR tekst
-          convert "$LOGO" \
-            -resize 192x192 \
-            -gravity South \
-            -background "#CC4400" \
-            -splice 0x32 \
-            -fill white \
-            -font DejaVu-Sans-Bold \
-            -pointsize 20 \
-            -gravity South \
-            -annotate +0+8 "BARKR" \
-            /tmp/barkr_icons/ic_launcher_192.png
-
-          echo "✅ Basisicoon met BARKR tekst gegenereerd"
-
-          # Bewaar preview voor verificatie
-          cp /tmp/barkr_icons/ic_launcher_192.png /tmp/barkr_preview.png
-
-          # Genereer alle formaten vanuit het basisicoon
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          convert /tmp/barkr_icons/ic_launcher_192.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert "$LOGO" -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert "$LOGO" -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert "$LOGO" -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert "$LOGO" -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          convert "$LOGO" -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
-          echo "=== VERIFICATIE ICONEN ==="
-          echo "Gegenereerde icoon bestanden:"
+          # Sla preview op voor verificatie
+          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png /tmp/barkr_preview.png
+
+          echo "=== GEGENEREERDE ICONEN ==="
           ls -la android/app/src/main/res/mipmap-xxxhdpi/
           echo "✅ Alle iconen succesvol gegenereerd"
 
-      - name: Upload icoon preview (verificatie)
+      - name: Upload icoon preview
         uses: actions/upload-artifact@v4
         with:
           name: barkr-icon-preview
