@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.2
+#   BARKR BACKEND v10.3
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -71,6 +71,7 @@ def init_db():
         schedules            TEXT DEFAULT "{}",
         vacation_mode        INTEGER DEFAULT 0,
         last_ping_time       TEXT DEFAULT "",
+        last_unlocked_ping   TEXT DEFAULT "",
         notify_self          INTEGER DEFAULT 1,
         last_inactivity_alert TEXT DEFAULT ""
     )''')
@@ -250,7 +251,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.29 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.30 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -318,16 +319,19 @@ def monitoring_loop():
                         pass
 
                 # Bewijs van leven = unlocked ping binnen het venster
-                # locked pings tellen NIET als actief gebruik
+                # Gebruik last_unlocked_ping uit database
                 was_actief = False
-                state = user_states.get(own_phone, {})
-                last_status = state.get('device_status', 'unknown')
-                if last_ping_dt is not None and start_dt <= last_ping_dt <= (end_dt + timedelta(minutes=2)):
-                    if last_status == 'unlocked':
-                        was_actief = True
-                        log_status(f"✅ {user_name} was actief (toestel IN GEBRUIK). Geen alarm.")
-                    else:
-                        log_status(f"❌ {user_name} ping binnen venster maar toestel VERGRENDELD. Alarm!")
+                last_unlocked = user.get('last_unlocked_ping', '')
+                if last_unlocked:
+                    try:
+                        last_unlocked_dt = datetime.strptime(last_unlocked, "%Y-%m-%d %H:%M:%S")
+                        if start_dt <= last_unlocked_dt <= (end_dt + timedelta(minutes=2)):
+                            was_actief = True
+                            log_status(f"✅ {user_name} was IN GEBRUIK binnen venster. Geen alarm.")
+                    except ValueError:
+                        pass
+                if not was_actief:
+                    log_status(f"❌ {user_name} geen IN GEBRUIK ping binnen venster. Alarm!")
 
                 if was_actief:
                     log_status(f"✅ {user_name} was actief. Geen alarm.")
@@ -350,7 +354,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.29"}), 200
+    return jsonify({"status": "online", "version": "10.30"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -409,10 +413,13 @@ def heartbeat():
         update_ping(own_phone, now_str)
         log_status(f"👤 NIEUWE GEBRUIKER → {user_name} ({own_phone})")
 
-    # Update naam als die veranderd is
+    # Update naam en last_unlocked_ping als toestel in gebruik is
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("UPDATE users SET user_name=? WHERE own_phone=?", (user_name, own_phone))
+    if device_status == 'unlocked':
+        c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE own_phone=?", (user_name, now_str, own_phone))
+    else:
+        c.execute("UPDATE users SET user_name=? WHERE own_phone=?", (user_name, own_phone))
     conn.commit()
     conn.close()
 
