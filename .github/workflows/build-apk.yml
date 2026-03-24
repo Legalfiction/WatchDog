@@ -48,21 +48,11 @@ jobs:
           cp AndroidManifest.xml  android/app/src/main/AndroidManifest.xml
           echo "✅ Native bestanden geïnjecteerd"
 
-      - name: Zoek logo bestand
-        run: |
-          echo "=== Zoeken naar logo bestanden ==="
-          find . -name "logo.png" -not -path "./node_modules/*" -not -path "./.git/*"
-          echo "=== Root directory inhoud ==="
-          ls -la *.png 2>/dev/null || echo "Geen PNG in root"
-          echo "=== Public directory ==="
-          ls -la public/*.png 2>/dev/null || echo "Geen PNG in public/"
-
       - name: Installeer ImageMagick
         run: sudo apt-get install -y imagemagick
 
       - name: Genereer app iconen uit logo.png
         run: |
-          # Zoek logo op alle mogelijke locaties
           LOGO=""
           if [ -f "public/logo.png" ]; then
             LOGO="public/logo.png"
@@ -94,10 +84,44 @@ jobs:
 
           echo "✅ Iconen gegenereerd uit $LOGO"
 
+      - name: Genereer keystore voor signing
+        run: |
+          keytool -genkey -v \
+            -keystore android/app/barkr-release.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias ${{ secrets.KEY_ALIAS }} \
+            -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
+            -keypass ${{ secrets.KEY_PASSWORD }} \
+            -dname "CN=Barkr, OU=Barkr, O=Barkr, L=Netherlands, ST=Netherlands, C=NL"
+          echo "✅ Keystore gegenereerd"
+
+      - name: Configureer signing in build.gradle
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          android.signingConfigs {
+              release {
+                  storeFile file("barkr-release.jks")
+                  storePassword System.getenv("KEYSTORE_PASSWORD")
+                  keyAlias System.getenv("KEY_ALIAS")
+                  keyPassword System.getenv("KEY_PASSWORD")
+              }
+          }
+          android.buildTypes.release.signingConfig = android.signingConfigs.release
+          android.buildTypes.debug.signingConfig = android.signingConfigs.release
+          EOF
+          echo "✅ Signing geconfigureerd"
+
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build debug APK
+      - name: Build signed APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           cd android
           ./gradlew assembleDebug
@@ -105,6 +129,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: barkr-debug-apk
+          name: barkr-signed-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
