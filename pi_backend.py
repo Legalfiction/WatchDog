@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.22
+#   BARKR BACKEND v10.23
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -343,7 +343,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.1"}), 200
+    return jsonify({"status": "online", "version": "10.2"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -368,7 +368,7 @@ def heartbeat():
         log_status(f"📱 ONLINE → {user_name} ({own_phone}) | bron: {source}")
 
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
-    log_status(f"💓 HEARTBEAT → {user_name} ({own_phone}) | bron: {source}")
+    source = data.get('source', 'webview')
 
     updated = update_ping(own_phone, now_str)
     if not updated:
@@ -420,7 +420,7 @@ def ping():
         log_status(f"📱 ONLINE → {user_name} ({own_phone}) | bron: webview")
 
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
-    log_status(f"💓 HEARTBEAT → {user_name} ({own_phone}) | bron: {source}")
+    source = data.get('source', 'webview')
 
     updated = update_ping(own_phone, now_str)
     if not updated:
