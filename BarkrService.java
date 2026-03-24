@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
@@ -32,15 +33,25 @@ public class BarkrService extends Service {
     private static final String APP_KEY         = "BARKR_SECURE_V1";
     private static final String PREFS_NAME      = "BarkrPrefs";
 
-    private Handler  handler;
-    private Runnable pingRunnable;
-    private boolean  isRunning = false;
+    private Handler           handler;
+    private Runnable          pingRunnable;
+    private boolean           isRunning = false;
+    private PowerManager.WakeLock wakeLock;
 
     @Override
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
         createNotificationChannel();
+
+        // Wake lock voorkomt dat Android de CPU sloopt en de service killt
+        PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "BarkrApp::BarkrWakeLock"
+        );
+        wakeLock.acquire();
+        Log.d(TAG, "✅ WakeLock verkregen");
     }
 
     @Override
@@ -58,6 +69,7 @@ public class BarkrService extends Service {
             startPingLoop();
         }
 
+        // START_STICKY herstart de service automatisch als Android hem toch killt
         return START_STICKY;
     }
 
@@ -70,9 +82,25 @@ public class BarkrService extends Service {
     public void onDestroy() {
         super.onDestroy();
         isRunning = false;
+
         if (handler != null && pingRunnable != null) {
             handler.removeCallbacks(pingRunnable);
         }
+
+        // Geef wake lock vrij
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+            Log.d(TAG, "WakeLock vrijgegeven");
+        }
+
+        // Herstart de service onmiddellijk als hij gestopt wordt
+        Intent restartIntent = new Intent(getApplicationContext(), BarkrService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(restartIntent);
+        } else {
+            startService(restartIntent);
+        }
+        Log.d(TAG, "Service herstart na onDestroy");
     }
 
     private void startPingLoop() {
@@ -159,7 +187,6 @@ public class BarkrService extends Service {
             PendingIntent.FLAG_IMMUTABLE
         );
 
-        // Gebruik android.R.drawable.ic_dialog_info — bestaat op alle Android versies
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Barkr is waakzaam")
             .setContentText("Digitale waakhond actief")
