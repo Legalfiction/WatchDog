@@ -1,22 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Netwerk permissies -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <!-- Foreground Service permissies -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-
-    <!-- Autostart bij opstarten telefoon -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-    <!-- Voorkomt dat Android de app doodt bij batterijbesparing -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Notificatie permissie (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -28,29 +18,25 @@
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true">
 
-        <!-- Hoofd activiteit -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
             android:launchMode="singleTask"
             android:name=".MainActivity"
             android:theme="@style/AppTheme.NoActionBarLaunch">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- Foreground Service -->
+        <!-- Geen foregroundServiceType zodat het werkt op alle Android versies -->
         <service
             android:name=".BarkrService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice"
             android:stopWithTask="false" />
 
-        <!-- Boot Receiver — start service bij opstarten telefoon -->
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"
