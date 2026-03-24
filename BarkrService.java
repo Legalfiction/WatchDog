@@ -29,7 +29,7 @@ public class BarkrService extends Service {
     private static final String TAG             = "BarkrService";
     private static final String CHANNEL_ID      = "barkr_foreground";
     private static final int    NOTIFICATION_ID = 1001;
-    private static final long   PING_INTERVAL   = 60_000;
+    private static final long   PING_INTERVAL   = 60_000; // 60 seconden
     private static final String APP_KEY         = "BARKR_SECURE_V1";
     private static final String PREFS_NAME      = "BarkrPrefs";
 
@@ -43,28 +43,24 @@ public class BarkrService extends Service {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
         createNotificationChannel();
-
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BarkrApp::WakeLock");
         wakeLock.acquire();
-        Log.d(TAG, "BarkrService aangemaakt, WakeLock verkregen");
+        Log.d(TAG, "BarkrService aangemaakt");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "BarkrService gestart");
-
         try {
             startForeground(NOTIFICATION_ID, buildNotification());
         } catch (Exception e) {
             Log.e(TAG, "startForeground fout: " + e.getMessage());
         }
-
         if (!isRunning) {
             isRunning = true;
             startPingLoop();
         }
-
         return START_STICKY;
     }
 
@@ -77,16 +73,12 @@ public class BarkrService extends Service {
     public void onDestroy() {
         super.onDestroy();
         isRunning = false;
-
         if (handler != null && pingRunnable != null) {
             handler.removeCallbacks(pingRunnable);
         }
-
         if (wakeLock != null && wakeLock.isHeld()) {
             wakeLock.release();
         }
-
-        Log.d(TAG, "BarkrService gestopt — START_STICKY herstart hem");
     }
 
     private void startPingLoop() {
@@ -94,23 +86,20 @@ public class BarkrService extends Service {
             @Override
             public void run() {
                 if (isRunning) {
-                    sendPingInBackground();
+                    sendPing();
                     handler.postDelayed(this, PING_INTERVAL);
                 }
             }
         };
-        // Direct eerste ping sturen
+        // Direct eerste ping bij start
         handler.post(pingRunnable);
     }
 
-    private void sendPingInBackground() {
+    private void sendPing() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    // Lees altijd verse instellingen uit SharedPreferences
-                    // Die worden bijgewerkt door de JavaScript bridge
-                    // in MainActivity elke keer als de gebruiker iets wijzigt
                     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
                     String  userName     = prefs.getString("user_name",    "");
                     String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
@@ -118,18 +107,10 @@ public class BarkrService extends Service {
                     String  windowEnd    = prefs.getString("window_end",    "00:00");
                     boolean vacationMode = prefs.getBoolean("vacation_mode", false);
 
-                    // Geen ping als naam leeg, vacation mode aan,
-                    // of tijdvenster staat op 00:00 (geen bewaking)
+                    // Ping altijd als naam bekend is, ook als vacation mode aan
+                    // De server beslist wat er met de ping gebeurt
                     if (userName.isEmpty()) {
-                        Log.d(TAG, "Ping overgeslagen: naam niet ingesteld");
-                        return;
-                    }
-                    if (vacationMode) {
-                        Log.d(TAG, "Ping overgeslagen: vacation mode");
-                        return;
-                    }
-                    if (windowStart.equals("00:00") && windowEnd.equals("00:00")) {
-                        Log.d(TAG, "Ping overgeslagen: geen tijdvenster");
+                        Log.d(TAG, "Ping overgeslagen: naam niet ingesteld in SharedPreferences");
                         return;
                     }
 
@@ -139,9 +120,11 @@ public class BarkrService extends Service {
 
                     JSONObject payload = new JSONObject();
                     payload.put("name",          userName);
-                    payload.put("app_key",       APP_KEY);
-                    payload.put("secret",        APP_KEY);
-                    payload.put("active_window", activeWindow);
+                    payload.put("app_key",        APP_KEY);
+                    payload.put("secret",         APP_KEY);
+                    payload.put("active_window",  activeWindow);
+                    payload.put("vacation_mode",  vacationMode);
+                    payload.put("source",         "background_service");
 
                     URL url = new URL(serverUrl + "/ping");
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -161,6 +144,7 @@ public class BarkrService extends Service {
 
                     Log.d(TAG, "✅ Ping → " + userName +
                         " | " + windowStart + "–" + windowEnd +
+                        " | vacation=" + vacationMode +
                         " | HTTP " + code);
 
                 } catch (Exception e) {
@@ -173,29 +157,22 @@ public class BarkrService extends Service {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
-                "Barkr Bewaking",
-                NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, "Barkr Bewaking", NotificationManager.IMPORTANCE_LOW
             );
             channel.setDescription("Barkr bewaakt je welzijn op de achtergrond");
             channel.setShowBadge(false);
             channel.enableVibration(false);
             channel.enableLights(false);
-
             NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
-            }
+            if (manager != null) manager.createNotificationChannel(channel);
         }
     }
 
     private Notification buildNotification() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent,
-            PendingIntent.FLAG_IMMUTABLE
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         );
-
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Barkr is waakzaam")
             .setContentText("Digitale waakhond actief")
