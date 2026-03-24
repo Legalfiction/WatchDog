@@ -479,7 +479,7 @@ def monitoring_loop():
                     except ValueError:
                         pass
 
-                was_actief = last_ping_dt is not None and start_dt <= last_ping_dt < end_dt
+                was_actief = last_ping_dt is not None and start_dt <= last_ping_dt <= (end_dt + timedelta(seconds=59))
 
                 if was_actief:
                     log_status(f"✅ {user_name} was actief. Geen alarm.")
