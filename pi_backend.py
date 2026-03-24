@@ -10,24 +10,15 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v9.0 — PRODUCTIE
+#   BARKR BACKEND v9.1 — PRODUCTIE
 #
-#   Developer alerts: ALLEEN technische fouten
-#   - WhatsApp berichtendienst faalt (HTTP != 200)
-#   - Alarm kon niet verstuurd worden naar contacten
-#   - Database schrijffout
-#   - Onverwachte crash in monitoring loop
-#
-#   NIET gemeld aan developer:
-#   - Gebruikers die geen tijdvenster hebben ingesteld
-#   - Gebruikers die de app op pauze hebben
-#   - Inactiviteit van gebruikers
-#   Dat is de verantwoordelijkheid van de gebruiker zelf.
-#
-#   Gebruikers met notify_self=True en eigen nummer
-#   ontvangen WEL de wekelijkse herinnering en
-#   inactiviteitsmelding — maar dat gaat puur tussen
-#   de app en de gebruiker, niet via de developer.
+#   Nieuw in v9.1:
+#   - Inactiviteitsmelding naar gebruiker (own_phone) als
+#     de app meer dan 4 uur geen ping heeft gestuurd
+#   - Bericht bevat instructie om app te herstart
+#   - Bericht bevat uitleg over handleiding voor autostart
+#   - notify_self standaard AAN (tenzij gebruiker uitzet)
+#   - Developer alert alleen bij technische fouten
 # ============================================================
 
 DB_FILE          = os.path.expanduser("~/barkr/barkr_users.db")
@@ -39,14 +30,11 @@ EMPTY_TIME       = "00:00"
 INACTIVITY_HOURS = 4
 REMINDER_DAYS    = 7
 
-# Developer — ontvangt ALLEEN technische foutmeldingen
 DEVELOPER_PHONE  = "31615964009"
 DEVELOPER_NAME   = "Aldo"
 
-# Zorg dat dezelfde technische fout niet elke 5 seconden
-# opnieuw gemeld wordt — bewaar meldingstijdstempel per fouttype
 _dev_alert_cooldown: dict = {}
-DEV_ALERT_COOLDOWN_MINUTES = 60  # Max 1x per uur per fouttype
+DEV_ALERT_COOLDOWN_MINUTES = 60
 
 app = Flask(__name__)
 CORS(app)
@@ -54,10 +42,6 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 user_states: dict = {}
 
-
-# ============================================================
-#   LOGGING
-# ============================================================
 
 def log_status(msg: str):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -68,50 +52,25 @@ def log_status(msg: str):
 # ============================================================
 
 def alert_developer(error_type: str, detail: str):
-    """
-    Stuurt een WhatsApp naar de developer bij een technische fout.
-    Heeft een cooldown van 60 minuten per fouttype om spam te voorkomen.
-
-    Gebruik ALLEEN voor infrastructuurproblemen:
-    - WhatsApp API fout
-    - Database fout
-    - Alarm niet verstuurd
-    - Onverwachte crash
-    """
     now = datetime.now()
     last_sent = _dev_alert_cooldown.get(error_type)
     if last_sent:
-        minuten_geleden = (now - last_sent).total_seconds() / 60
-        if minuten_geleden < DEV_ALERT_COOLDOWN_MINUTES:
-            log_status(f"🔕 Developer alert onderdrukt ({error_type}) — cooldown actief")
+        if (now - last_sent).total_seconds() / 60 < DEV_ALERT_COOLDOWN_MINUTES:
             return
 
     _dev_alert_cooldown[error_type] = now
-
     message = (
         f"🔧 *BARKR TECHNISCHE FOUT*\n\n"
         f"Type: *{error_type}*\n"
         f"Tijdstip: {now.strftime('%d-%m-%Y %H:%M:%S')}\n\n"
-        f"Detail:\n{detail}\n\n"
-        f"Actie vereist door developer."
+        f"{detail}"
     )
-
-    # Stuur direct via requests — geen tussenliggende functie
-    # zodat een fout hier niet opnieuw een alert triggert
     try:
         clean = DEVELOPER_PHONE.replace('+', '').replace(' ', '')
-        params = {
-            "recipient": clean,
-            "apikey":    TEXTMEBOT_KEY,
-            "text":      message,
-        }
-        r = requests.get(TEXTMEBOT_URL, params=params, timeout=15)
-        if r.status_code == 200:
-            log_status(f"🔧 DEVELOPER ALERT VERSTUURD → {error_type}")
-        else:
-            log_status(f"⚠️ Developer alert mislukt (HTTP {r.status_code}) → {error_type}")
+        requests.get(TEXTMEBOT_URL, params={"recipient": clean, "apikey": TEXTMEBOT_KEY, "text": message}, timeout=15)
+        log_status(f"🔧 DEVELOPER ALERT → {error_type}")
     except Exception as e:
-        log_status(f"⚠️ Developer alert kon niet verstuurd worden: {e}")
+        log_status(f"⚠️ Developer alert mislukt: {e}")
 
 
 # ============================================================
@@ -124,49 +83,37 @@ def init_db():
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
 
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_name               TEXT PRIMARY KEY,
-                contacts                TEXT    DEFAULT '[]',
-                active_days             TEXT    DEFAULT '[]',
-                schedules               TEXT    DEFAULT '{}',
-                use_custom_schedule     INTEGER DEFAULT 1,
-                vacation_mode           INTEGER DEFAULT 0,
-                last_ping_time          TEXT    DEFAULT "",
-                active_window_start     TEXT    DEFAULT "",
-                active_window_end       TEXT    DEFAULT "",
-                notify_self             INTEGER DEFAULT 0,
-                own_phone               TEXT    DEFAULT "",
-                last_inactivity_alert   TEXT    DEFAULT "",
-                last_reminder_sent      TEXT    DEFAULT ""
-            )
-        ''')
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            user_name               TEXT PRIMARY KEY,
+            contacts                TEXT    DEFAULT '[]',
+            active_days             TEXT    DEFAULT '[]',
+            schedules               TEXT    DEFAULT '{}',
+            use_custom_schedule     INTEGER DEFAULT 1,
+            vacation_mode           INTEGER DEFAULT 0,
+            last_ping_time          TEXT    DEFAULT "",
+            active_window_start     TEXT    DEFAULT "",
+            active_window_end       TEXT    DEFAULT "",
+            notify_self             INTEGER DEFAULT 1,
+            own_phone               TEXT    DEFAULT "",
+            last_inactivity_alert   TEXT    DEFAULT "",
+            last_reminder_sent      TEXT    DEFAULT ""
+        )''')
 
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS alarm_log (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_name    TEXT,
-                alarm_date   TEXT,
-                window_start TEXT,
-                window_end   TEXT,
-                fired_at     TEXT,
-                UNIQUE(user_name, alarm_date, window_start, window_end)
-            )
-        ''')
+        c.execute('''CREATE TABLE IF NOT EXISTS alarm_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_name TEXT, alarm_date TEXT, window_start TEXT, window_end TEXT, fired_at TEXT,
+            UNIQUE(user_name, alarm_date, window_start, window_end)
+        )''')
 
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS whatsapp_opted_in (
-                phone       TEXT PRIMARY KEY,
-                opted_in_at TEXT,
-                opted_in_by TEXT
-            )
-        ''')
+        c.execute('''CREATE TABLE IF NOT EXISTS whatsapp_opted_in (
+            phone TEXT PRIMARY KEY, opted_in_at TEXT, opted_in_by TEXT
+        )''')
 
         migrations = [
             "ALTER TABLE users ADD COLUMN vacation_mode INTEGER DEFAULT 0",
             "ALTER TABLE users ADD COLUMN active_window_start TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN active_window_end TEXT DEFAULT ''",
-            "ALTER TABLE users ADD COLUMN notify_self INTEGER DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN notify_self INTEGER DEFAULT 1",
             "ALTER TABLE users ADD COLUMN own_phone TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN last_inactivity_alert TEXT DEFAULT ''",
             "ALTER TABLE users ADD COLUMN last_reminder_sent TEXT DEFAULT ''",
@@ -180,7 +127,6 @@ def init_db():
         conn.commit()
         conn.close()
         log_status("✅ DATABASE GEREED")
-
     except Exception as e:
         log_status(f"❌ DATABASE INIT FOUT: {e}")
         alert_developer("Database init fout", str(e))
@@ -205,14 +151,12 @@ def register_opt_in(phone: str, opted_in_by: str):
     try:
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
-        c.execute("""INSERT OR IGNORE INTO whatsapp_opted_in (phone, opted_in_at, opted_in_by)
-                     VALUES (?, ?, ?)""",
+        c.execute("INSERT OR IGNORE INTO whatsapp_opted_in (phone, opted_in_at, opted_in_by) VALUES (?, ?, ?)",
                   (clean, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), opted_in_by))
         conn.commit()
         conn.close()
     except Exception as e:
-        log_status(f"❌ DB schrijffout (register_opt_in): {e}")
-        alert_developer("Database schrijffout", f"register_opt_in({clean}): {e}")
+        alert_developer("Database schrijffout", f"register_opt_in: {e}")
 
 
 def is_empty_window(start: str, end: str) -> bool:
@@ -223,8 +167,7 @@ def reminder_due(last_sent: str) -> bool:
     if not last_sent:
         return True
     try:
-        last_dt = datetime.strptime(last_sent, "%Y-%m-%d")
-        return (datetime.now() - last_dt).days >= REMINDER_DAYS
+        return (datetime.now() - datetime.strptime(last_sent, "%Y-%m-%d")).days >= REMINDER_DAYS
     except ValueError:
         return True
 
@@ -238,8 +181,7 @@ def mark_reminder_sent(user_name: str):
         conn.commit()
         conn.close()
     except Exception as e:
-        log_status(f"❌ DB schrijffout (mark_reminder_sent): {e}")
-        alert_developer("Database schrijffout", f"mark_reminder_sent({user_name}): {e}")
+        alert_developer("Database schrijffout", f"mark_reminder_sent: {e}")
 
 
 def upsert_user(user_name: str, fields: dict):
@@ -256,39 +198,24 @@ def upsert_user(user_name: str, fields: dict):
         last_inact = existing[3] if existing else ""
         last_rem   = existing[4] if existing else ""
 
-        c.execute('''
-            INSERT INTO users (
-                user_name, contacts, active_days, schedules,
-                use_custom_schedule, vacation_mode,
-                last_ping_time, active_window_start, active_window_end,
-                notify_self, own_phone,
-                last_inactivity_alert, last_reminder_sent
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_name) DO UPDATE SET
-                contacts            = excluded.contacts,
-                active_days         = excluded.active_days,
-                schedules           = excluded.schedules,
-                use_custom_schedule = excluded.use_custom_schedule,
-                vacation_mode       = excluded.vacation_mode,
-                notify_self         = excluded.notify_self,
-                own_phone           = excluded.own_phone
-        ''', (
-            user_name,
-            fields.get('contacts', '[]'),
-            fields.get('active_days', json.dumps([0,1,2,3,4,5,6])),
-            fields.get('schedules', '{}'),
-            int(fields.get('use_custom_schedule', True)),
-            int(fields.get('vacation_mode', False)),
-            last_ping, win_start, win_end,
-            int(fields.get('notify_self', False)),
-            fields.get('own_phone', ''),
-            last_inact, last_rem,
-        ))
+        c.execute('''INSERT INTO users (
+            user_name, contacts, active_days, schedules, use_custom_schedule, vacation_mode,
+            last_ping_time, active_window_start, active_window_end,
+            notify_self, own_phone, last_inactivity_alert, last_reminder_sent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_name) DO UPDATE SET
+            contacts=excluded.contacts, active_days=excluded.active_days,
+            schedules=excluded.schedules, use_custom_schedule=excluded.use_custom_schedule,
+            vacation_mode=excluded.vacation_mode, notify_self=excluded.notify_self,
+            own_phone=excluded.own_phone''',
+            (user_name, fields.get('contacts','[]'), fields.get('active_days',json.dumps([0,1,2,3,4,5,6])),
+             fields.get('schedules','{}'), int(fields.get('use_custom_schedule',True)),
+             int(fields.get('vacation_mode',False)), last_ping, win_start, win_end,
+             int(fields.get('notify_self',True)), fields.get('own_phone',''),
+             last_inact, last_rem))
         conn.commit()
         conn.close()
     except Exception as e:
-        log_status(f"❌ DB schrijffout (upsert_user): {e}")
         alert_developer("Database schrijffout", f"upsert_user({user_name}): {e}")
 
 
@@ -296,36 +223,25 @@ def reset_ping(user_name: str):
     try:
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
-        c.execute("""UPDATE users SET
-                        last_ping_time      = '',
-                        active_window_start = '',
-                        active_window_end   = ''
-                     WHERE user_name = ?""", (user_name,))
+        c.execute("UPDATE users SET last_ping_time='', active_window_start='', active_window_end='' WHERE user_name=?", (user_name,))
         conn.commit()
         conn.close()
     except Exception as e:
-        log_status(f"❌ DB schrijffout (reset_ping): {e}")
-        alert_developer("Database schrijffout", f"reset_ping({user_name}): {e}")
+        alert_developer("Database schrijffout", f"reset_ping: {e}")
 
 
-def update_ping(user_name: str, timestamp: str,
-                win_start: str, win_end: str) -> bool:
+def update_ping(user_name: str, timestamp: str, win_start: str, win_end: str) -> bool:
     try:
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
-        c.execute("""UPDATE users SET
-                        last_ping_time      = ?,
-                        active_window_start = ?,
-                        active_window_end   = ?
-                     WHERE user_name = ?""",
+        c.execute("UPDATE users SET last_ping_time=?, active_window_start=?, active_window_end=? WHERE user_name=?",
                   (timestamp, win_start, win_end, user_name))
         updated = c.rowcount
         conn.commit()
         conn.close()
         return updated > 0
     except Exception as e:
-        log_status(f"❌ DB schrijffout (update_ping): {e}")
-        alert_developer("Database schrijffout", f"update_ping({user_name}): {e}")
+        alert_developer("Database schrijffout", f"update_ping: {e}")
         return False
 
 
@@ -333,120 +249,87 @@ def mark_inactivity_alert(user_name: str):
     try:
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
-        c.execute("UPDATE users SET last_inactivity_alert = ? WHERE user_name = ?",
+        c.execute("UPDATE users SET last_inactivity_alert=? WHERE user_name=?",
                   (datetime.now().strftime("%Y-%m-%d"), user_name))
         conn.commit()
         conn.close()
     except Exception as e:
-        log_status(f"❌ DB schrijffout (mark_inactivity_alert): {e}")
-        alert_developer("Database schrijffout", f"mark_inactivity_alert({user_name}): {e}")
+        alert_developer("Database schrijffout", f"mark_inactivity_alert: {e}")
 
 
 def alarm_already_fired(user_name, alarm_date, window_start, window_end):
     try:
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
-        c.execute("""SELECT id FROM alarm_log
-                     WHERE user_name=? AND alarm_date=?
-                     AND window_start=? AND window_end=?""",
+        c.execute("SELECT id FROM alarm_log WHERE user_name=? AND alarm_date=? AND window_start=? AND window_end=?",
                   (user_name, alarm_date, window_start, window_end))
         found = c.fetchone() is not None
         conn.close()
         return found
     except Exception as e:
-        log_status(f"❌ DB leesfout (alarm_already_fired): {e}")
-        alert_developer("Database leesfout", f"alarm_already_fired({user_name}): {e}")
-        return True  # Veilig: bij twijfel geen dubbel alarm
+        alert_developer("Database leesfout", f"alarm_already_fired: {e}")
+        return True
 
 
 def mark_alarm_fired(user_name, alarm_date, window_start, window_end):
     try:
         conn = sqlite3.connect(DB_FILE)
         c    = conn.cursor()
-        c.execute("""INSERT OR IGNORE INTO alarm_log
-                     (user_name, alarm_date, window_start, window_end, fired_at)
-                     VALUES (?, ?, ?, ?, ?)""",
-                  (user_name, alarm_date, window_start, window_end,
-                   datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        c.execute("INSERT OR IGNORE INTO alarm_log (user_name, alarm_date, window_start, window_end, fired_at) VALUES (?,?,?,?,?)",
+                  (user_name, alarm_date, window_start, window_end, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit()
         conn.close()
     except Exception as e:
-        log_status(f"❌ DB schrijffout (mark_alarm_fired): {e}")
-        alert_developer("Database schrijffout", f"mark_alarm_fired({user_name}): {e}")
+        alert_developer("Database schrijffout", f"mark_alarm_fired: {e}")
 
-
-# ============================================================
-#   AUTHENTICATIE
-# ============================================================
 
 def authenticate(data: dict) -> bool:
-    return (
-        data.get('app_key') == APP_SECRET or
-        data.get('secret')  == APP_SECRET
-    )
+    return data.get('app_key') == APP_SECRET or data.get('secret') == APP_SECRET
 
 
 # ============================================================
-#   WHATSAPP — met technische foutdetectie
+#   WHATSAPP
 # ============================================================
 
-def send_whatsapp(phone: str, message: str,
-                  context: str = "") -> bool:
-    """
-    Verstuurt een WhatsApp bericht.
-    Bij een HTTP-fout wordt de developer geïnformeerd
-    via alert_developer — dit is een technisch probleem
-    met de berichtendienst, niet gebruikersgedrag.
-    """
+def send_whatsapp(phone: str, message: str, context: str = "") -> bool:
     clean_phone = normalize_phone(phone)
     if not clean_phone:
         return False
-    params = {
-        "recipient": clean_phone,
-        "apikey":    TEXTMEBOT_KEY,
-        "text":      message,
-    }
     try:
-        r = requests.get(TEXTMEBOT_URL, params=params, timeout=15)
+        r = requests.get(TEXTMEBOT_URL, params={"recipient": clean_phone, "apikey": TEXTMEBOT_KEY, "text": message}, timeout=15)
         if r.status_code != 200:
-            log_status(f"⚠️ WhatsApp API fout ({clean_phone}): HTTP {r.status_code}")
-            alert_developer(
-                "WhatsApp API fout",
-                f"HTTP {r.status_code} bij versturen naar {clean_phone}.\n"
-                f"Context: {context}\n"
-                f"Response: {r.text[:200]}"
-            )
+            alert_developer("WhatsApp API fout", f"HTTP {r.status_code} → {clean_phone} | {context}")
             return False
         return True
     except requests.exceptions.Timeout:
-        log_status(f"⚠️ WhatsApp timeout ({clean_phone})")
-        alert_developer(
-            "WhatsApp API timeout",
-            f"Timeout bij versturen naar {clean_phone}. Context: {context}"
-        )
+        alert_developer("WhatsApp API timeout", f"Timeout → {clean_phone} | {context}")
         return False
     except Exception as e:
-        log_status(f"⚠️ WhatsApp onbekende fout ({clean_phone}): {e}")
-        alert_developer(
-            "WhatsApp onbekende fout",
-            f"Fout bij versturen naar {clean_phone}: {e}. Context: {context}"
-        )
+        alert_developer("WhatsApp onbekende fout", f"{e} → {clean_phone} | {context}")
         return False
 
 
 # ============================================================
-#   GEBRUIKERSBERICHTEN (puur tussen app en gebruiker)
+#   INACTIVITEITSMELDING — slim bericht naar gebruiker
 # ============================================================
 
 def send_user_inactivity_alert(user: dict):
     """
-    Optionele melding aan de gebruiker zelf als de app
-    meer dan 4 uur geen ping heeft gestuurd.
-    Alleen als notify_self=True en eigen nummer bekend.
-    Developer wordt NIET betrokken.
+    Stuurt een WhatsApp naar de gebruiker als de app meer dan
+    4 uur geen ping heeft gestuurd. Alleen als:
+    - notify_self = True (standaard AAN)
+    - own_phone is ingevuld
+    - Nog niet verstuurd vandaag
+
+    Het bericht legt uit:
+    1. Wat er aan de hand is
+    2. Hoe de app te herstart
+    3. Dat autostart niet op elk toestel werkt
+    4. Dat de handleiding uitleg geeft per merk
+    5. Dat de gebruiker berichten kan uitzetten via schuifje
     """
     own_phone   = user.get('own_phone', '')
-    notify_self = bool(user.get('notify_self', 0))
+    notify_self = bool(user.get('notify_self', 1))
     user_name   = user['user_name']
     today_str   = datetime.now().strftime("%Y-%m-%d")
 
@@ -455,27 +338,31 @@ def send_user_inactivity_alert(user: dict):
     if user.get('last_inactivity_alert') == today_str:
         return
 
-    msg = (
-        f"⚠️ *Barkr — Controlemelding*\n\n"
+    message = (
+        f"⚠️ *Barkr — App niet actief*\n\n"
         f"Hallo {user_name},\n\n"
-        f"Je Barkr app heeft de afgelopen {INACTIVITY_HOURS} uur geen "
-        f"activiteit gestuurd.\n\n"
-        f"Controleer of Barkr nog actief is op je telefoon. "
-        f"Open de app om de bewaking te hervatten. 🐾"
+        f"Je Barkr app heeft de afgelopen {INACTIVITY_HOURS} uur geen signaal "
+        f"verstuurd. Zolang de app niet actief is, worden je noodcontacten "
+        f"niet gewaarschuwd als dat nodig is.\n\n"
+        f"*Wat moet je doen?*\n"
+        f"Open de Barkr app op je telefoon om de bewaking te hervatten.\n\n"
+        f"*Automatisch opstarten werkt niet op elk toestel.*\n"
+        f"Open de app → tik op het vraagteken → kies 'Opstartgids' "
+        f"voor instructies voor jouw telefoonmerk.\n\n"
+        f"Wil je deze berichten niet meer ontvangen? Open Barkr → "
+        f"Instellingen → zet het schuifje naast je nummer UIT. 🐾"
     )
-    send_whatsapp(own_phone, msg, context=f"inactivity_alert:{user_name}")
-    mark_inactivity_alert(user_name)
-    log_status(f"📱 INACTIVITEITSMELDING → {user_name} ({own_phone})")
+
+    success = send_whatsapp(own_phone, message, context=f"inactivity:{user_name}")
+    if success:
+        log_status(f"📱 INACTIVITEITSMELDING → {user_name} ({own_phone})")
+        mark_inactivity_alert(user_name)
 
 
 def send_user_reminder(user: dict, reason: str):
-    """
-    Optionele wekelijkse herinnering aan gebruiker zelf.
-    Alleen als notify_self=True en eigen nummer bekend.
-    Developer wordt NIET betrokken.
-    """
+    """Wekelijkse herinnering als geen tijdvenster of app op pauze."""
     own_phone   = user.get('own_phone', '')
-    notify_self = bool(user.get('notify_self', 0))
+    notify_self = bool(user.get('notify_self', 1))
     user_name   = user['user_name']
 
     if not notify_self or not own_phone:
@@ -486,30 +373,27 @@ def send_user_reminder(user: dict, reason: str):
         msg = (
             f"👋 Hallo {user_name}!\n\n"
             f"Je Barkr app is actief maar je hebt nog geen bewakingstijden "
-            f"ingesteld voor deze week.\n\n"
-            f"Zonder tijdvenster bewaakt Barkr je niet. Open de app en stel "
-            f"je tijden in via *Weekplanning*. 🐾"
+            f"ingesteld. Zonder tijdvenster bewaakt Barkr je niet.\n\n"
+            f"Open de app en stel je tijden in via *Weekplanning*. 🐾\n\n"
+            f"Wil je deze herinnering niet? Open Barkr → Instellingen → "
+            f"zet het schuifje naast je nummer UIT."
         )
     else:
         msg = (
             f"👋 Hallo {user_name}!\n\n"
-            f"Je Barkr app staat al een tijdje op pauze. Zolang de app "
-            f"gepauzeerd is, bewaakt Barkr je niet.\n\n"
-            f"Wil je de bewaking hervatten? Open de app en tik op de "
-            f"grote knop om Barkr weer te activeren. 🐾"
+            f"Je Barkr app staat op pauze. Zolang de app gepauzeerd is "
+            f"worden je noodcontacten niet gewaarschuwd.\n\n"
+            f"Open de app en tik op de grote knop om Barkr te activeren. 🐾\n\n"
+            f"Wil je deze herinnering niet? Open Barkr → Instellingen → "
+            f"zet het schuifje naast je nummer UIT."
         )
 
-    send_whatsapp(own_phone, msg, context=f"weekly_reminder:{user_name}:{reason}")
+    send_whatsapp(own_phone, msg, context=f"reminder:{user_name}:{reason}")
     mark_reminder_sent(user_name)
     log_status(f"📱 HERINNERING → {user_name} ({own_phone}) | {reason}")
 
 
 def escalate_user(user: dict, start_str: str, end_str: str):
-    """
-    Verstuurt het alarm naar alle noodcontacten van de gebruiker.
-    Als een alarm NIET verstuurd kan worden (API fout), wordt
-    de developer geïnformeerd — dit is een technisch probleem.
-    """
     user_name    = user['user_name']
     contacts     = json.loads(user['contacts']) if user['contacts'] else []
     failed_count = 0
@@ -520,7 +404,7 @@ def escalate_user(user: dict, start_str: str, end_str: str):
         f"Gebruiker: *{user_name}*\n"
         f"Tijdvenster: {start_str} – {end_str}\n\n"
         f"De ingestelde eindtijd is verstreken zonder dat er gebruik van het "
-        f"toestel is geregistreerd. Een mogelijke oorzaak is een lege batterij.\n\n"
+        f"toestel is geregistreerd.\n\n"
         f"Neem voor de zekerheid contact op met de gebruiker."
     )
 
@@ -529,33 +413,18 @@ def escalate_user(user: dict, start_str: str, end_str: str):
     for contact in contacts:
         phone = contact.get('phone', '')
         if phone:
-            success = send_whatsapp(
-                phone, message,
-                context=f"alarm:{user_name}:{start_str}-{end_str}"
-            )
+            success = send_whatsapp(phone, message, context=f"alarm:{user_name}")
             if success:
                 sent_count += 1
-                log_status(f"✅ Alarm → {phone} ({contact.get('name', '?')})")
+                log_status(f"✅ Alarm → {phone} ({contact.get('name','?')})")
             else:
                 failed_count += 1
-                log_status(f"❌ Alarm mislukt → {phone} ({contact.get('name', '?')})")
             time.sleep(6)
 
-    # Technische fout: alarm kon niet verstuurd worden
     if failed_count > 0 and sent_count == 0:
-        alert_developer(
-            "Alarm volledig mislukt",
-            f"Gebruiker: {user_name} | Venster: {start_str}–{end_str}\n"
-            f"Alle {failed_count} alarm(en) konden niet worden verstuurd. "
-            f"WhatsApp API mogelijk niet bereikbaar."
-        )
+        alert_developer("Alarm volledig mislukt", f"{user_name} | {start_str}–{end_str} | {failed_count} mislukt")
     elif failed_count > 0:
-        alert_developer(
-            "Alarm gedeeltelijk mislukt",
-            f"Gebruiker: {user_name} | Venster: {start_str}–{end_str}\n"
-            f"{sent_count} verstuurd, {failed_count} mislukt. "
-            f"Controleer de WhatsApp API."
-        )
+        alert_developer("Alarm gedeeltelijk mislukt", f"{user_name} | {sent_count} OK, {failed_count} mislukt")
 
 
 # ============================================================
@@ -567,7 +436,6 @@ def get_active_window(user: dict, day_idx: int) -> tuple[str, str]:
     win_end   = user.get('active_window_end',   '')
     if win_start and win_end and win_start != '??:??' and win_end != '??:??':
         return win_start, win_end
-
     schedules = {}
     if user.get('schedules'):
         try:
@@ -593,19 +461,14 @@ def all_windows_empty(schedules_json: str) -> bool:
 
 
 def monitoring_loop():
-    log_status(
-        f"🚀 BARKR ENGINE v9.0 GESTART | "
-        f"Ping timeout: {PING_TIMEOUT}s | "
-        f"Developer alerts: alleen technische fouten"
-    )
+    log_status(f"🚀 BARKR ENGINE v9.1 GESTART | Ping timeout: {PING_TIMEOUT}s | Inactiviteit na: {INACTIVITY_HOURS}u")
 
     while True:
         try:
             current_time = time.time()
 
             for uname, state in list(user_states.items()):
-                if (state["status"] == "online" and
-                        (current_time - state["last_ping"]) > PING_TIMEOUT):
+                if state["status"] == "online" and (current_time - state["last_ping"]) > PING_TIMEOUT:
                     user_states[uname]["status"] = "offline"
                     log_status(f"📵 OFFLINE → {uname} | {state['window']}")
 
@@ -635,7 +498,7 @@ def monitoring_loop():
                     except ValueError:
                         pass
 
-                # ---- WEKELIJKSE HERINNERING (puur naar gebruiker) ----
+                # Wekelijkse herinnering
                 if user_is_active and reminder_due(user.get('last_reminder_sent', '')):
                     if all_windows_empty(user.get('schedules', '{}')):
                         send_user_reminder(user, 'no_window')
@@ -644,18 +507,17 @@ def monitoring_loop():
                         send_user_reminder(user, 'vacation_mode')
                         continue
 
-                # ---- INACTIVITEITSMELDING (puur naar gebruiker) ----
+                # Inactiviteitsmelding na 4 uur
                 if user_is_active and last_ping_time:
                     try:
                         last_ping_dt  = datetime.strptime(last_ping_time, "%Y-%m-%d %H:%M:%S")
                         inactief_uren = (now - last_ping_dt).total_seconds() / 3600
-                        if (inactief_uren >= INACTIVITY_HOURS and
-                                user.get('last_inactivity_alert') != today_str):
+                        if inactief_uren >= INACTIVITY_HOURS and user.get('last_inactivity_alert') != today_str:
                             send_user_inactivity_alert(user)
                     except ValueError:
                         pass
 
-                # ---- NORMALE BEWAKINGSLOGICA ----
+                # Normale bewakingslogica
                 if user.get('vacation_mode'):
                     continue
 
@@ -670,29 +532,19 @@ def monitoring_loop():
                     continue
 
                 start_str, end_str = get_active_window(user, day_idx)
-
                 if not start_str or not end_str:
                     continue
-
                 if is_empty_window(start_str, end_str):
                     continue
 
                 try:
-                    start_dt = datetime.combine(
-                        now.date(), datetime.strptime(start_str, "%H:%M").time()
-                    )
-                    end_dt = datetime.combine(
-                        now.date(), datetime.strptime(end_str, "%H:%M").time()
-                    )
+                    start_dt = datetime.combine(now.date(), datetime.strptime(start_str, "%H:%M").time())
+                    end_dt   = datetime.combine(now.date(), datetime.strptime(end_str,   "%H:%M").time())
                 except ValueError:
                     continue
 
-                if start_dt >= end_dt:
+                if start_dt >= end_dt or now <= end_dt:
                     continue
-
-                if now <= end_dt:
-                    continue
-
                 if alarm_already_fired(user_name, today_str, start_str, end_str):
                     continue
 
@@ -701,16 +553,11 @@ def monitoring_loop():
                 last_ping_dt = None
                 if last_ping_time:
                     try:
-                        last_ping_dt = datetime.strptime(
-                            last_ping_time, "%Y-%m-%d %H:%M:%S"
-                        )
+                        last_ping_dt = datetime.strptime(last_ping_time, "%Y-%m-%d %H:%M:%S")
                     except ValueError:
                         pass
 
-                was_actief = (
-                    last_ping_dt is not None and
-                    start_dt <= last_ping_dt < end_dt
-                )
+                was_actief = last_ping_dt is not None and start_dt <= last_ping_dt < end_dt
 
                 if was_actief:
                     log_status(f"✅ {user_name} was actief. Geen alarm.")
@@ -721,11 +568,7 @@ def monitoring_loop():
 
         except Exception as e:
             log_status(f"⚠️ MONITORING LOOP CRASH: {e}")
-            alert_developer(
-                "Monitoring loop crash",
-                f"Onverwachte fout in monitoring loop: {e}\n"
-                f"De loop blijft draaien maar dit vereist onderzoek."
-            )
+            alert_developer("Monitoring loop crash", str(e))
 
         time.sleep(5)
 
@@ -736,7 +579,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "9.0-PRODUCTIE"}), 200
+    return jsonify({"status": "online", "version": "9.1-PRODUCTIE"}), 200
 
 
 @app.route('/save_settings', methods=['POST'])
@@ -744,7 +587,6 @@ def save_settings():
     data = request.get_json(silent=True)
     if not data or not authenticate(data):
         return jsonify({"status": "error", "message": "Unauthorized"}), 403
-
     user_name = (data.get('name') or '').strip()
     if not user_name:
         return jsonify({"status": "error", "message": "Naam ontbreekt"}), 400
@@ -755,10 +597,9 @@ def save_settings():
         'schedules':           json.dumps(data.get('schedules', {})),
         'use_custom_schedule': data.get('useCustomSchedule', True),
         'vacation_mode':       data.get('vacationMode', False),
-        'notify_self':         data.get('notifySelf', False),
+        'notify_self':         data.get('notifySelf', True),
         'own_phone':           data.get('ownPhone', ''),
     })
-
     reset_ping(user_name)
     log_status(f"💾 OPGESLAGEN → '{user_name}'")
     return jsonify({"status": "ok"}), 200
@@ -769,7 +610,6 @@ def ping():
     data = request.get_json(silent=True)
     if not data or not authenticate(data):
         return jsonify({"status": "error", "message": "Unauthorized"}), 403
-
     user_name = (data.get('name') or '').strip()
     if not user_name:
         return jsonify({"status": "error", "message": "Naam ontbreekt"}), 400
@@ -781,19 +621,15 @@ def ping():
     current_time  = time.time()
 
     if is_empty_window(win_start, win_end):
-        # Registreer activiteit maar sla geen venster op
         try:
             conn = sqlite3.connect(DB_FILE)
             c    = conn.cursor()
-            c.execute("UPDATE users SET last_ping_time = ? WHERE user_name = ?",
-                      (now_str, user_name))
+            c.execute("UPDATE users SET last_ping_time=? WHERE user_name=?", (now_str, user_name))
             conn.commit()
             conn.close()
         except Exception as e:
-            alert_developer("Database schrijffout", f"ping update (no window) {user_name}: {e}")
-        user_states[user_name] = {
-            "status": "online", "last_ping": current_time, "window": "geen venster"
-        }
+            alert_developer("Database schrijffout", f"ping (no window): {e}")
+        user_states[user_name] = {"status": "online", "last_ping": current_time, "window": "geen venster"}
         return jsonify({"status": "skipped", "reason": "no active window"}), 200
 
     window_str = f"{win_start}–{win_end}"
@@ -801,16 +637,14 @@ def ping():
     if state["status"] == "offline":
         log_status(f"📱 ONLINE → {user_name} | {window_str}")
 
-    user_states[user_name] = {
-        "status": "online", "last_ping": current_time, "window": window_str
-    }
+    user_states[user_name] = {"status": "online", "last_ping": current_time, "window": window_str}
 
     user_updated = update_ping(user_name, now_str, win_start, win_end)
     if not user_updated:
         upsert_user(user_name, {
             'contacts': '[]', 'active_days': json.dumps([0,1,2,3,4,5,6]),
             'schedules': '{}', 'use_custom_schedule': True,
-            'vacation_mode': False, 'notify_self': False, 'own_phone': '',
+            'vacation_mode': False, 'notify_self': True, 'own_phone': '',
         })
         update_ping(user_name, now_str, win_start, win_end)
         log_status(f"👤 NIEUWE GEBRUIKER → '{user_name}'")
@@ -845,19 +679,14 @@ def send_optin():
 
     message_to_contact = (
         f"👋 Hallo {contact_name}!\n\n"
-        f"*{user_name}* heeft je toegevoegd als noodcontact in de *Barkr* app "
-        f"— een digitale waakhond die automatisch alarm slaat als er iets mis gaat.\n\n"
-        f"Om berichten te kunnen ontvangen moet je WhatsApp eenmalig worden "
-        f"geactiveerd. Stuur hiervoor dit bericht naar *+34 623 78 95 80*:\n\n"
+        f"*{user_name}* heeft je toegevoegd als noodcontact in de *Barkr* app.\n\n"
+        f"Om berichten te ontvangen moet je WhatsApp eenmalig activeren. "
+        f"Stuur dit bericht naar *+34 623 78 95 80*:\n\n"
         f"`I allow callmebot to send me messages`\n\n"
-        f"Na activatie ben je direct bereikbaar als noodcontact. "
-        f"Je hoeft verder niets te doen. 🐾"
+        f"Na activatie ben je direct bereikbaar als noodcontact. 🐾"
     )
 
-    success = send_whatsapp(
-        phone, message_to_contact,
-        context=f"optin:{user_name}:{contact_name}"
-    )
+    success = send_whatsapp(phone, message_to_contact, context=f"optin:{user_name}")
 
     if success:
         register_opt_in(phone, user_name)
@@ -865,15 +694,11 @@ def send_optin():
 
         if user_phone:
             time.sleep(6)
-            message_to_user = (
+            send_whatsapp(user_phone, (
                 f"✅ *Barkr bevestiging*\n\n"
-                f"Het activatiebericht is verstuurd naar *{contact_name}*.\n\n"
-                f"Zodra {contact_name} zich aanmeldt, is het contact actief "
-                f"en ontvangt het automatisch een alarm als jij je tijdvenster mist.\n\n"
-                f"Je hoeft verder niets te doen. 🐾"
-            )
-            send_whatsapp(user_phone, message_to_user,
-                          context=f"optin_confirm:{user_name}")
+                f"Activatiebericht verstuurd naar *{contact_name}*.\n"
+                f"Zodra {contact_name} zich aanmeldt is het contact actief. 🐾"
+            ), context=f"optin_confirm:{user_name}")
 
         return jsonify({"status": "sent"}), 200
     else:
@@ -885,26 +710,19 @@ def test_contact():
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"status": "error"}), 400
-    contact_name = data.get('name', 'Contact')
-    phone        = data.get('phone', '')
+    phone = data.get('phone', '')
     if not phone:
         return jsonify({"status": "error", "message": "Geen telefoonnummer"}), 400
     message = (
         f"🔔 *BARKR TESTBERICHT*\n\n"
-        f"Hallo {contact_name}! Dit is een testbericht van Barkr.\n"
-        f"Uw nummer is succesvol gekoppeld als noodcontact.\n\n"
-        f"U hoeft niets te doen."
+        f"Hallo {data.get('name','Contact')}! Dit is een testbericht van Barkr.\n"
+        f"Uw nummer is succesvol gekoppeld als noodcontact."
     )
-    success = send_whatsapp(phone, message, context=f"test:{contact_name}")
-    log_status(f"{'✅' if success else '❌'} TESTBERICHT → {contact_name} ({phone})")
+    success = send_whatsapp(phone, message, context=f"test:{data.get('name','')}")
     if success:
         return jsonify({"status": "success"}), 200
     return jsonify({"status": "error", "message": "Verzenden mislukt"}), 500
 
-
-# ============================================================
-#   OPSTARTEN
-# ============================================================
 
 if __name__ == '__main__':
     init_db()
