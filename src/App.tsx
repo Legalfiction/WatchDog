@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog,
-  Clock, Info, ChevronDown, Wifi, MessageCircle, CheckCircle2, Phone,
+  Clock, Info, ChevronDown, Wifi, MessageCircle, CheckCircle2, Phone, Bell,
 } from 'lucide-react';
 
 import { TRANSLATIONS } from './constants/translations';
