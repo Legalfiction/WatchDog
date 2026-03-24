@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { TRANSLATIONS } from './constants/translations';
-import { COUNTRIES } from './constants/countries';
+import { COUNTRIES, LANGUAGES } from './constants/countries';
 import { InfoPage } from './components/InfoPage';
 
 const ENDPOINTS  = ['https://barkr.nl', 'http://192.168.1.38:5000'];
@@ -97,13 +97,15 @@ export default function App() {
                       ? parsed.schedules : defaultSchedules,
       ownPhone:     parsed.ownPhone     || '',
       notifySelf:   parsed.notifySelf   !== undefined ? parsed.notifySelf : false,
+      language:     parsed.language     || 'nl',
     };
   });
 
+  const langObj    = LANGUAGES[settings.language] || LANGUAGES['nl'];
+  const lang       = langObj?.lang || 'nl';
+  const daysVoluit = langObj?.days || ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
   const countryObj = COUNTRIES[settings.country] || COUNTRIES['NL'];
-  const lang       = countryObj?.lang || 'nl';
   const prefix     = countryObj?.prefix || '+31';
-  const daysVoluit = countryObj?.days || ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
 
   const isBase        = activeTab === 'base';
   const activeDateStr = activeTab === 'today' ? todayStr   : tomorrowStr;
@@ -175,7 +177,12 @@ export default function App() {
       const d = new Date(), dStr = getLocalYYYYMMDD(d);
       const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       setSettings((prev: any) => {
-        if (prev.overrides?.[dStr] && tStr > prev.overrides[dStr].end) {
+        const endTime = prev.overrides[dStr].end;
+          const startTime = prev.overrides[dStr].start;
+          // Venster over middernacht: eindtijd < starttijd
+          const isMidnight = endTime < startTime;
+          const expired = isMidnight ? false : tStr > endTime;
+          if (prev.overrides?.[dStr] && expired) {
           const n = { ...prev.overrides };
           delete n[dStr];
           if (activeTab === 'today') setActiveTab('base');
@@ -191,7 +198,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
+
+    // Telefoonnummer is altijd het noodcontact nummer
+    // Dit is de enige constante sleutel in het systeem
     const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
+    if (!contactPhone || contactPhone.length < 8) return;
 
     const payload: any = {
       ...settings,
@@ -333,7 +344,25 @@ export default function App() {
       {!showSettings && !showManual && !showWeekPlan && (
         <main className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar">
           <div className="flex flex-col items-center pt-2">
-            <button onClick={() => setSettings({ ...settings, vacationMode: !settings.vacationMode })}
+            <button onClick={() => {
+              const newVacation = !settings.vacationMode;
+              const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
+              setSettings({ ...settings, vacationMode: newVacation });
+              // Direct opslaan zonder vertraging
+              if (activeUrl && contactPhone && contactPhone.length >= 8) {
+                fetch(`${activeUrl}/save_settings`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ...settings,
+                    vacationMode: newVacation,
+                    app_key: 'BARKR_SECURE_V1',
+                    ownPhone: contactPhone,
+                    useCustomSchedule: true,
+                    activeDays: [0,1,2,3,4,5,6],
+                  }),
+                }).catch(() => {});
+              }
+            }}
               disabled={status !== 'connected'}
               className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 overflow-hidden border-[8px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
