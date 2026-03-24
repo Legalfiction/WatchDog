@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.2
+#   BARKR BACKEND v10.22
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
