@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.25
+#   BARKR BACKEND v10.2
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -250,7 +250,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.26 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.28 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -346,7 +346,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.26"}), 200
+    return jsonify({"status": "online", "version": "10.28"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -361,8 +361,8 @@ def heartbeat():
     source        = data.get('source', 'unknown')
     device_status = data.get('device_status', 'unknown')
 
-    if not own_phone:
-        return jsonify({"status": "error", "message": "Telefoonnummer ontbreekt"}), 400
+    if not own_phone or len(own_phone) < 8:
+        return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
     now_str      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current_time = time.time()
@@ -391,7 +391,9 @@ def heartbeat():
             pass
 
     source = data.get('source', 'webview')
-    log_status(f"💓 PING → {user_name} ({own_phone}) | venster: {window_info} | bron: {source}")
+    status_icon = "🔓" if device_status == "unlocked" else "🔒"
+    status_txt = "IN GEBRUIK" if device_status == "unlocked" else "VERGRENDELD"
+    log_status(f"💓 {status_icon} PING -> {user_name} ({own_phone}) | {status_txt} | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
     updated = update_ping(own_phone, now_str)
@@ -433,8 +435,8 @@ def ping():
         if row:
             own_phone = row[0]
 
-    if not own_phone:
-        return jsonify({"status": "error", "message": "Telefoonnummer ontbreekt"}), 400
+    if not own_phone or len(own_phone) < 8:
+        return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
     now_str      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current_time = time.time()
@@ -492,8 +494,8 @@ def save_settings():
     own_phone = normalize_phone(data.get('ownPhone', ''))
     user_name = (data.get('name') or '').strip()
 
-    if not own_phone:
-        return jsonify({"status": "error", "message": "Telefoonnummer ontbreekt"}), 400
+    if not own_phone or len(own_phone) < 8:
+        return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
     upsert_user(own_phone, {
         'user_name':    user_name,
