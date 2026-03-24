@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v9.2 — PRODUCTIE
+#   BARKR BACKEND v9.21 — PRODUCTIE
 #
 #   Fix v9.2:
 #   - Ping wordt genegeerd als naam korter is dan 3 tekens
@@ -351,11 +351,21 @@ def escalate_user(user: dict, start_str: str, end_str: str):
         alert_developer("Alarm mislukt", f"{user_name} | {start_str}–{end_str} | alle {failed_count} mislukt")
 
 
-def get_active_window(user: dict, day_idx: int) -> tuple[str, str]:
+def get_active_window(user: dict, day_idx: int, now: datetime = None) -> tuple[str, str]:
+    if now is None:
+        now = datetime.now()
     win_start = user.get('active_window_start', '')
     win_end   = user.get('active_window_end', '')
+    # Gebruik opgeslagen venster alleen als het nog niet verlopen is
     if win_start and win_end and win_start != '??:??' and win_end != '??:??':
-        return win_start, win_end
+        try:
+            end_dt = datetime.combine(now.date(), datetime.strptime(win_end, "%H:%M").time())
+            # Geef 2 minuten extra marge na deadline
+            if now <= end_dt + timedelta(minutes=2):
+                return win_start, win_end
+        except Exception:
+            return win_start, win_end
+    # Fallback: weekplanning
     schedules = {}
     if user.get('schedules'):
         try:
@@ -381,7 +391,7 @@ def all_windows_empty(schedules_json: str) -> bool:
 
 
 def monitoring_loop():
-    log_status(f"🚀 BARKR ENGINE v9.2 GESTART | Ping timeout: {PING_TIMEOUT}s | Min naam: {MIN_NAME_LENGTH} tekens")
+    log_status(f"🚀 BARKR ENGINE v9.3 GESTART | Ping timeout: {PING_TIMEOUT}s | Min naam: {MIN_NAME_LENGTH} tekens")
 
     while True:
         try:
@@ -453,7 +463,7 @@ def monitoring_loop():
                 if day_idx not in active_days:
                     continue
 
-                start_str, end_str = get_active_window(user, day_idx)
+                start_str, end_str = get_active_window(user, day_idx, now)
                 if not start_str or not end_str:
                     continue
                 if is_empty_window(start_str, end_str):
@@ -498,7 +508,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "9.2-PRODUCTIE"}), 200
+    return jsonify({"status": "online", "version": "9.3-PRODUCTIE"}), 200
 
 
 @app.route('/save_settings', methods=['POST'])
