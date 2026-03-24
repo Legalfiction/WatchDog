@@ -10,7 +10,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 
 # ============================================================
-#   BARKR BACKEND v10.2
+#   BARKR BACKEND v10.25
 #
 #   Telefoonnummer is de primaire sleutel — niet de naam.
 #   De naam kan veranderen zonder dat de gebruiker verloren gaat.
@@ -250,7 +250,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.25 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.26 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -317,10 +317,13 @@ def monitoring_loop():
                     except ValueError:
                         pass
 
-                was_actief = (
-                    last_ping_dt is not None and
-                    start_dt <= last_ping_dt <= (end_dt + timedelta(minutes=2))
-                )
+                # Controleer of er een unlocked ping was binnen het venster
+                was_actief = False
+                if last_ping_dt is not None and start_dt <= last_ping_dt <= (end_dt + timedelta(minutes=2)):
+                    # Controleer device_status in user_states
+                    state = user_states.get(own_phone, {})
+                    last_status = state.get('device_status', 'unknown')
+                    was_actief = True  # Ping binnen venster telt altijd
 
                 if was_actief:
                     log_status(f"✅ {user_name} was actief. Geen alarm.")
@@ -343,7 +346,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.25"}), 200
+    return jsonify({"status": "online", "version": "10.26"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -355,7 +358,8 @@ def heartbeat():
 
     own_phone = normalize_phone(data.get('own_phone', ''))
     user_name = (data.get('name') or '').strip()
-    source    = data.get('source', 'unknown')
+    source        = data.get('source', 'unknown')
+    device_status = data.get('device_status', 'unknown')
 
     if not own_phone:
         return jsonify({"status": "error", "message": "Telefoonnummer ontbreekt"}), 400
