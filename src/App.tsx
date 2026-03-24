@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog,
-  Clock, Info, ChevronDown, Wifi, MessageCircle, CheckCircle2,
-  Bell, AlertCircle, Phone,
+  Clock, Info, ChevronDown, Wifi, MessageCircle, CheckCircle2, Phone,
 } from 'lucide-react';
 
 import { TRANSLATIONS } from './constants/translations';
@@ -16,8 +15,8 @@ const EMPTY_TIME = '00:00';
 declare global {
   interface Window {
     BarkrAndroid?: {
-      updateSettings: (json: string) => void;
-      getSettings: () => string;
+      saveCredentials: (ownPhone: string, userName: string) => void;
+      getCredentials: () => string;
     };
   }
 }
@@ -37,7 +36,6 @@ for (let i = 0; i < 7; i++) {
   defaultSchedules[i] = { startTime: EMPTY_TIME, endTime: EMPTY_TIME };
 }
 
-// Voeg landprefix toe als die ontbreekt
 const ensurePrefix = (phone: string, prefix: string): string => {
   const clean = phone.replace(/\s/g, '');
   if (!clean) return '';
@@ -47,11 +45,12 @@ const ensurePrefix = (phone: string, prefix: string): string => {
   return prefix + clean;
 };
 
-const syncToAndroid = (name: string, windowStart: string, windowEnd: string, vacationMode: boolean) => {
+// Sla telefoonnummer en naam op in Android SharedPreferences
+// zodat BarkrService ze kan gebruiken voor de heartbeat
+const saveToAndroid = (ownPhone: string, userName: string) => {
   if (window.BarkrAndroid) {
-    window.BarkrAndroid.updateSettings(JSON.stringify({
-      name, window_start: windowStart, window_end: windowEnd, vacation_mode: vacationMode,
-    }));
+    window.BarkrAndroid.saveCredentials(ownPhone, userName);
+    console.log('✅ Android credentials opgeslagen:', userName, ownPhone);
   }
 };
 
@@ -125,9 +124,12 @@ export default function App() {
   const todayIsActive    = todaySchedule &&
     todaySchedule.startTime !== EMPTY_TIME && todaySchedule.endTime !== EMPTY_TIME;
 
+  // Sla credentials op in Android bij elke wijziging van naam of telefoonnummer
   useEffect(() => {
-    syncToAndroid(settings.name, todayWindowStart || EMPTY_TIME, todayWindowEnd || EMPTY_TIME, settings.vacationMode);
-  }, [settings.name, todayWindowStart, todayWindowEnd, settings.vacationMode]);
+    if (settings.ownPhone && settings.name) {
+      saveToAndroid(settings.ownPhone, settings.name);
+    }
+  }, [settings.ownPhone, settings.name]);
 
   const checkOptIn = useCallback(async (phone: string) => {
     if (!activeUrl || !phone || phone.length < 6) return;
@@ -152,7 +154,12 @@ export default function App() {
     try {
       const res = await fetch(`${activeUrl}/send_optin`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_key: APP_KEY, phone, contact_name: contactName, user_name: settings.name, user_phone: settings.ownPhone }),
+        body: JSON.stringify({
+          app_key: APP_KEY, phone,
+          contact_name: contactName,
+          user_name: settings.name,
+          user_phone: settings.ownPhone,
+        }),
       });
       const data = await res.json();
       if (data.status === 'sent') setOptInStatus(prev => ({ ...prev, [phone]: 'opted_in' }));
@@ -161,6 +168,7 @@ export default function App() {
     }
   };
 
+  // Overrides vervallen na eindtijd
   useEffect(() => {
     const interval = setInterval(() => {
       const d = new Date(), dStr = getLocalYYYYMMDD(d);
@@ -178,10 +186,18 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
+  // Instellingen opslaan naar Pi
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
-    if (!activeUrl) return;
-    const payload: any = { ...settings, app_key: APP_KEY, useCustomSchedule: true, activeDays: [0,1,2,3,4,5,6] };
+    if (!activeUrl || !settings.ownPhone) return;
+
+    const payload: any = {
+      ...settings,
+      app_key: APP_KEY,
+      useCustomSchedule: true,
+      activeDays: [0,1,2,3,4,5,6],
+      ownPhone: settings.ownPhone,
+    };
     payload.schedules = JSON.parse(JSON.stringify(settings.schedules));
     if (settings.overrides[todayStr]) {
       payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
@@ -189,6 +205,7 @@ export default function App() {
     if (settings.overrides[tomorrowStr]) {
       payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
     }
+
     const timer = setTimeout(() => {
       fetch(`${activeUrl}/save_settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -198,6 +215,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
+  // Endpoint detectie
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
@@ -214,22 +232,29 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
+  // WebView ping — stuurt ook own_phone mee
   useEffect(() => {
-    if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
+    if (status !== 'connected' || !activeUrl || settings.vacationMode || !settings.ownPhone) return;
     const sendPing = () => {
       if (document.visibilityState !== 'visible' || !todayHasWindow) return;
-      syncToAndroid(settings.name, todayWindowStart || EMPTY_TIME, todayWindowEnd || EMPTY_TIME, false);
       fetch(`${activeUrl}/ping`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: settings.name, app_key: APP_KEY, active_window: { start: todayWindowStart, end: todayWindowEnd } }),
-      }).then(res => { if (res.ok) setLastPing(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })); }).catch(() => {});
+        body: JSON.stringify({
+          name: settings.name,
+          own_phone: settings.ownPhone,
+          app_key: APP_KEY,
+          active_window: { start: todayWindowStart, end: todayWindowEnd },
+        }),
+      }).then(res => {
+        if (res.ok) setLastPing(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }).catch(() => {});
     };
     if (document.visibilityState === 'visible') sendPing();
     const pingInterval = setInterval(sendPing, 5000);
     const handleVis = () => { if (document.visibilityState === 'visible') sendPing(); };
     document.addEventListener('visibilitychange', handleVis);
     return () => { clearInterval(pingInterval); document.removeEventListener('visibilitychange', handleVis); };
-  }, [status, activeUrl, settings.vacationMode, settings.name, todayHasWindow, todayWindowStart, todayWindowEnd]);
+  }, [status, activeUrl, settings.vacationMode, settings.name, settings.ownPhone, todayHasWindow, todayWindowStart, todayWindowEnd]);
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
     if (activeTab === type) {
@@ -256,14 +281,11 @@ export default function App() {
     setSettings({ ...settings, overrides: n });
   };
 
-  const handleNotifySelfToggle = () => {
-    const newVal = !settings.notifySelf;
-    setSettings({ ...settings, notifySelf: newVal, ownPhone: newVal ? settings.ownPhone : '' });
-  };
-
   const handlePhoneBlur = () => {
     if (settings.ownPhone) {
-      setSettings({ ...settings, ownPhone: ensurePrefix(settings.ownPhone, prefix) });
+      const fixed = ensurePrefix(settings.ownPhone, prefix);
+      setSettings({ ...settings, ownPhone: fixed });
+      saveToAndroid(fixed, settings.name);
     }
   };
 
@@ -285,6 +307,7 @@ export default function App() {
         * { box-shadow: none !important; text-shadow: none !important; }
       `}</style>
 
+      {/* HEADER */}
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-orange-600 p-1.5 rounded-lg"><Dog size={20} className="text-white" /></div>
@@ -304,6 +327,7 @@ export default function App() {
         </div>
       </header>
 
+      {/* HOOFDSCHERM */}
       {!showSettings && !showManual && !showWeekPlan && (
         <main className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar">
           <div className="flex flex-col items-center pt-2">
@@ -374,6 +398,7 @@ export default function App() {
         </main>
       )}
 
+      {/* WEEKPLANNING */}
       {showWeekPlan && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar">
           <header className="flex justify-between items-center mb-2">
@@ -402,68 +427,64 @@ export default function App() {
         </div>
       )}
 
+      {/* INFO */}
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto no-scrollbar">
           <InfoPage onClose={() => setShowManual(false)} lang={lang} />
         </div>
       )}
 
-      {/* INSTELLINGEN — professioneel, compact, overzichtelijk */}
+      {/* INSTELLINGEN */}
       {showSettings && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto no-scrollbar">
           <div className="p-5 space-y-4 pb-24">
-
-            {/* Header */}
             <div className="flex justify-between items-center pt-1">
               <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2>
               <button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full border border-slate-200"><X size={20} /></button>
             </div>
 
-            {/* SECTIE 1: Profiel */}
+            {/* PROFIEL */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Profiel</p>
               </div>
               <div className="p-4 space-y-3">
-                <div>
+                <div className="relative">
                   <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">{t('country', lang)}</label>
-                  <div className="relative">
-                    <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700 appearance-none outline-none text-sm">
-                      {Object.keys(COUNTRIES).map(key => (
-                        <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].name} ({COUNTRIES[key].prefix})</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-3.5 text-slate-400 pointer-events-none" size={16} />
-                  </div>
+                  <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700 appearance-none outline-none text-sm">
+                    {Object.keys(COUNTRIES).map(key => (
+                      <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].name} ({COUNTRIES[key].prefix})</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-9 text-slate-400 pointer-events-none" size={16} />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">{t('user_name', lang)}</label>
-                  <input value={settings.name} onChange={e => setSettings({ ...settings, name: e.target.value })}
+                  <input value={settings.name}
+                    onChange={e => setSettings({ ...settings, name: e.target.value })}
+                    onBlur={() => saveToAndroid(settings.ownPhone, settings.name)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700 text-sm outline-none" />
                 </div>
               </div>
             </div>
 
-            {/* SECTIE 2: Meldingen — schuifje EERST, nummer daarna */}
+            {/* MELDINGEN */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Meldingen</p>
               </div>
               <div className="p-4 space-y-3">
-                {/* Schuifje eerst */}
                 <div className="flex items-center justify-between">
                   <div className="flex-1 pr-4">
                     <p className="text-sm font-bold text-slate-800">{t('notify_self_label', lang)}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{t('notify_self_desc', lang)}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{t('notify_self_desc', lang)}</p>
                   </div>
-                  <button onClick={handleNotifySelfToggle}
+                  <button onClick={() => setSettings({ ...settings, notifySelf: !settings.notifySelf })}
                     className={`relative w-12 h-6 rounded-full transition-all duration-300 shrink-0 ${settings.notifySelf ? 'bg-orange-500' : 'bg-slate-200'}`}>
                     <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 ${settings.notifySelf ? 'left-6' : 'left-0.5'}`} />
                   </button>
                 </div>
-
-                {/* Telefoonnummer — alleen zichtbaar als schuifje AAN */}
                 {settings.notifySelf && (
                   <div className="pt-1 border-t border-slate-100">
                     <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
@@ -475,13 +496,12 @@ export default function App() {
                       onBlur={handlePhoneBlur}
                       placeholder={`bijv. ${prefix}612345678`}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-slate-700 text-sm outline-none" />
-                    <p className="text-[10px] text-slate-400 mt-1">{t('own_phone_hint', lang)}</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* SECTIE 3: Noodcontacten */}
+            {/* NOODCONTACTEN */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('contacts', lang)}</p>
@@ -500,7 +520,7 @@ export default function App() {
                       <div className="flex justify-between items-center">
                         <p className="text-[10px] font-black text-slate-500 uppercase">Contact {i + 1}</p>
                         <button onClick={() => { const n = [...settings.contacts]; n.splice(i, 1); setSettings({ ...settings, contacts: n }); }}
-                          className="text-slate-300 hover:text-red-400"><Trash2 size={15} /></button>
+                          className="text-slate-300"><Trash2 size={15} /></button>
                       </div>
                       <input placeholder={t('c_name', lang)} value={c.name}
                         onChange={e => { const n = [...settings.contacts]; n[i].name = e.target.value; setSettings({ ...settings, contacts: n }); }}
@@ -533,7 +553,7 @@ export default function App() {
               </div>
             </div>
 
-            <button onClick={() => setShowSettings(false)}
+            <button onClick={() => { saveToAndroid(settings.ownPhone, settings.name); setShowSettings(false); }}
               className="w-full py-4 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] text-sm">
               {t('save', lang)}
             </button>
