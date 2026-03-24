@@ -250,7 +250,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.28 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.29 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -317,13 +317,17 @@ def monitoring_loop():
                     except ValueError:
                         pass
 
-                # Controleer of er een unlocked ping was binnen het venster
+                # Bewijs van leven = unlocked ping binnen het venster
+                # locked pings tellen NIET als actief gebruik
                 was_actief = False
+                state = user_states.get(own_phone, {})
+                last_status = state.get('device_status', 'unknown')
                 if last_ping_dt is not None and start_dt <= last_ping_dt <= (end_dt + timedelta(minutes=2)):
-                    # Controleer device_status in user_states
-                    state = user_states.get(own_phone, {})
-                    last_status = state.get('device_status', 'unknown')
-                    was_actief = True  # Ping binnen venster telt altijd
+                    if last_status == 'unlocked':
+                        was_actief = True
+                        log_status(f"✅ {user_name} was actief (toestel IN GEBRUIK). Geen alarm.")
+                    else:
+                        log_status(f"❌ {user_name} ping binnen venster maar toestel VERGRENDELD. Alarm!")
 
                 if was_actief:
                     log_status(f"✅ {user_name} was actief. Geen alarm.")
@@ -346,7 +350,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.28"}), 200
+    return jsonify({"status": "online", "version": "10.29"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
