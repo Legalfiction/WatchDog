@@ -48,29 +48,51 @@ jobs:
           cp AndroidManifest.xml  android/app/src/main/AndroidManifest.xml
           echo "✅ Native bestanden geïnjecteerd"
 
+      - name: Zoek logo bestand
+        run: |
+          echo "=== Zoeken naar logo bestanden ==="
+          find . -name "logo.png" -not -path "./node_modules/*" -not -path "./.git/*"
+          echo "=== Root directory inhoud ==="
+          ls -la *.png 2>/dev/null || echo "Geen PNG in root"
+          echo "=== Public directory ==="
+          ls -la public/*.png 2>/dev/null || echo "Geen PNG in public/"
+
       - name: Installeer ImageMagick
         run: sudo apt-get install -y imagemagick
 
       - name: Genereer app iconen uit logo.png
         run: |
+          # Zoek logo op alle mogelijke locaties
+          LOGO=""
+          if [ -f "public/logo.png" ]; then
+            LOGO="public/logo.png"
+            echo "✅ Logo gevonden in public/"
+          elif [ -f "logo.png" ]; then
+            LOGO="logo.png"
+            echo "✅ Logo gevonden in root"
+          else
+            echo "❌ Logo niet gevonden — gebruik standaard icoon"
+            exit 0
+          fi
+
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
 
-          convert public/logo.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          convert public/logo.png -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
-          convert public/logo.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          convert public/logo.png -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
-          convert public/logo.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          convert public/logo.png -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
-          convert public/logo.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          convert public/logo.png -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
-          convert public/logo.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          convert public/logo.png -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          convert "$LOGO" -resize 48x48   android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          convert "$LOGO" -resize 72x72   android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          convert "$LOGO" -resize 96x96   android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          convert "$LOGO" -resize 144x144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          convert "$LOGO" -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          convert "$LOGO" -resize 192x192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 
-          echo "✅ Iconen gegenereerd uit logo.png"
+          echo "✅ Iconen gegenereerd uit $LOGO"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
