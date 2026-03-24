@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Settings, Plus, Trash2, X, Activity, ShieldCheck, Dog,
   Clock, Info, ChevronDown, Wifi, MessageCircle, CheckCircle2,
-  Bell, AlertCircle,
+  Bell, AlertCircle, Phone,
 } from 'lucide-react';
 
 import { TRANSLATIONS } from './constants/translations';
@@ -13,7 +13,6 @@ const ENDPOINTS  = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 const APP_KEY    = 'BARKR_SECURE_V1';
 const EMPTY_TIME = '00:00';
 
-// Declareer de Android bridge interface
 declare global {
   interface Window {
     BarkrAndroid?: {
@@ -24,8 +23,8 @@ declare global {
 }
 
 const getLocalYYYYMMDD = (d: Date) => {
-  const y   = d.getFullYear();
-  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 };
@@ -38,18 +37,21 @@ for (let i = 0; i < 7; i++) {
   defaultSchedules[i] = { startTime: EMPTY_TIME, endTime: EMPTY_TIME };
 }
 
-// Stuur instellingen naar Android SharedPreferences via de bridge
-// De BarkrService leest deze voor elke ping
+// Voeg landprefix toe als die ontbreekt
+const ensurePrefix = (phone: string, prefix: string): string => {
+  const clean = phone.replace(/\s/g, '');
+  if (!clean) return '';
+  if (clean.startsWith('+')) return clean;
+  if (clean.startsWith('00')) return '+' + clean.slice(2);
+  if (clean.startsWith('0')) return prefix + clean.slice(1);
+  return prefix + clean;
+};
+
 const syncToAndroid = (name: string, windowStart: string, windowEnd: string, vacationMode: boolean) => {
   if (window.BarkrAndroid) {
-    const payload = JSON.stringify({
-      name,
-      window_start:  windowStart,
-      window_end:    windowEnd,
-      vacation_mode: vacationMode,
-    });
-    window.BarkrAndroid.updateSettings(payload);
-    console.log('✅ Bridge sync:', name, windowStart, windowEnd);
+    window.BarkrAndroid.updateSettings(JSON.stringify({
+      name, window_start: windowStart, window_end: windowEnd, vacation_mode: vacationMode,
+    }));
   }
 };
 
@@ -61,7 +63,6 @@ export default function App() {
   const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing,     setLastPing]     = useState('--:--');
   const [optInStatus,  setOptInStatus]  = useState<Record<string, 'unknown' | 'pending' | 'opted_in'>>({});
-  const [phoneError,   setPhoneError]   = useState(false);
 
   const now         = new Date();
   const todayStr    = getLocalYYYYMMDD(now);
@@ -74,9 +75,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'base' | 'today' | 'tomorrow'>(() => {
     const saved = localStorage.getItem('barkr_v16_data');
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.overrides && parsed.overrides[todayStr])    return 'today';
-      if (parsed.overrides && parsed.overrides[tomorrowStr]) return 'tomorrow';
+      const p = JSON.parse(saved);
+      if (p.overrides?.[todayStr])    return 'today';
+      if (p.overrides?.[tomorrowStr]) return 'tomorrow';
     }
     return 'base';
   });
@@ -96,12 +97,13 @@ export default function App() {
       schedules:    (parsed.schedules && Object.keys(parsed.schedules).length > 0)
                       ? parsed.schedules : defaultSchedules,
       ownPhone:     parsed.ownPhone     || '',
-      notifySelf:   parsed.notifySelf   !== undefined ? parsed.notifySelf : true,
+      notifySelf:   parsed.notifySelf   !== undefined ? parsed.notifySelf : false,
     };
   });
 
   const countryObj = COUNTRIES[settings.country] || COUNTRIES['NL'];
   const lang       = countryObj?.lang || 'nl';
+  const prefix     = countryObj?.prefix || '+31';
   const daysVoluit = countryObj?.days || ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
 
   const isBase        = activeTab === 'base';
@@ -123,17 +125,10 @@ export default function App() {
   const todayIsActive    = todaySchedule &&
     todaySchedule.startTime !== EMPTY_TIME && todaySchedule.endTime !== EMPTY_TIME;
 
-  // Sync naar Android bridge bij elke relevante wijziging
   useEffect(() => {
-    syncToAndroid(
-      settings.name,
-      todayWindowStart || EMPTY_TIME,
-      todayWindowEnd   || EMPTY_TIME,
-      settings.vacationMode
-    );
+    syncToAndroid(settings.name, todayWindowStart || EMPTY_TIME, todayWindowEnd || EMPTY_TIME, settings.vacationMode);
   }, [settings.name, todayWindowStart, todayWindowEnd, settings.vacationMode]);
 
-  // Opt-in check
   const checkOptIn = useCallback(async (phone: string) => {
     if (!activeUrl || !phone || phone.length < 6) return;
     try {
@@ -157,12 +152,7 @@ export default function App() {
     try {
       const res = await fetch(`${activeUrl}/send_optin`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          app_key: APP_KEY, phone,
-          contact_name: contactName,
-          user_name:    settings.name,
-          user_phone:   settings.ownPhone,
-        }),
+        body: JSON.stringify({ app_key: APP_KEY, phone, contact_name: contactName, user_name: settings.name, user_phone: settings.ownPhone }),
       });
       const data = await res.json();
       if (data.status === 'sent') setOptInStatus(prev => ({ ...prev, [phone]: 'opted_in' }));
@@ -171,18 +161,16 @@ export default function App() {
     }
   };
 
-  // Overrides vervallen
   useEffect(() => {
     const interval = setInterval(() => {
-      const d    = new Date();
-      const dStr = getLocalYYYYMMDD(d);
+      const d = new Date(), dStr = getLocalYYYYMMDD(d);
       const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       setSettings((prev: any) => {
-        if (prev.overrides && prev.overrides[dStr] && tStr > prev.overrides[dStr].end) {
-          const newOverrides = { ...prev.overrides };
-          delete newOverrides[dStr];
+        if (prev.overrides?.[dStr] && tStr > prev.overrides[dStr].end) {
+          const n = { ...prev.overrides };
+          delete n[dStr];
           if (activeTab === 'today') setActiveTab('base');
-          return { ...prev, overrides: newOverrides };
+          return { ...prev, overrides: n };
         }
         return prev;
       });
@@ -190,32 +178,17 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Instellingen opslaan naar server
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
-
-    const payload: any = { ...settings };
-    payload.app_key           = APP_KEY;
-    payload.useCustomSchedule = true;
-    payload.activeDays        = [0,1,2,3,4,5,6];
-    payload.schedules         = JSON.parse(JSON.stringify(settings.schedules));
-    payload.notifySelf        = settings.notifySelf;
-    payload.ownPhone          = settings.ownPhone;
-
+    const payload: any = { ...settings, app_key: APP_KEY, useCustomSchedule: true, activeDays: [0,1,2,3,4,5,6] };
+    payload.schedules = JSON.parse(JSON.stringify(settings.schedules));
     if (settings.overrides[todayStr]) {
-      payload.schedules[todayIdx] = {
-        startTime: settings.overrides[todayStr].start,
-        endTime:   settings.overrides[todayStr].end,
-      };
+      payload.schedules[todayIdx] = { startTime: settings.overrides[todayStr].start, endTime: settings.overrides[todayStr].end };
     }
     if (settings.overrides[tomorrowStr]) {
-      payload.schedules[tomorrowIdx] = {
-        startTime: settings.overrides[tomorrowStr].start,
-        endTime:   settings.overrides[tomorrowStr].end,
-      };
+      payload.schedules[tomorrowIdx] = { startTime: settings.overrides[tomorrowStr].start, endTime: settings.overrides[tomorrowStr].end };
     }
-
     const timer = setTimeout(() => {
       fetch(`${activeUrl}/save_settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -225,7 +198,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
 
-  // Endpoint detectie
   const findConnection = useCallback(async () => {
     for (const url of ENDPOINTS) {
       try {
@@ -242,28 +214,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // Ping vanuit WebView (als app op voorgrond is)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
-
     const sendPing = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (!todayHasWindow) return;
-
-      // Sync ook naar bridge bij elke ping
+      if (document.visibilityState !== 'visible' || !todayHasWindow) return;
       syncToAndroid(settings.name, todayWindowStart || EMPTY_TIME, todayWindowEnd || EMPTY_TIME, false);
-
       fetch(`${activeUrl}/ping`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: settings.name, app_key: APP_KEY,
-          active_window: { start: todayWindowStart, end: todayWindowEnd },
-        }),
-      }).then(res => {
-        if (res.ok) setLastPing(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      }).catch(() => {});
+        body: JSON.stringify({ name: settings.name, app_key: APP_KEY, active_window: { start: todayWindowStart, end: todayWindowEnd } }),
+      }).then(res => { if (res.ok) setLastPing(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })); }).catch(() => {});
     };
-
     if (document.visibilityState === 'visible') sendPing();
     const pingInterval = setInterval(sendPing, 5000);
     const handleVis = () => { if (document.visibilityState === 'visible') sendPing(); };
@@ -271,13 +231,12 @@ export default function App() {
     return () => { clearInterval(pingInterval); document.removeEventListener('visibilitychange', handleVis); };
   }, [status, activeUrl, settings.vacationMode, settings.name, todayHasWindow, todayWindowStart, todayWindowEnd]);
 
-  // Override beheer
   const toggleOverride = (type: 'today' | 'tomorrow') => {
     if (activeTab === type) {
       setActiveTab('base');
-      const newOverrides = { ...settings.overrides };
-      delete newOverrides[type === 'today' ? todayStr : tomorrowStr];
-      setSettings({ ...settings, overrides: newOverrides });
+      const n = { ...settings.overrides };
+      delete n[type === 'today' ? todayStr : tomorrowStr];
+      setSettings({ ...settings, overrides: n });
     } else {
       setActiveTab(type);
       const targetStr = type === 'today' ? todayStr : tomorrowStr;
@@ -288,22 +247,33 @@ export default function App() {
   };
 
   const updateOverrideTime = (field: 'start' | 'end', value: string) => {
-    let currentTab = activeTab;
-    if (currentTab === 'base') { currentTab = 'today'; setActiveTab('today'); }
-    const dateStr = currentTab === 'today' ? todayStr : tomorrowStr;
-    const newOverrides = { ...settings.overrides };
-    if (!newOverrides[dateStr]) newOverrides[dateStr] = { start: EMPTY_TIME, end: EMPTY_TIME };
-    newOverrides[dateStr][field] = value;
-    setSettings({ ...settings, overrides: newOverrides });
+    let tab = activeTab;
+    if (tab === 'base') { tab = 'today'; setActiveTab('today'); }
+    const dateStr = tab === 'today' ? todayStr : tomorrowStr;
+    const n = { ...settings.overrides };
+    if (!n[dateStr]) n[dateStr] = { start: EMPTY_TIME, end: EMPTY_TIME };
+    n[dateStr][field] = value;
+    setSettings({ ...settings, overrides: n });
   };
 
-  const handleSaveSettings = () => {
-    if (!settings.ownPhone || settings.ownPhone.length < 8) {
-      setPhoneError(true);
-      return;
+  const handleNotifySelfToggle = () => {
+    const newVal = !settings.notifySelf;
+    setSettings({ ...settings, notifySelf: newVal, ownPhone: newVal ? settings.ownPhone : '' });
+  };
+
+  const handlePhoneBlur = () => {
+    if (settings.ownPhone) {
+      setSettings({ ...settings, ownPhone: ensurePrefix(settings.ownPhone, prefix) });
     }
-    setPhoneError(false);
-    setShowSettings(false);
+  };
+
+  const handleContactPhoneBlur = (i: number) => {
+    const n = [...settings.contacts];
+    if (n[i].phone) {
+      n[i].phone = ensurePrefix(n[i].phone, prefix);
+      setSettings({ ...settings, contacts: n });
+      checkOptIn(n[i].phone);
+    }
   };
 
   return (
@@ -315,19 +285,15 @@ export default function App() {
         * { box-shadow: none !important; text-shadow: none !important; }
       `}</style>
 
-      {/* HEADER */}
       <header className="px-6 py-4 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-20 shrink-0">
         <div className="flex items-center gap-3">
           <div className="bg-orange-600 p-1.5 rounded-lg"><Dog size={20} className="text-white" /></div>
           <div>
             <h1 className="text-lg font-black italic tracking-tighter text-slate-800 uppercase">Barkr</h1>
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
-              <div className={`w-2 h-2 rounded-full ${
-                status === 'connected' ? settings.vacationMode ? 'bg-blue-500' : todayHasWindow ? 'bg-emerald-500' : 'bg-amber-400' : 'bg-red-500'
-              }`} />
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? settings.vacationMode ? 'bg-blue-500' : todayHasWindow ? 'bg-emerald-500' : 'bg-amber-400' : 'bg-red-500'}`} />
               <span className={status === 'connected' ? settings.vacationMode ? 'text-blue-600' : todayHasWindow ? 'text-emerald-600' : 'text-amber-600' : 'text-red-500'}>
-                {status === 'offline' ? t('offline', lang) : status === 'searching' ? '...' :
-                 settings.vacationMode ? t('idle', lang) : todayHasWindow ? t('vigilant', lang) : t('no_window', lang)}
+                {status === 'offline' ? t('offline', lang) : status === 'searching' ? '...' : settings.vacationMode ? t('idle', lang) : todayHasWindow ? t('vigilant', lang) : t('no_window', lang)}
               </span>
             </div>
           </div>
@@ -338,28 +304,14 @@ export default function App() {
         </div>
       </header>
 
-      {/* HOOFDSCHERM */}
       {!showSettings && !showManual && !showWeekPlan && (
         <main className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar">
-
-          {!settings.ownPhone && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3">
-              <AlertCircle size={18} className="text-amber-600 shrink-0" />
-              <p className="text-xs font-bold text-amber-800">
-                {t('own_phone_required', lang)} —{' '}
-                <button onClick={() => setShowSettings(true)} className="underline">{t('setup', lang)}</button>
-              </p>
-            </div>
-          )}
-
           <div className="flex flex-col items-center pt-2">
-            <button
-              onClick={() => setSettings({ ...settings, vacationMode: !settings.vacationMode })}
+            <button onClick={() => setSettings({ ...settings, vacationMode: !settings.vacationMode })}
               disabled={status !== 'connected'}
               className={`relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 overflow-hidden border-[8px] ${
                 status !== 'connected' ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
-                : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'
-              }`}>
+                : settings.vacationMode ? 'bg-slate-900 border-slate-700' : 'bg-orange-600 border-orange-700'}`}>
               {status !== 'connected' ? <Wifi size={60} className="text-slate-400 animate-pulse" />
               : settings.vacationMode ? (
                 <div className="flex flex-col items-center justify-center relative w-full h-full">
@@ -377,13 +329,10 @@ export default function App() {
                 </div>
               )}
             </button>
-
             <div className="mt-4 w-full bg-white px-6 py-3 rounded-[20px] border border-slate-100 text-center flex flex-col items-center">
               <div className="flex items-center gap-2 mb-1">
                 <Activity size={14} className="text-slate-400" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  {todayHasWindow ? t('heartbeat', lang) : t('last_check', lang)}
-                </p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{todayHasWindow ? t('heartbeat', lang) : t('last_check', lang)}</p>
               </div>
               <p className="text-sm font-black text-slate-800 tabular-nums">{todayHasWindow ? lastPing : '—'}</p>
             </div>
@@ -395,18 +344,12 @@ export default function App() {
                 <Clock size={16} className="text-orange-600" />
                 <h3 className="font-black text-[10px] uppercase tracking-tight text-slate-800">{t('week_plan', lang)}</h3>
               </div>
-              <button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full bg-slate-800 text-white">
-                {t('week_plan', lang).toUpperCase()}
-              </button>
+              <button onClick={() => setShowWeekPlan(true)} className="text-[9px] font-black px-3 py-1.5 rounded-full bg-slate-800 text-white">{t('week_plan', lang).toUpperCase()}</button>
             </header>
             <div className="p-4 space-y-4">
               <div className="flex gap-2">
-                <button onClick={() => toggleOverride('today')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                  {t('today', lang)}
-                </button>
-                <button onClick={() => toggleOverride('tomorrow')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                  {t('tomorrow', lang)}
-                </button>
+                <button onClick={() => toggleOverride('today')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border ${activeTab === 'today' ? 'bg-orange-600 border-orange-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('today', lang)}</button>
+                <button onClick={() => toggleOverride('tomorrow')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('tomorrow', lang)}</button>
               </div>
               <div className={`border rounded-xl p-3 ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                 <div className="grid grid-cols-2 gap-3">
@@ -431,7 +374,6 @@ export default function App() {
         </main>
       )}
 
-      {/* WEEKPLANNING */}
       {showWeekPlan && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar">
           <header className="flex justify-between items-center mb-2">
@@ -460,120 +402,142 @@ export default function App() {
         </div>
       )}
 
-      {/* INFO */}
       {showManual && (
         <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto no-scrollbar">
           <InfoPage onClose={() => setShowManual(false)} lang={lang} />
         </div>
       )}
 
-      {/* INSTELLINGEN */}
+      {/* INSTELLINGEN — professioneel, compact, overzichtelijk */}
       {showSettings && (
-        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto p-6 space-y-6 pb-20 no-scrollbar">
-          <header className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2>
-            <button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full border border-slate-200"><X size={20} /></button>
-          </header>
+        <div className="fixed inset-0 bg-slate-50 z-50 overflow-y-auto no-scrollbar">
+          <div className="p-5 space-y-4 pb-24">
 
-          {/* EIGEN NUMMER — verplicht */}
-          <div className={`p-5 rounded-2xl border space-y-3 ${phoneError ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-200'}`}>
-            <div className="flex items-center gap-2">
-              <Bell size={18} className={phoneError ? 'text-red-600' : 'text-orange-600'} />
-              <div>
-                <p className={`text-sm font-black ${phoneError ? 'text-red-800' : 'text-orange-900'}`}>{t('own_phone_label', lang)}</p>
-                <p className={`text-[10px] font-medium mt-0.5 ${phoneError ? 'text-red-700' : 'text-orange-700'}`}>
-                  {phoneError ? t('own_phone_required', lang) : t('own_phone_hint', lang)}
-                </p>
+            {/* Header */}
+            <div className="flex justify-between items-center pt-1">
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">{t('setup', lang)}</h2>
+              <button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full border border-slate-200"><X size={20} /></button>
+            </div>
+
+            {/* SECTIE 1: Profiel */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Profiel</p>
+              </div>
+              <div className="p-4 space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">{t('country', lang)}</label>
+                  <div className="relative">
+                    <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700 appearance-none outline-none text-sm">
+                      {Object.keys(COUNTRIES).map(key => (
+                        <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].name} ({COUNTRIES[key].prefix})</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3.5 text-slate-400 pointer-events-none" size={16} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">{t('user_name', lang)}</label>
+                  <input value={settings.name} onChange={e => setSettings({ ...settings, name: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700 text-sm outline-none" />
+                </div>
               </div>
             </div>
-            <input
-              value={settings.ownPhone}
-              onChange={e => { setSettings({ ...settings, ownPhone: e.target.value }); setPhoneError(false); }}
-              placeholder={t('own_phone_placeholder', lang)}
-              className={`w-full border rounded-xl p-3 text-sm font-mono outline-none ${phoneError ? 'bg-white border-red-300 text-red-700' : 'bg-white border-orange-200 text-slate-700'}`} />
-            <div className="flex items-center justify-between pt-1 border-t border-orange-200">
-              <div>
-                <p className="text-xs font-black text-orange-900">{t('notify_self_label', lang)}</p>
-                <p className="text-[10px] text-orange-700 font-medium mt-0.5">{t('notify_self_desc', lang)}</p>
+
+            {/* SECTIE 2: Meldingen — schuifje EERST, nummer daarna */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Meldingen</p>
               </div>
-              <button
-                onClick={() => setSettings({ ...settings, notifySelf: !settings.notifySelf })}
-                className={`relative w-12 h-6 rounded-full transition-all duration-300 shrink-0 ml-3 ${settings.notifySelf ? 'bg-orange-600' : 'bg-slate-300'}`}>
-                <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 ${settings.notifySelf ? 'left-6' : 'left-0.5'}`} />
-              </button>
-            </div>
-          </div>
+              <div className="p-4 space-y-3">
+                {/* Schuifje eerst */}
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 pr-4">
+                    <p className="text-sm font-bold text-slate-800">{t('notify_self_label', lang)}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{t('notify_self_desc', lang)}</p>
+                  </div>
+                  <button onClick={handleNotifySelfToggle}
+                    className={`relative w-12 h-6 rounded-full transition-all duration-300 shrink-0 ${settings.notifySelf ? 'bg-orange-500' : 'bg-slate-200'}`}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 ${settings.notifySelf ? 'left-6' : 'left-0.5'}`} />
+                  </button>
+                </div>
 
-          {/* NAAM & LAND */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
-            <div className="relative">
-              <label className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">{t('country', lang)}</label>
-              <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-black text-slate-700 appearance-none outline-none">
-                {Object.keys(COUNTRIES).map(key => (
-                  <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].name} ({COUNTRIES[key].prefix})</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-4 top-8 text-slate-400 pointer-events-none" size={18} />
+                {/* Telefoonnummer — alleen zichtbaar als schuifje AAN */}
+                {settings.notifySelf && (
+                  <div className="pt-1 border-t border-slate-100">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                      <Phone size={10} className="inline mr-1" />{t('own_phone_label', lang)}
+                    </label>
+                    <input
+                      value={settings.ownPhone}
+                      onChange={e => setSettings({ ...settings, ownPhone: e.target.value })}
+                      onBlur={handlePhoneBlur}
+                      placeholder={`bijv. ${prefix}612345678`}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-slate-700 text-sm outline-none" />
+                    <p className="text-[10px] text-slate-400 mt-1">{t('own_phone_hint', lang)}</p>
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase">{t('user_name', lang)}</label>
-              <input value={settings.name} onChange={e => setSettings({ ...settings, name: e.target.value })}
-                className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-3 font-bold text-slate-700" />
-            </div>
-          </div>
 
-          {/* CONTACTEN */}
-          <div>
-            <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label>
-            <button onClick={() => setSettings({ ...settings, contacts: [...settings.contacts, { name: '', phone: COUNTRIES[settings.country]?.prefix || '' }] })}
-              className="w-full bg-orange-600 text-white p-3 rounded-xl flex justify-center mb-4"><Plus size={20} /></button>
-            <div className="space-y-4">
-              {settings.contacts.map((c: any, i: number) => {
-                const phone = c.phone || '';
-                const optin = phone ? (optInStatus[phone] || 'unknown') : 'unknown';
-                return (
-                  <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200 relative space-y-4">
-                    <button onClick={() => { const n = [...settings.contacts]; n.splice(i, 1); setSettings({ ...settings, contacts: n }); }}
-                      className="absolute top-4 right-4 text-slate-300"><Trash2 size={18} /></button>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_name', lang)}</label>
+            {/* SECTIE 3: Noodcontacten */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="bg-slate-50 px-4 py-2 border-b border-slate-100 flex justify-between items-center">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t('contacts', lang)}</p>
+                <button onClick={() => setSettings({ ...settings, contacts: [...settings.contacts, { name: '', phone: prefix }] })}
+                  className="bg-orange-500 text-white rounded-full p-1"><Plus size={14} /></button>
+              </div>
+              <div className="p-4 space-y-3">
+                {settings.contacts.length === 0 && (
+                  <p className="text-[11px] text-slate-400 text-center py-2">Nog geen noodcontacten. Tik op + om toe te voegen.</p>
+                )}
+                {settings.contacts.map((c: any, i: number) => {
+                  const phone = c.phone || '';
+                  const optin = phone && phone.length >= 8 ? (optInStatus[phone] || 'unknown') : 'unknown';
+                  return (
+                    <div key={i} className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] font-black text-slate-500 uppercase">Contact {i + 1}</p>
+                        <button onClick={() => { const n = [...settings.contacts]; n.splice(i, 1); setSettings({ ...settings, contacts: n }); }}
+                          className="text-slate-300 hover:text-red-400"><Trash2 size={15} /></button>
+                      </div>
                       <input placeholder={t('c_name', lang)} value={c.name}
                         onChange={e => { const n = [...settings.contacts]; n[i].name = e.target.value; setSettings({ ...settings, contacts: n }); }}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-bold text-slate-700 outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-bold text-slate-400 uppercase mb-1 block">{t('c_phone', lang)}</label>
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-bold text-slate-700 outline-none" />
                       <input value={c.phone}
-                        onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); if (e.target.value.length >= 8) checkOptIn(e.target.value); }}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-mono text-slate-600 outline-none" />
+                        onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); }}
+                        onBlur={() => handleContactPhoneBlur(i)}
+                        placeholder={`${prefix}612345678`}
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm font-mono text-slate-600 outline-none" />
+                      {phone && phone.length >= 8 && (
+                        optin === 'opted_in' ? (
+                          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                            <CheckCircle2 size={14} className="text-emerald-600" />
+                            <p className="text-[10px] font-black text-emerald-700 uppercase">{t('whatsapp_active', lang)}</p>
+                          </div>
+                        ) : (
+                          <button onClick={() => sendOptIn(phone, c.name || 'Contact')}
+                            className="w-full bg-green-500 text-white text-[11px] font-black py-2.5 rounded-lg flex items-center justify-center gap-2">
+                            <MessageCircle size={14} /> {t('whatsapp_activate', lang)}
+                          </button>
+                        )
+                      )}
+                      <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })}
+                        className="w-full bg-white text-slate-500 text-[10px] font-black py-2 rounded-lg border border-slate-200 flex items-center justify-center gap-1.5">
+                        <ShieldCheck size={12} /> {t('test', lang)}
+                      </button>
                     </div>
-                    {phone && phone.length >= 8 && (
-                      optin === 'opted_in' ? (
-                        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5">
-                          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                          <p className="text-[10px] font-black text-emerald-700 uppercase">{t('whatsapp_active', lang)}</p>
-                        </div>
-                      ) : optin === 'pending' ? (
-                        <button onClick={() => sendOptIn(phone, c.name || 'Contact')}
-                          className="w-full bg-green-500 text-white text-[11px] font-black py-3 rounded-xl flex items-center justify-center gap-2">
-                          <MessageCircle size={16} /> {t('whatsapp_activate', lang)}
-                        </button>
-                      ) : null
-                    )}
-                    <button onClick={() => activeUrl && fetch(`${activeUrl}/test_contact`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c) })}
-                      className="w-full bg-emerald-50 text-emerald-600 text-[10px] font-black py-2 rounded-lg border border-emerald-100 flex items-center justify-center gap-2">
-                      <ShieldCheck size={14} /> {t('test', lang)}
-                    </button>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          <button onClick={handleSaveSettings} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em]">
-            {t('save', lang)}
-          </button>
+            <button onClick={() => setShowSettings(false)}
+              className="w-full py-4 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] text-sm">
+              {t('save', lang)}
+            </button>
+          </div>
         </div>
       )}
     </div>
