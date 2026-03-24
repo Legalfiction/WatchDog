@@ -13,6 +13,16 @@ const ENDPOINTS  = ['https://barkr.nl', 'http://192.168.1.38:5000'];
 const APP_KEY    = 'BARKR_SECURE_V1';
 const EMPTY_TIME = '00:00';
 
+// Declareer de Android bridge interface
+declare global {
+  interface Window {
+    BarkrAndroid?: {
+      updateSettings: (json: string) => void;
+      getSettings: () => string;
+    };
+  }
+}
+
 const getLocalYYYYMMDD = (d: Date) => {
   const y   = d.getFullYear();
   const m   = String(d.getMonth() + 1).padStart(2, '0');
@@ -27,6 +37,21 @@ const defaultSchedules: any = {};
 for (let i = 0; i < 7; i++) {
   defaultSchedules[i] = { startTime: EMPTY_TIME, endTime: EMPTY_TIME };
 }
+
+// Stuur instellingen naar Android SharedPreferences via de bridge
+// De BarkrService leest deze voor elke ping
+const syncToAndroid = (name: string, windowStart: string, windowEnd: string, vacationMode: boolean) => {
+  if (window.BarkrAndroid) {
+    const payload = JSON.stringify({
+      name,
+      window_start:  windowStart,
+      window_end:    windowEnd,
+      vacation_mode: vacationMode,
+    });
+    window.BarkrAndroid.updateSettings(payload);
+    console.log('✅ Bridge sync:', name, windowStart, windowEnd);
+  }
+};
 
 export default function App() {
   const [activeUrl,    setActiveUrl]    = useState<string | null>(null);
@@ -70,7 +95,6 @@ export default function App() {
       contacts:     parsed.contacts     || [],
       schedules:    (parsed.schedules && Object.keys(parsed.schedules).length > 0)
                       ? parsed.schedules : defaultSchedules,
-      // Eigen nummer is nu altijd aanwezig, notify_self standaard AAN
       ownPhone:     parsed.ownPhone     || '',
       notifySelf:   parsed.notifySelf   !== undefined ? parsed.notifySelf : true,
     };
@@ -91,13 +115,23 @@ export default function App() {
     displayEnd   = settings.overrides[activeDateStr].end;
   }
 
-  const todaySchedule = settings.schedules[todayIdx];
-  const todayOverride = settings.overrides[todayStr];
+  const todaySchedule    = settings.schedules[todayIdx];
+  const todayOverride    = settings.overrides[todayStr];
   const todayWindowStart = todayOverride ? todayOverride.start : todaySchedule?.startTime;
   const todayWindowEnd   = todayOverride ? todayOverride.end   : todaySchedule?.endTime;
   const todayHasWindow   = todayWindowStart !== EMPTY_TIME && todayWindowEnd !== EMPTY_TIME;
   const todayIsActive    = todaySchedule &&
     todaySchedule.startTime !== EMPTY_TIME && todaySchedule.endTime !== EMPTY_TIME;
+
+  // Sync naar Android bridge bij elke relevante wijziging
+  useEffect(() => {
+    syncToAndroid(
+      settings.name,
+      todayWindowStart || EMPTY_TIME,
+      todayWindowEnd   || EMPTY_TIME,
+      settings.vacationMode
+    );
+  }, [settings.name, todayWindowStart, todayWindowEnd, settings.vacationMode]);
 
   // Opt-in check
   const checkOptIn = useCallback(async (phone: string) => {
@@ -156,7 +190,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  // Instellingen opslaan
+  // Instellingen opslaan naar server
   useEffect(() => {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
@@ -208,13 +242,17 @@ export default function App() {
     return () => clearInterval(interval);
   }, [findConnection]);
 
-  // Ping
+  // Ping vanuit WebView (als app op voorgrond is)
   useEffect(() => {
     if (status !== 'connected' || !activeUrl || settings.vacationMode) return;
 
     const sendPing = () => {
       if (document.visibilityState !== 'visible') return;
       if (!todayHasWindow) return;
+
+      // Sync ook naar bridge bij elke ping
+      syncToAndroid(settings.name, todayWindowStart || EMPTY_TIME, todayWindowEnd || EMPTY_TIME, false);
+
       fetch(`${activeUrl}/ping`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -259,7 +297,6 @@ export default function App() {
     setSettings({ ...settings, overrides: newOverrides });
   };
 
-  // Opslaan met validatie
   const handleSaveSettings = () => {
     if (!settings.ownPhone || settings.ownPhone.length < 8) {
       setPhoneError(true);
@@ -296,12 +333,8 @@ export default function App() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl">
-            <Info size={20} className="text-slate-600" />
-          </button>
-          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl">
-            <Settings size={20} className="text-slate-600" />
-          </button>
+          <button onClick={() => setShowManual(true)} className="p-2.5 bg-slate-100 rounded-xl"><Info size={20} className="text-slate-600" /></button>
+          <button onClick={() => setShowSettings(true)} className="p-2.5 bg-slate-100 rounded-xl"><Settings size={20} className="text-slate-600" /></button>
         </div>
       </header>
 
@@ -309,15 +342,12 @@ export default function App() {
       {!showSettings && !showManual && !showWeekPlan && (
         <main className="flex-1 p-4 space-y-4 overflow-y-auto no-scrollbar">
 
-          {/* Waarschuwing als eigen nummer niet ingevuld */}
           {!settings.ownPhone && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3">
               <AlertCircle size={18} className="text-amber-600 shrink-0" />
               <p className="text-xs font-bold text-amber-800">
                 {t('own_phone_required', lang)} —{' '}
-                <button onClick={() => setShowSettings(true)} className="underline">
-                  {t('setup', lang)}
-                </button>
+                <button onClick={() => setShowSettings(true)} className="underline">{t('setup', lang)}</button>
               </p>
             </div>
           )}
@@ -334,9 +364,7 @@ export default function App() {
               : settings.vacationMode ? (
                 <div className="flex flex-col items-center justify-center relative w-full h-full">
                   <div className="absolute top-12 right-16 flex font-black text-blue-300 pointer-events-none z-10">
-                    <span className="text-3xl animate-zz">Z</span>
-                    <span className="text-2xl animate-zz ml-1">z</span>
-                    <span className="text-xl animate-zz ml-1">z</span>
+                    <span className="text-3xl animate-zz">Z</span><span className="text-2xl animate-zz ml-1">z</span><span className="text-xl animate-zz ml-1">z</span>
                   </div>
                   <img src="/logo.png" alt="Barkr" className="w-full h-full object-cover scale-[1.02] opacity-40 grayscale" />
                 </div>
@@ -344,9 +372,7 @@ export default function App() {
                 <div className="flex flex-col items-center justify-center w-full h-full relative">
                   <img src="/logo.png" alt="Barkr" className="w-full h-full object-cover scale-[1.02]" />
                   <div className="absolute bottom-5 inset-x-0 text-center">
-                    <span className="text-[10px] font-black uppercase text-white tracking-widest px-4 italic">
-                      {t('tap_sleep', lang)}
-                    </span>
+                    <span className="text-[10px] font-black uppercase text-white tracking-widest px-4 italic">{t('tap_sleep', lang)}</span>
                   </div>
                 </div>
               )}
@@ -412,9 +438,7 @@ export default function App() {
             <h2 className="text-2xl font-black uppercase italic tracking-tighter text-slate-800">{t('week_plan', lang)}</h2>
             <button onClick={() => setShowWeekPlan(false)} className="p-2 bg-white rounded-full border border-slate-200"><X size={24} /></button>
           </header>
-          <p className="text-xs font-medium text-slate-500 bg-orange-50 border border-orange-100 rounded-2xl p-4 leading-relaxed">
-            {t('week_plan_desc', lang)}
-          </p>
+          <p className="text-xs font-medium text-slate-500 bg-orange-50 border border-orange-100 rounded-2xl p-4 leading-relaxed">{t('week_plan_desc', lang)}</p>
           <div className="space-y-3">
             {daysVoluit.map((dayName: string, d: number) => {
               const sched = settings.schedules[d] || { startTime: EMPTY_TIME, endTime: EMPTY_TIME };
@@ -432,9 +456,7 @@ export default function App() {
               );
             })}
           </div>
-          <button onClick={() => setShowWeekPlan(false)} className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-[28px] tracking-[0.2em]">
-            {t('save', lang)}
-          </button>
+          <button onClick={() => setShowWeekPlan(false)} className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-[28px] tracking-[0.2em]">{t('save', lang)}</button>
         </div>
       )}
 
@@ -453,14 +475,12 @@ export default function App() {
             <button onClick={() => setShowSettings(false)} className="p-2 bg-white rounded-full border border-slate-200"><X size={20} /></button>
           </header>
 
-          {/* EIGEN NUMMER — verplicht, staat bovenaan */}
+          {/* EIGEN NUMMER — verplicht */}
           <div className={`p-5 rounded-2xl border space-y-3 ${phoneError ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-200'}`}>
             <div className="flex items-center gap-2">
               <Bell size={18} className={phoneError ? 'text-red-600' : 'text-orange-600'} />
               <div>
-                <p className={`text-sm font-black ${phoneError ? 'text-red-800' : 'text-orange-900'}`}>
-                  {t('own_phone_label', lang)}
-                </p>
+                <p className={`text-sm font-black ${phoneError ? 'text-red-800' : 'text-orange-900'}`}>{t('own_phone_label', lang)}</p>
                 <p className={`text-[10px] font-medium mt-0.5 ${phoneError ? 'text-red-700' : 'text-orange-700'}`}>
                   {phoneError ? t('own_phone_required', lang) : t('own_phone_hint', lang)}
                 </p>
@@ -470,11 +490,7 @@ export default function App() {
               value={settings.ownPhone}
               onChange={e => { setSettings({ ...settings, ownPhone: e.target.value }); setPhoneError(false); }}
               placeholder={t('own_phone_placeholder', lang)}
-              className={`w-full border rounded-xl p-3 text-sm font-mono outline-none ${
-                phoneError ? 'bg-white border-red-300 text-red-700' : 'bg-white border-orange-200 text-slate-700'
-              }`} />
-
-            {/* SCHUIFJE voor berichten — staat direct onder eigen nummer */}
+              className={`w-full border rounded-xl p-3 text-sm font-mono outline-none ${phoneError ? 'bg-white border-red-300 text-red-700' : 'bg-white border-orange-200 text-slate-700'}`} />
             <div className="flex items-center justify-between pt-1 border-t border-orange-200">
               <div>
                 <p className="text-xs font-black text-orange-900">{t('notify_self_label', lang)}</p>
@@ -511,9 +527,7 @@ export default function App() {
           <div>
             <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest block mb-2 px-1">{t('contacts', lang)}</label>
             <button onClick={() => setSettings({ ...settings, contacts: [...settings.contacts, { name: '', phone: COUNTRIES[settings.country]?.prefix || '' }] })}
-              className="w-full bg-orange-600 text-white p-3 rounded-xl flex justify-center mb-4">
-              <Plus size={20} />
-            </button>
+              className="w-full bg-orange-600 text-white p-3 rounded-xl flex justify-center mb-4"><Plus size={20} /></button>
             <div className="space-y-4">
               {settings.contacts.map((c: any, i: number) => {
                 const phone = c.phone || '';
@@ -557,8 +571,7 @@ export default function App() {
             </div>
           </div>
 
-          <button onClick={handleSaveSettings}
-            className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em]">
+          <button onClick={handleSaveSettings} className="w-full py-5 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em]">
             {t('save', lang)}
           </button>
         </div>
