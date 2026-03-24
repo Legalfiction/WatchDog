@@ -6,7 +6,6 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -20,13 +19,13 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        startBarkrService();
 
-        // Voeg JavaScript interface toe zodat de WebApp
-        // instellingen kan doorgeven aan de BarkrService
+        // Registreer de bridge VOOR het laden van de WebView
         getBridge().getWebView().addJavascriptInterface(
             new BarkrBridge(), "BarkrAndroid"
         );
+
+        startBarkrService();
     }
 
     @Override
@@ -43,46 +42,37 @@ public class MainActivity extends BridgeActivity {
             } else {
                 startService(serviceIntent);
             }
+            Log.d(TAG, "BarkrService gestart");
         } catch (Exception e) {
             Log.e(TAG, "Service start fout: " + e.getMessage());
         }
     }
 
-    // ----------------------------------------------------------------
-    //  BRIDGE: JavaScript → SharedPreferences → BarkrService
-    //
-    //  De WebApp roept window.BarkrAndroid.updateSettings(json) aan
-    //  bij elke wijziging van instellingen of tijdvenster.
-    //  De BarkrService leest deze SharedPreferences voor elke ping.
-    // ----------------------------------------------------------------
     public class BarkrBridge {
 
         @JavascriptInterface
         public void updateSettings(String settingsJson) {
             try {
-                JSONObject settings = new JSONObject(settingsJson);
+                JSONObject s = new JSONObject(settingsJson);
 
-                SharedPreferences.Editor prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+                String name         = s.optString("name",         "");
+                String windowStart  = s.optString("window_start", "00:00");
+                String windowEnd    = s.optString("window_end",   "00:00");
+                boolean vacationMode = s.optBoolean("vacation_mode", false);
 
-                // Gebruikersnaam
-                prefs.putString("user_name", settings.optString("name", ""));
+                SharedPreferences.Editor prefs =
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
 
-                // Tijdvenster van vandaag
-                prefs.putString("window_start", settings.optString("window_start", "00:00"));
-                prefs.putString("window_end",   settings.optString("window_end",   "00:00"));
-
-                // Vacation mode
-                prefs.putBoolean("vacation_mode", settings.optBoolean("vacation_mode", false));
-
-                // Server URL
-                prefs.putString("server_url", "https://barkr.nl");
-
+                prefs.putString("user_name",    name);
+                prefs.putString("window_start", windowStart);
+                prefs.putString("window_end",   windowEnd);
+                prefs.putBoolean("vacation_mode", vacationMode);
+                prefs.putString("server_url",   "https://barkr.nl");
                 prefs.apply();
 
-                Log.d(TAG, "✅ SharedPreferences bijgewerkt: " +
-                    settings.optString("name") + " | " +
-                    settings.optString("window_start") + "–" +
-                    settings.optString("window_end"));
+                Log.d(TAG, "✅ Bridge: " + name +
+                    " | " + windowStart + "–" + windowEnd +
+                    " | vacation=" + vacationMode);
 
             } catch (Exception e) {
                 Log.e(TAG, "Bridge fout: " + e.getMessage());
@@ -91,15 +81,14 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public String getSettings() {
-            // Geeft huidige instellingen terug aan de WebApp
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             try {
-                JSONObject result = new JSONObject();
-                result.put("name",         prefs.getString("user_name",    ""));
-                result.put("window_start", prefs.getString("window_start", "00:00"));
-                result.put("window_end",   prefs.getString("window_end",   "00:00"));
-                result.put("vacation_mode", prefs.getBoolean("vacation_mode", false));
-                return result.toString();
+                JSONObject r = new JSONObject();
+                r.put("name",          prefs.getString("user_name",    ""));
+                r.put("window_start",  prefs.getString("window_start", "00:00"));
+                r.put("window_end",    prefs.getString("window_end",   "00:00"));
+                r.put("vacation_mode", prefs.getBoolean("vacation_mode", false));
+                return r.toString();
             } catch (Exception e) {
                 return "{}";
             }
