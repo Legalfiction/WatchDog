@@ -28,25 +28,9 @@ public class BarkrService extends Service {
     private static final String TAG             = "BarkrService";
     private static final String CHANNEL_ID      = "barkr_foreground";
     private static final int    NOTIFICATION_ID = 1001;
-
-    // ----------------------------------------------------------------
-    //  PRODUCTIE INSTELLINGEN
-    //
-    //  De BarkrService draait op de achtergrond als vangnet.
-    //  De WebView (App.tsx) stuurt direct een ping bij elke
-    //  visibilitychange naar voorgrond — dat vangt korte bezoeken op.
-    //
-    //  Achtergrond interval: 60 seconden
-    //  Server timeout:       90 seconden (zie pi_backend.py)
-    //
-    //  Scenario: gebruiker kijkt 5 seconden naar de app:
-    //  1. App opent → WebView vuurt direct ping (< 1 seconde) ✅
-    //  2. App sluit → BarkrService continueert achtergrond pings
-    //  3. Server ontvangt ping → last_ping_time bijgewerkt ✅
-    // ----------------------------------------------------------------
-    private static final long   PING_INTERVAL_MS = 60_000; // 60 seconden achtergrond
-    private static final String APP_KEY          = "BARKR_SECURE_V1";
-    private static final String PREFS_NAME       = "BarkrPrefs";
+    private static final long   PING_INTERVAL   = 60_000;
+    private static final String APP_KEY         = "BARKR_SECURE_V1";
+    private static final String PREFS_NAME      = "BarkrPrefs";
 
     private Handler  handler;
     private Runnable pingRunnable;
@@ -61,8 +45,13 @@ public class BarkrService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "Barkr Foreground Service gestart");
-        startForeground(NOTIFICATION_ID, buildNotification());
+        Log.d(TAG, "BarkrService gestart");
+
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification());
+        } catch (Exception e) {
+            Log.e(TAG, "startForeground fout: " + e.getMessage());
+        }
 
         if (!isRunning) {
             isRunning = true;
@@ -84,14 +73,7 @@ public class BarkrService extends Service {
         if (handler != null && pingRunnable != null) {
             handler.removeCallbacks(pingRunnable);
         }
-        Log.d(TAG, "Barkr Service gestopt");
     }
-
-    // ----------------------------------------------------------------
-    //  PING LOOP
-    //  Direct ping bij start, daarna elke 60 seconden.
-    //  De WebView (visibilitychange) vangt korte app-bezoeken op.
-    // ----------------------------------------------------------------
 
     private void startPingLoop() {
         pingRunnable = new Runnable() {
@@ -99,12 +81,10 @@ public class BarkrService extends Service {
             public void run() {
                 if (isRunning) {
                     sendPingInBackground();
-                    handler.postDelayed(this, PING_INTERVAL_MS);
+                    handler.postDelayed(this, PING_INTERVAL);
                 }
             }
         };
-        // Stuur direct een ping bij het starten van de service
-        // Dit registreert ook een herstart van de telefoon
         handler.post(pingRunnable);
     }
 
@@ -114,14 +94,11 @@ public class BarkrService extends Service {
                 SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
                 String  userName     = prefs.getString("user_name",    "");
                 String  serverUrl    = prefs.getString("server_url",    "https://barkr.nl");
-                String  windowStart  = prefs.getString("window_start",  "06:00");
-                String  windowEnd    = prefs.getString("window_end",    "10:00");
+                String  windowStart  = prefs.getString("window_start",  "00:00");
+                String  windowEnd    = prefs.getString("window_end",    "00:00");
                 boolean vacationMode = prefs.getBoolean("vacation_mode", false);
 
-                if (userName.isEmpty() || vacationMode) {
-                    Log.d(TAG, "Ping overgeslagen: naam leeg of vakantie-modus actief");
-                    return;
-                }
+                if (userName.isEmpty() || vacationMode) return;
 
                 JSONObject activeWindow = new JSONObject();
                 activeWindow.put("start", windowStart);
@@ -146,22 +123,15 @@ public class BarkrService extends Service {
                     os.write(body);
                 }
 
-                int responseCode = conn.getResponseCode();
+                int code = conn.getResponseCode();
                 conn.disconnect();
-
-                Log.d(TAG, "✅ Achtergrond ping → " + userName +
-                           " | Venster: " + windowStart + "–" + windowEnd +
-                           " | HTTP " + responseCode);
+                Log.d(TAG, "Ping → " + userName + " | HTTP " + code);
 
             } catch (Exception e) {
-                Log.w(TAG, "Ping mislukt (netwerk?): " + e.getMessage());
+                Log.w(TAG, "Ping mislukt: " + e.getMessage());
             }
         }).start();
     }
-
-    // ----------------------------------------------------------------
-    //  NOTIFICATIE
-    // ----------------------------------------------------------------
 
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -170,7 +140,7 @@ public class BarkrService extends Service {
                 "Barkr Bewaking",
                 NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Barkr bewaakt actief je welzijn op de achtergrond");
+            channel.setDescription("Barkr bewaakt je welzijn op de achtergrond");
             channel.setShowBadge(false);
             channel.enableVibration(false);
             channel.enableLights(false);
@@ -189,10 +159,11 @@ public class BarkrService extends Service {
             PendingIntent.FLAG_IMMUTABLE
         );
 
+        // Gebruik android.R.drawable.ic_dialog_info — bestaat op alle Android versies
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Barkr is waakzaam")
-            .setContentText("Digitale waakhond actief — tik om te openen")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentText("Digitale waakhond actief")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setSilent(true)
