@@ -322,7 +322,9 @@ export default function App() {
   const handleContactPhoneBlur = (i: number) => {
     const n = [...settings.contacts];
     if (n[i].phone) {
-      n[i].phone = ensurePrefix(n[i].phone, prefix);
+      const contactCountry = n[i].country || settings.country || 'NL';
+      const contactPrefix = COUNTRIES[contactCountry]?.prefix || prefix;
+      n[i].phone = ensurePrefix(n[i].phone, contactPrefix);
       setSettings({ ...settings, contacts: n });
       checkOptIn(n[i].phone);
     }
@@ -576,15 +578,34 @@ export default function App() {
                         <button onClick={() => { const n = [...settings.contacts]; n.splice(i, 1); setSettings({ ...settings, contacts: n }); }}
                           className="text-slate-300"><Trash2 size={14} /></button>
                       </div>
-                      <div className="flex gap-2">
-                        <input placeholder="Naam" value={c.name}
-                          onChange={e => { const n = [...settings.contacts]; n[i].name = e.target.value; setSettings({ ...settings, contacts: n }); }}
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-bold text-slate-700 outline-none" />
-                        <input value={c.phone}
-                          onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); }}
-                          onBlur={() => handleContactPhoneBlur(i)}
-                          placeholder={`${prefix}6...`}
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-mono text-slate-600 outline-none" />
+                      {/* Naam + Landcode + Nummer op één regel */}
+                      <div className="flex gap-1.5 items-end">
+                        <div className="flex-1">
+                          <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Naam</label>
+                          <input placeholder="Naam" value={c.name}
+                            onChange={e => { const n = [...settings.contacts]; n[i].name = e.target.value; setSettings({ ...settings, contacts: n }); }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-bold text-slate-700 outline-none" />
+                        </div>
+                        <div className="w-20 shrink-0">
+                          <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Land</label>
+                          <div className="relative">
+                            <select value={c.country || settings.country || 'NL'} onChange={e => { const n = [...settings.contacts]; n[i].country = e.target.value; setSettings({ ...settings, contacts: n }); }}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
+                              {Object.keys(COUNTRIES).map(key => (
+                                <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-1 top-2.5 text-slate-400 pointer-events-none" size={10} />
+                          </div>
+                        </div>
+                        <div className="w-28 shrink-0">
+                          <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Nummer</label>
+                          <input value={c.phone}
+                            onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); }}
+                            onBlur={() => handleContactPhoneBlur(i)}
+                            placeholder="612345678"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-mono text-slate-600 outline-none" />
+                        </div>
                       </div>
                       {phone && phone.length >= 8 && (
                         optin === 'opted_in' ? (
