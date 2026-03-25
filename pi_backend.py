@@ -127,8 +127,8 @@ def register_opt_in(phone: str, opted_in_by: str):
     clean = normalize_phone(phone)
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO whatsapp_opted_in (phone, opted_in_at, opted_in_by) VALUES (?,?,?)",
-              (clean, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), opted_in_by))
+    c.execute("INSERT OR IGNORE INTO whatsapp_opted_in (phone, opted_in_at, opted_in_by) VALUES (?,?,?)  ",
+              (clean, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""))
     conn.commit()
     conn.close()
 
@@ -514,7 +514,9 @@ def save_settings():
     for contact in contacts:
         contact_phone = normalize_phone(contact.get('phone', ''))
         contact_name  = contact.get('name', 'Contact')
-        if contact_phone and len(contact_phone) >= 8 and not is_opted_in(contact_phone):
+        already = is_opted_in(contact_phone)
+        log_status(f"🔍 OPT-IN CHECK → {contact_phone} | al bekend: {already}")
+        if contact_phone and len(contact_phone) >= 8 and not already:
             wa_link = f"https://wa.me/34623789580?text=I%20allow%20callmebot%20to%20send%20me%20messages"
             msg = (
                 "\U0001f44b Hallo " + contact_name + "!\n\n"
