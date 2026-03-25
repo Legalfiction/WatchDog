@@ -506,30 +506,16 @@ export default function App() {
                     onBlur={() => saveToAndroid(settings.contacts[0]?.phone || settings.ownPhone, settings.name)}
                     className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-bold text-slate-700 text-sm outline-none" />
                 </div>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Taal</label>
-                    <div className="relative">
-                      <select value={langKey} onChange={e => setSettings({ ...settings, language: e.target.value })}
-                        className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-sm">
-                        {Object.keys(LANGUAGES).map(key => (
-                          <option key={key} value={key}>{LANGUAGES[key].flag} {LANGUAGES[key].name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" size={14} />
-                    </div>
-                  </div>
-                  <div className="w-28">
-                    <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
-                    <div className="relative">
-                      <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
-                        className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-sm">
-                        {Object.keys(COUNTRIES).map(key => (
-                          <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" size={14} />
-                    </div>
+                <div>
+                  <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Taal</label>
+                  <div className="relative">
+                    <select value={langKey} onChange={e => setSettings({ ...settings, language: e.target.value })}
+                      className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-sm">
+                      {Object.keys(LANGUAGES).map(key => (
+                        <option key={key} value={key}>{LANGUAGES[key].flag} {LANGUAGES[key].name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" size={14} />
                   </div>
                 </div>
                 <div className="pt-1 border-t border-orange-200">
@@ -544,13 +530,27 @@ export default function App() {
                     </button>
                   </div>
                   {settings.notifySelf && (
-                    <div className="mt-2">
-                      <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />WhatsApp nummer</label>
-                      <input value={settings.ownPhone}
-                        onChange={e => setSettings({ ...settings, ownPhone: e.target.value })}
-                        onBlur={handlePhoneBlur}
-                        placeholder={`${prefix}612345678`}
-                        className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none" />
+                    <div className="mt-2 flex gap-2 items-end">
+                      <div className="w-24 shrink-0">
+                        <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
+                        <div className="relative">
+                          <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
+                            className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
+                            {Object.keys(COUNTRIES).map(key => (
+                              <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-1 top-2.5 text-slate-400 pointer-events-none" size={10} />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />Nummer</label>
+                        <input value={settings.ownPhone}
+                          onChange={e => setSettings({ ...settings, ownPhone: e.target.value })}
+                          onBlur={handlePhoneBlur}
+                          placeholder="612345678"
+                          className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none" />
+                      </div>
                     </div>
                   )}
                 </div>
