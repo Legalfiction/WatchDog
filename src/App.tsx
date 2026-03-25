@@ -101,7 +101,8 @@ export default function App() {
     };
   });
 
-  const langObj    = LANGUAGES[settings.language] || LANGUAGES['nl'];
+  const langKey    = (settings.language && LANGUAGES[settings.language]) ? settings.language : 'nl';
+  const langObj    = LANGUAGES[langKey];
   const lang       = langObj?.lang || 'nl';
   const daysVoluit = langObj?.days || ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
   const countryObj = COUNTRIES[settings.country] || COUNTRIES['NL'];
