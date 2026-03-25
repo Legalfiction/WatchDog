@@ -178,12 +178,12 @@ export default function App() {
       const d = new Date(), dStr = getLocalYYYYMMDD(d);
       const tStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
       setSettings((prev: any) => {
-        const endTime = prev.overrides[dStr].end;
-          const startTime = prev.overrides[dStr].start;
-          // Venster over middernacht: eindtijd < starttijd
-          const isMidnight = endTime < startTime;
-          const expired = isMidnight ? false : tStr > endTime;
-          if (prev.overrides?.[dStr] && expired) {
+        if (!prev.overrides?.[dStr]) return prev;
+        const endTime = prev.overrides[dStr]?.end || '00:00';
+        const startTime = prev.overrides[dStr]?.start || '00:00';
+        const isMidnight = endTime < startTime;
+        const expired = isMidnight ? false : tStr > endTime;
+        if (expired) {
           const n = { ...prev.overrides };
           delete n[dStr];
           if (activeTab === 'today') setActiveTab('base');
