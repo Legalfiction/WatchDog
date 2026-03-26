@@ -235,7 +235,7 @@ def escalate_user(user: dict, start_str: str, end_str: str):
         f"De ingestelde eindtijd is verstreken zonder dat er gebruik van het toestel is geregistreerd. Een mogelijke oorzaak is een lege batterij.\n\n"
         f"Neem voor de zekerheid contact op met de gebruiker."
     )
-    log_status(f"📢 ALARM → {user_name} ({own_phone}) | {start_str}–{end_str} | {len(contacts)} contacten")
+    log_status(f"📢 ALARM → {user_name} [dev:{device_id[:8]}] | {start_str}–{end_str} | {len(contacts)} contacten")
     for contact in contacts:
         phone = contact.get('phone', '')
         if phone:
@@ -262,7 +262,7 @@ def send_inactivity_alert(user: dict):
         f"Wil je deze berichten niet? Open Barkr → Instellingen → schuifje UIT."
     )
     if send_whatsapp(own_phone, msg, context=f"inactivity:{own_phone}"):
-        log_status(f"📱 INACTIVITEITSMELDING → {user_name} ({own_phone})")
+        log_status(f"📱 INACTIVITEITSMELDING → {user_name} [dev:{device_id[:8]}]")
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("UPDATE users SET last_inactivity_alert=? WHERE own_phone=?", (today_str, own_phone))
@@ -281,7 +281,7 @@ def monitoring_loop():
             for phone, state in list(user_states.items()):
                 if state["status"] == "online" and (current_time - state["last_ping"]) > PING_TIMEOUT:
                     user_states[phone]["status"] = "offline"
-                    log_status(f"📵 OFFLINE → {state.get('name','?')} ({phone}) | {int(current_time - state['last_ping'])}s geen ping")
+                    log_status(f"📵 OFFLINE → {state.get('name','?')} [dev:{phone[:8]}] | {int(current_time - state['last_ping'])}s geen ping")
 
             conn = sqlite3.connect(DB_FILE)
             conn.row_factory = sqlite3.Row
@@ -329,7 +329,7 @@ def monitoring_loop():
                 if alarm_already_fired(own_phone, today_str, start_str, end_str):
                     continue
 
-                log_status(f"🏁 Deadline {end_str} bereikt voor {user_name} ({own_phone})")
+                log_status(f"🏁 Deadline {end_str} bereikt voor {user_name} [dev:{device_id[:8]}]")
 
                 last_ping_dt = None
                 if last_ping_time:
@@ -402,7 +402,7 @@ def heartbeat():
 
     state = user_states.get(own_phone, {"status": "offline", "last_ping": 0, "name": user_name})
     if state["status"] == "offline":
-        log_status(f"📱 ONLINE → {user_name} ({own_phone}) | bron: {source}")
+        log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: {source}")
 
     # Haal tijdvenster op voor logging
     conn_tmp = sqlite3.connect(DB_FILE)
@@ -426,7 +426,7 @@ def heartbeat():
     source = data.get('source', 'webview')
     status_icon = "🔓" if device_status == "unlocked" else "🔒"
     status_txt = "IN GEBRUIK" if device_status == "unlocked" else "VERGRENDELD"
-    log_status(f"💓 {status_icon} PING -> {user_name} ({own_phone}) | {status_txt} | venster: {window_info} | bron: {source}")
+    log_status(f"💓 {status_icon} PING -> {user_name} [dev:{device_id[:8]}] | {status_txt} | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
     updated = update_ping(own_phone, now_str)
@@ -436,7 +436,7 @@ def heartbeat():
             'schedules': '{}', 'vacation_mode': False, 'notify_self': True,
         })
         update_ping(own_phone, now_str)
-        log_status(f"👤 NIEUWE GEBRUIKER → {user_name} ({own_phone})")
+        log_status(f"👤 NIEUWE GEBRUIKER → {user_name} [dev:{device_id[:8]}]")
 
     # Update naam en last_unlocked_ping als toestel in gebruik is
     conn = sqlite3.connect(DB_FILE)
@@ -469,7 +469,7 @@ def ping():
 
     state = user_states.get(own_phone, {"status": "offline", "last_ping": 0, "name": user_name})
     if state["status"] == "offline":
-        log_status(f"📱 ONLINE → {user_name} ({own_phone}) | bron: webview")
+        log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: webview")
 
     # Haal tijdvenster op voor logging
     conn_tmp = sqlite3.connect(DB_FILE)
@@ -491,7 +491,7 @@ def ping():
             pass
 
     source = data.get('source', 'webview')
-    log_status(f"💓 PING → {user_name} ({own_phone}) | venster: {window_info} | bron: {source}")
+    log_status(f"💓 PING → {user_name} [dev:{device_id[:8]}] | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
     updated = update_ping(own_phone, now_str)
