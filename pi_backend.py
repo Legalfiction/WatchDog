@@ -55,7 +55,15 @@ def alert_developer(error_type: str, detail: str):
 
 
 def normalize_phone(phone: str) -> str:
-    return phone.replace(' ', '').replace('-', '').replace('+', '').strip()
+    """Verwijdert alle niet-cijfer tekens. Geeft lege string bij ongeldig nummer."""
+    import re
+    clean = re.sub(r'[^0-9]', '', phone)
+    return clean
+
+def is_valid_phone(phone: str) -> bool:
+    """Telefoonnummer moet 10-15 cijfers hebben na normalisatie."""
+    clean = normalize_phone(phone)
+    return clean.isdigit() and 10 <= len(clean) <= 15
 
 
 def init_db():
@@ -92,6 +100,20 @@ def init_db():
 
     conn.commit()
     conn.close()
+    # Verwijder automatisch ongeldige records bij elke opstart
+    conn_clean = sqlite3.connect(DB_FILE)
+    c_clean = conn_clean.cursor()
+    c_clean.execute("""
+        DELETE FROM users
+        WHERE length(replace(replace(replace(own_phone,' ',''),'-',''),'+','')) < 10
+           OR length(replace(replace(replace(own_phone,' ',''),'-',''),'+','')) > 15
+           OR own_phone GLOB '*[^0-9]*'
+    """)
+    deleted = c_clean.rowcount
+    conn_clean.commit()
+    conn_clean.close()
+    if deleted > 0:
+        log_status(f"🧹 {deleted} ongeldige records automatisch verwijderd")
     log_status("✅ DATABASE GEREED (telefoonnummer als sleutel)")
 
 
@@ -251,7 +273,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.34 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.35 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -354,7 +376,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.34"}), 200
+    return jsonify({"status": "online", "version": "10.35"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -369,7 +391,7 @@ def heartbeat():
     source        = data.get('source', 'unknown')
     device_status = data.get('device_status', 'unknown')
 
-    if not own_phone or len(own_phone) < 8:
+    if not own_phone or not is_valid_phone(own_phone):
         return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
     now_str      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -436,7 +458,7 @@ def ping():
     own_phone = normalize_phone(data.get('own_phone', ''))
     user_name = (data.get('name') or '').strip()
 
-    if not own_phone or len(own_phone) < 8:
+    if not own_phone or not is_valid_phone(own_phone):
         return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
     now_str      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -496,7 +518,7 @@ def save_settings():
     own_phone = normalize_phone(data.get('ownPhone', ''))
     user_name = (data.get('name') or '').strip()
 
-    if not own_phone or len(own_phone) < 8:
+    if not own_phone or not is_valid_phone(own_phone):
         return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
 
     contacts = data.get('contacts', [])
@@ -516,7 +538,7 @@ def save_settings():
         contact_name  = contact.get('name', 'Contact')
         already = is_opted_in(contact_phone)
         log_status(f"🔍 OPT-IN CHECK → {contact_phone} | al bekend: {already}")
-        if contact_phone and len(contact_phone) >= 8 and not already:
+        if contact_phone and is_valid_phone(contact_phone) and not already:
             wa_link = f"https://wa.me/34623789580?text=I%20allow%20callmebot%20to%20send%20me%20messages"
             msg = (
                 "\U0001f44b Hallo " + contact_name + "!\n\n"
