@@ -1,267 +1,127 @@
-import React, { useState } from 'react';
-import {
-  X, AlertTriangle, CalendarDays, Plane, Briefcase, Home, Mountain,
-  Zap, Dog, HeartPulse, Clock, ExternalLink, Wifi, Mail,
-  Smartphone, Hash, Bell, CheckCircle2, MessageCircle, Shield,
-  ChevronRight,
-} from 'lucide-react';
-import { TRANSLATIONS } from '../constants/translations';
+// Landen — voor landcode/prefix telefoon (wereldwijd)
+export const COUNTRIES: Record<string, { flag: string; prefix: string; name: string }> = {
+  NL: { flag: '🇳🇱', prefix: '+31',  name: 'Nederland' },
+  BE: { flag: '🇧🇪', prefix: '+32',  name: 'België' },
+  DE: { flag: '🇩🇪', prefix: '+49',  name: 'Deutschland' },
+  FR: { flag: '🇫🇷', prefix: '+33',  name: 'France' },
+  GB: { flag: '🇬🇧', prefix: '+44',  name: 'United Kingdom' },
+  US: { flag: '🇺🇸', prefix: '+1',   name: 'United States' },
+  CA: { flag: '🇨🇦', prefix: '+1',   name: 'Canada' },
+  AU: { flag: '🇦🇺', prefix: '+61',  name: 'Australia' },
+  AT: { flag: '🇦🇹', prefix: '+43',  name: 'Österreich' },
+  CH: { flag: '🇨🇭', prefix: '+41',  name: 'Schweiz' },
+  ES: { flag: '🇪🇸', prefix: '+34',  name: 'España' },
+  IT: { flag: '🇮🇹', prefix: '+39',  name: 'Italia' },
+  PT: { flag: '🇵🇹', prefix: '+351', name: 'Portugal' },
+  PL: { flag: '🇵🇱', prefix: '+48',  name: 'Polska' },
+  TR: { flag: '🇹🇷', prefix: '+90',  name: 'Türkiye' },
+  SE: { flag: '🇸🇪', prefix: '+46',  name: 'Sverige' },
+  NO: { flag: '🇳🇴', prefix: '+47',  name: 'Norge' },
+  DK: { flag: '🇩🇰', prefix: '+45',  name: 'Danmark' },
+  FI: { flag: '🇫🇮', prefix: '+358', name: 'Suomi' },
+  GR: { flag: '🇬🇷', prefix: '+30',  name: 'Ελλάδα' },
+  CZ: { flag: '🇨🇿', prefix: '+420', name: 'Česká republika' },
+  SK: { flag: '🇸🇰', prefix: '+421', name: 'Slovensko' },
+  HU: { flag: '🇭🇺', prefix: '+36',  name: 'Magyarország' },
+  RO: { flag: '🇷🇴', prefix: '+40',  name: 'România' },
+  BG: { flag: '🇧🇬', prefix: '+359', name: 'България' },
+  HR: { flag: '🇭🇷', prefix: '+385', name: 'Hrvatska' },
+  RS: { flag: '🇷🇸', prefix: '+381', name: 'Srbija' },
+  SI: { flag: '🇸🇮', prefix: '+386', name: 'Slovenija' },
+  IE: { flag: '🇮🇪', prefix: '+353', name: 'Ireland' },
+  LU: { flag: '🇱🇺', prefix: '+352', name: 'Luxembourg' },
+  LT: { flag: '🇱🇹', prefix: '+370', name: 'Lietuva' },
+  LV: { flag: '🇱🇻', prefix: '+371', name: 'Latvija' },
+  EE: { flag: '🇪🇪', prefix: '+372', name: 'Eesti' },
+  UA: { flag: '🇺🇦', prefix: '+380', name: 'Україна' },
+  RU: { flag: '🇷🇺', prefix: '+7',   name: 'Россия' },
+  BY: { flag: '🇧🇾', prefix: '+375', name: 'Беларусь' },
+  MD: { flag: '🇲🇩', prefix: '+373', name: 'Moldova' },
+  AL: { flag: '🇦🇱', prefix: '+355', name: 'Shqipëria' },
+  MK: { flag: '🇲🇰', prefix: '+389', name: 'Македонија' },
+  BA: { flag: '🇧🇦', prefix: '+387', name: 'Bosna i Hercegovina' },
+  ME: { flag: '🇲🇪', prefix: '+382', name: 'Crna Gora' },
+  XK: { flag: '🇽🇰', prefix: '+383', name: 'Kosovë' },
+  IS: { flag: '🇮🇸', prefix: '+354', name: 'Ísland' },
+  MT: { flag: '🇲🇹', prefix: '+356', name: 'Malta' },
+  CY: { flag: '🇨🇾', prefix: '+357', name: 'Κύπρος' },
+  NZ: { flag: '🇳🇿', prefix: '+64',  name: 'New Zealand' },
+  ZA: { flag: '🇿🇦', prefix: '+27',  name: 'South Africa' },
+  NG: { flag: '🇳🇬', prefix: '+234', name: 'Nigeria' },
+  KE: { flag: '🇰🇪', prefix: '+254', name: 'Kenya' },
+  GH: { flag: '🇬🇭', prefix: '+233', name: 'Ghana' },
+  EG: { flag: '🇪🇬', prefix: '+20',  name: 'مصر' },
+  MA: { flag: '🇲🇦', prefix: '+212', name: 'المغرب' },
+  TN: { flag: '🇹🇳', prefix: '+216', name: 'تونس' },
+  DZ: { flag: '🇩🇿', prefix: '+213', name: 'الجزائر' },
+  ET: { flag: '🇪🇹', prefix: '+251', name: 'Ethiopia' },
+  TZ: { flag: '🇹🇿', prefix: '+255', name: 'Tanzania' },
+  UG: { flag: '🇺🇬', prefix: '+256', name: 'Uganda' },
+  IN: { flag: '🇮🇳', prefix: '+91',  name: 'India' },
+  PK: { flag: '🇵🇰', prefix: '+92',  name: 'Pakistan' },
+  BD: { flag: '🇧🇩', prefix: '+880', name: 'Bangladesh' },
+  LK: { flag: '🇱🇰', prefix: '+94',  name: 'Sri Lanka' },
+  NP: { flag: '🇳🇵', prefix: '+977', name: 'Nepal' },
+  MM: { flag: '🇲🇲', prefix: '+95',  name: 'Myanmar' },
+  TH: { flag: '🇹🇭', prefix: '+66',  name: 'ประเทศไทย' },
+  VN: { flag: '🇻🇳', prefix: '+84',  name: 'Việt Nam' },
+  ID: { flag: '🇮🇩', prefix: '+62',  name: 'Indonesia' },
+  MY: { flag: '🇲🇾', prefix: '+60',  name: 'Malaysia' },
+  SG: { flag: '🇸🇬', prefix: '+65',  name: 'Singapore' },
+  PH: { flag: '🇵🇭', prefix: '+63',  name: 'Philippines' },
+  CN: { flag: '🇨🇳', prefix: '+86',  name: '中国' },
+  JP: { flag: '🇯🇵', prefix: '+81',  name: '日本' },
+  KR: { flag: '🇰🇷', prefix: '+82',  name: '대한민국' },
+  TW: { flag: '🇹🇼', prefix: '+886', name: 'Taiwan' },
+  HK: { flag: '🇭🇰', prefix: '+852', name: 'Hong Kong' },
+  MO: { flag: '🇲🇴', prefix: '+853', name: 'Macau' },
+  KH: { flag: '🇰🇭', prefix: '+855', name: 'Cambodia' },
+  LA: { flag: '🇱🇦', prefix: '+856', name: 'Laos' },
+  MN: { flag: '🇲🇳', prefix: '+976', name: 'Mongolia' },
+  KZ: { flag: '🇰🇿', prefix: '+7',   name: 'Казахстан' },
+  UZ: { flag: '🇺🇿', prefix: '+998', name: 'Uzbekistan' },
+  AZ: { flag: '🇦🇿', prefix: '+994', name: 'Azərbaycan' },
+  GE: { flag: '🇬🇪', prefix: '+995', name: 'საქართველო' },
+  AM: { flag: '🇦🇲', prefix: '+374', name: 'Հայաuտան' },
+  IL: { flag: '🇮🇱', prefix: '+972', name: 'ישראל' },
+  SA: { flag: '🇸🇦', prefix: '+966', name: 'السعودية' },
+  AE: { flag: '🇦🇪', prefix: '+971', name: 'الإمارات' },
+  QA: { flag: '🇶🇦', prefix: '+974', name: 'قطر' },
+  KW: { flag: '🇰🇼', prefix: '+965', name: 'الكويت' },
+  BH: { flag: '🇧🇭', prefix: '+973', name: 'البحرين' },
+  OM: { flag: '🇴🇲', prefix: '+968', name: 'عُمان' },
+  JO: { flag: '🇯🇴', prefix: '+962', name: 'الأردن' },
+  LB: { flag: '🇱🇧', prefix: '+961', name: 'لبنان' },
+  IQ: { flag: '🇮🇶', prefix: '+964', name: 'العراق' },
+  IR: { flag: '🇮🇷', prefix: '+98',  name: 'ایران' },
+  AF: { flag: '🇦🇫', prefix: '+93',  name: 'Afghanistan' },
+  MX: { flag: '🇲🇽', prefix: '+52',  name: 'México' },
+  BR: { flag: '🇧🇷', prefix: '+55',  name: 'Brasil' },
+  AR: { flag: '🇦🇷', prefix: '+54',  name: 'Argentina' },
+  CL: { flag: '🇨🇱', prefix: '+56',  name: 'Chile' },
+  CO: { flag: '🇨🇴', prefix: '+57',  name: 'Colombia' },
+  PE: { flag: '🇵🇪', prefix: '+51',  name: 'Perú' },
+  VE: { flag: '🇻🇪', prefix: '+58',  name: 'Venezuela' },
+  EC: { flag: '🇪🇨', prefix: '+593', name: 'Ecuador' },
+  BO: { flag: '🇧🇴', prefix: '+591', name: 'Bolivia' },
+  PY: { flag: '🇵🇾', prefix: '+595', name: 'Paraguay' },
+  UY: { flag: '🇺🇾', prefix: '+598', name: 'Uruguay' },
+  CR: { flag: '🇨🇷', prefix: '+506', name: 'Costa Rica' },
+  PA: { flag: '🇵🇦', prefix: '+507', name: 'Panamá' },
+  CU: { flag: '🇨🇺', prefix: '+53',  name: 'Cuba' },
+  DO: { flag: '🇩🇴', prefix: '+1',   name: 'República Dominicana' },
+  JM: { flag: '🇯🇲', prefix: '+1',   name: 'Jamaica' },
+};
 
-interface Props {
-  onClose: () => void;
-  lang: string;
-}
-
-export const InfoPage: React.FC<Props> = ({ onClose, lang }) => {
-  const [activeTab, setActiveTab] = useState<'about' | 'startup'>('about');
-
-  const t = (key: string) =>
-    TRANSLATIONS[lang]?.[key] || TRANSLATIONS['nl']?.[key] || key;
-
-  const phones = [
-    { key: 'generic', icon: '📱', color: 'bg-slate-100 border-slate-200', textColor: 'text-slate-700' },
-    { key: 'samsung', icon: '🔵', color: 'bg-blue-50 border-blue-100', textColor: 'text-blue-900' },
-    { key: 'xiaomi', icon: '🟠', color: 'bg-orange-50 border-orange-100', textColor: 'text-orange-900' },
-    { key: 'huawei', icon: '🔴', color: 'bg-red-50 border-red-100', textColor: 'text-red-900' },
-    { key: 'oppo', icon: '🟢', color: 'bg-green-50 border-green-100', textColor: 'text-green-900' },
-    { key: 'pixel',    icon: '⚪', color: 'bg-slate-50 border-slate-200',   textColor: 'text-slate-700' },
-    { key: 'motorola', icon: '🔷', color: 'bg-blue-50 border-blue-100',     textColor: 'text-blue-900' },
-  ];
-
-  return (
-    <div className="bg-slate-50 min-h-screen flex flex-col">
-
-      {/* VASTE HEADER */}
-      <div className="bg-white border-b border-slate-100 sticky top-0 z-20">
-        <div className="flex justify-between items-center px-5 py-4">
-          <h2 className="text-xl font-black uppercase italic tracking-tight text-slate-800">
-            {t('manual')}
-          </h2>
-          <button onClick={onClose}
-            className="p-2 bg-slate-100 rounded-full border border-slate-200">
-            <X size={22} />
-          </button>
-        </div>
-
-        {/* TABS */}
-        <div className="flex px-5 pb-3 gap-2">
-          <button
-            onClick={() => setActiveTab('about')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${
-              activeTab === 'about'
-                ? 'bg-orange-600 text-white'
-                : 'bg-slate-100 text-slate-500'
-            }`}>
-            {t('tab_about')}
-          </button>
-          <button
-            onClick={() => setActiveTab('startup')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${
-              activeTab === 'startup'
-                ? 'bg-orange-600 text-white'
-                : 'bg-slate-100 text-slate-500'
-            }`}>
-            {t('tab_startup')}
-          </button>
-        </div>
-      </div>
-
-      {/* SCROLLBARE INHOUD */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5 pb-10 no-scrollbar">
-
-        {/* ================================================ */}
-        {/* TAB 1: OVER BARKR                               */}
-        {/* ================================================ */}
-        {activeTab === 'about' && (
-          <>
-            {/* WAAROM BARKR — bovenaan, prominent */}
-            <section className="bg-orange-600 p-6 rounded-[28px] text-white space-y-3">
-              <h3 className="font-black text-lg uppercase italic tracking-tight flex items-center gap-2">
-                <Shield size={22} className="text-orange-200" />
-                {t('why_barkr_title')}
-              </h3>
-              <p className="text-sm font-medium leading-relaxed text-orange-50">
-                {t('why_barkr_intro')}
-              </p>
-              <p className="text-sm font-medium leading-relaxed text-orange-100">
-                {t('why_barkr_for')}
-              </p>
-            </section>
-
-            {/* NATIVE APP INFO */}
-            <section className="bg-blue-600 p-5 rounded-[24px] text-white space-y-2">
-              <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-[0.15em]">
-                <Smartphone size={16} className="text-blue-200" />
-                {t('launch_alert')}
-              </h4>
-              <p className="text-sm font-medium leading-relaxed">{t('launch_desc')}</p>
-            </section>
-
-            {/* WEEKPLANNING */}
-            <section className="bg-orange-50 p-5 rounded-[24px] border border-orange-200 space-y-2">
-              <h4 className="font-black text-orange-800 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <CalendarDays size={16} /> {t('smart_help_t')}
-              </h4>
-              <p className="text-sm text-orange-900 font-medium leading-relaxed">{t('smart_help_d')}</p>
-            </section>
-
-            {/* 00:00 UITLEG */}
-            <section className="bg-white p-5 rounded-[24px] border border-slate-200 space-y-2">
-              <h4 className="font-black text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <Hash size={16} className="text-orange-600" /> {t('zero_time_t')}
-              </h4>
-              <p className="text-sm text-slate-600 font-medium leading-relaxed">{t('zero_time_d')}</p>
-            </section>
-
-            {/* WHATSAPP INSTELLEN */}
-            <section className="bg-white p-5 rounded-[24px] border border-slate-200 space-y-3">
-              <h4 className="font-black text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <MessageCircle size={16} className="text-green-600" /> {t('whatsapp_setup_t')}
-              </h4>
-              <p className="text-sm text-slate-600 font-medium leading-relaxed">{t('whatsapp_setup_d')}</p>
-              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
-                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                <p className="text-[10px] font-black text-emerald-700 uppercase tracking-wide">{t('whatsapp_active')}</p>
-              </div>
-            </section>
-
-            {/* MELDING BIJ INACTIVITEIT */}
-            <section className="bg-white p-5 rounded-[24px] border border-slate-200 space-y-2">
-              <h4 className="font-black text-slate-700 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <Bell size={16} className="text-orange-600" /> {t('notify_self_info_t')}
-              </h4>
-              <p className="text-sm text-slate-600 font-medium leading-relaxed">{t('notify_self_info_d')}</p>
-            </section>
-
-            {/* SCENARIO'S */}
-            <section className="space-y-3">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 px-1 flex items-center gap-2">
-                <Zap size={14} /> {t('ins_title')}
-              </h3>
-              {[
-                { id: 1, icon: <Plane size={20} /> },
-                { id: 2, icon: <Briefcase size={20} /> },
-                { id: 3, icon: <Home size={20} /> },
-                { id: 4, icon: <Mountain size={20} /> },
-              ].map(item => (
-                <div key={item.id}
-                  className="bg-white p-4 rounded-[22px] border border-slate-200 flex gap-3 items-start">
-                  <div className="bg-orange-100 p-2.5 rounded-xl text-orange-600 shrink-0">{item.icon}</div>
-                  <div>
-                    <h5 className="font-black text-slate-800 text-sm uppercase italic tracking-tight">
-                      {t(`ins_${item.id}_t`)}
-                    </h5>
-                    <p className="text-xs text-slate-500 leading-relaxed mt-0.5">{t(`ins_${item.id}_d`)}</p>
-                  </div>
-                </div>
-              ))}
-            </section>
-
-            {/* HOE GEBRUIK JE BARKR */}
-            <section className="bg-orange-50 p-6 rounded-[32px] border border-orange-200 space-y-4">
-              <h4 className="font-black text-orange-800 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <Clock size={18} /> {t('how')}
-              </h4>
-              {[
-                { num: 1, title: t('setup'),     desc: t('how_step1') },
-                { num: 2, title: t('week_plan'), desc: t('how_step2') },
-                { num: 3, title: t('deadline'),  desc: t('how_step3') },
-              ].map(step => (
-                <div key={step.num} className="flex gap-3">
-                  <div className="bg-orange-600 text-white w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-black text-xs">
-                    {step.num}
-                  </div>
-                  <div>
-                    <p className="text-sm font-black text-orange-900">{step.title}</p>
-                    <p className="text-xs text-orange-800/70 leading-relaxed mt-0.5">{step.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </section>
-
-            {/* BETEKENIS */}
-            <section className="bg-white p-5 rounded-[24px] border border-slate-200 space-y-2">
-              <h4 className="font-black text-orange-600 flex items-center gap-2 uppercase text-xs tracking-[0.15em]">
-                <Dog size={18} /> {t('barkr_mean')}
-              </h4>
-              <p className="text-sm text-slate-600 leading-relaxed font-medium">{t('barkr_desc')}</p>
-            </section>
-
-            {/* SUPPORT */}
-            <section className="bg-slate-900 p-6 rounded-[32px] text-white space-y-4">
-              <h4 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest text-orange-400">
-                <ExternalLink size={16} /> {t('info_support')}
-              </h4>
-              <div className="space-y-3">
-                <a href="https://www.barkr.nl" target="_blank" rel="noreferrer"
-                  className="flex items-center gap-3 bg-slate-800 p-3.5 rounded-2xl border border-slate-700 active:scale-95 transition-all">
-                  <div className="bg-orange-600 p-2 rounded-xl"><Wifi size={16} className="text-white" /></div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{t('website')}</span>
-                    <span className="font-bold text-sm">www.barkr.nl</span>
-                  </div>
-                </a>
-                <a href="mailto:info@barkr.nl"
-                  className="flex items-center gap-3 bg-slate-800 p-3.5 rounded-2xl border border-slate-700 active:scale-95 transition-all">
-                  <div className="bg-blue-600 p-2 rounded-xl"><Mail size={16} className="text-white" /></div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">{t('email')}</span>
-                    <span className="font-bold text-sm">info@barkr.nl</span>
-                  </div>
-                </a>
-              </div>
-            </section>
-          </>
-        )}
-
-        {/* ================================================ */}
-        {/* TAB 2: OPSTARTGIDS                              */}
-        {/* ================================================ */}
-        {activeTab === 'startup' && (
-          <>
-            <section className="bg-blue-600 p-5 rounded-[24px] text-white space-y-2">
-              <h3 className="font-black text-base uppercase italic tracking-tight flex items-center gap-2">
-                <Smartphone size={20} className="text-blue-200" />
-                {t('startup_guide_title')}
-              </h3>
-              <p className="text-sm font-medium leading-relaxed text-blue-100">
-                {t('startup_guide_intro')}
-              </p>
-            </section>
-
-            {phones.map(phone => (
-              <section key={phone.key}
-                className={`p-5 rounded-[24px] border space-y-2 ${phone.color}`}>
-                <h4 className={`font-black text-sm flex items-center gap-2 ${phone.textColor}`}>
-                  <span className="text-lg">{phone.icon}</span>
-                  {t(`startup_${phone.key}_title`)}
-                </h4>
-                <p className={`text-sm font-medium leading-relaxed ${phone.textColor} opacity-80`}>
-                  {t(`startup_${phone.key}_desc`)}
-                </p>
-              </section>
-            ))}
-
-            {/* SLOTOPMERKING */}
-            <section className="bg-amber-50 p-5 rounded-[24px] border border-amber-200 space-y-2">
-              <h4 className="font-black text-amber-800 flex items-center gap-2 uppercase text-xs tracking-widest">
-                <AlertTriangle size={16} className="text-amber-600" />
-                Let op
-              </h4>
-              <p className="text-sm text-amber-900 font-medium leading-relaxed">
-                {t('startup_note')}
-              </p>
-            </section>
-          </>
-        )}
-
-        {/* SLUITKNOP SCROLLT MEE */}
-        <button onClick={onClose}
-          className="w-full py-5 bg-orange-600 text-white font-black uppercase rounded-[28px] tracking-widest active:scale-95 transition-all">
-          {t('close')}
-        </button>
-
-      </div>
-    </div>
-  );
+// Talen — voor de interface
+export const LANGUAGES: Record<string, { flag: string; name: string; lang: string; days: string[] }> = {
+  nl: { flag: '🇳🇱', name: 'Nederlands',     lang: 'nl', days: ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'] },
+  uk: { flag: '🇬🇧', name: 'English (UK)',    lang: 'uk', days: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] },
+  us: { flag: '🇺🇸', name: 'English (US)',    lang: 'us', days: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] },
+  de: { flag: '🇩🇪', name: 'Deutsch',         lang: 'de', days: ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'] },
+  fr: { flag: '🇫🇷', name: 'Français',        lang: 'fr', days: ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'] },
+  es: { flag: '🇪🇸', name: 'Español',         lang: 'es', days: ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'] },
+  it: { flag: '🇮🇹', name: 'Italiano',        lang: 'it', days: ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'] },
+  pl: { flag: '🇵🇱', name: 'Polski',          lang: 'pl', days: ['Poniedziałek','Wtorek','Środa','Czwartek','Piątek','Sobota','Niedziela'] },
+  tr: { flag: '🇹🇷', name: 'Türkçe',          lang: 'tr', days: ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'] },
 };
