@@ -52,18 +52,26 @@ public class MainActivity extends BridgeActivity {
         // deze kan gebruiken voor de heartbeat naar de Pi
         @JavascriptInterface
         public void saveCredentials(String ownPhone, String userName) {
-            SharedPreferences.Editor prefs =
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
-            prefs.putString("own_phone", ownPhone);
-            prefs.putString("user_name", userName);
-            prefs.apply();
-            Log.d(TAG, "Credentials opgeslagen: " + userName + " (" + ownPhone + ")");
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            SharedPreferences.Editor editor = prefs.edit();
+            // Genereer device_id als die nog niet bestaat
+            String deviceId = prefs.getString("device_id", "");
+            if (deviceId.isEmpty()) {
+                deviceId = java.util.UUID.randomUUID().toString().replace("-", "");
+                editor.putString("device_id", deviceId);
+                Log.d(TAG, "Nieuwe device_id: " + deviceId);
+            }
+            editor.putString("own_phone", ownPhone);
+            editor.putString("user_name", userName);
+            editor.apply();
+            Log.d(TAG, "Credentials opgeslagen: " + userName + " device:" + deviceId.substring(0,8));
         }
 
         @JavascriptInterface
         public String getCredentials() {
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            return prefs.getString("own_phone", "") + "|" + prefs.getString("user_name", "");
+            String deviceId = prefs.getString("device_id", "");
+            return prefs.getString("own_phone", "") + "|" + prefs.getString("user_name", "") + "|" + deviceId;
         }
     }
 }
