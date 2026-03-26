@@ -62,6 +62,17 @@ export default function App() {
   const [showWeekPlan, setShowWeekPlan] = useState(false);
   const [lastPing,     setLastPing]     = useState('--:--');
   const [optInStatus,  setOptInStatus]  = useState<Record<string, 'unknown' | 'pending' | 'opted_in'>>({});
+  const [saveErrors,   setSaveErrors]   = useState<string[]>([]);
+
+  // Unieke device_id per installatie - nooit telefoonnummer als sleutel
+  const deviceId = React.useMemo(() => {
+    let id = localStorage.getItem('barkr_device_id');
+    if (!id) {
+      id = 'web_' + Math.random().toString(36).substr(2, 16) + Date.now().toString(36);
+      localStorage.setItem('barkr_device_id', id);
+    }
+    return id;
+  }, []);
 
   const now         = new Date();
   const todayStr    = getLocalYYYYMMDD(now);
@@ -154,9 +165,8 @@ export default function App() {
 
   // Sla credentials op in Android bij elke wijziging van naam of telefoonnummer
   useEffect(() => {
-    const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
-    if (contactPhone) {
-      saveToAndroid(contactPhone, settings.name);
+    if (settings.ownPhone) {
+      saveToAndroid(settings.ownPhone, settings.name);
     }
   }, [settings.ownPhone, settings.name]);
 
@@ -225,14 +235,14 @@ export default function App() {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
 
-    // Telefoonnummer is altijd het noodcontact nummer
-    // Dit is de enige constante sleutel in het systeem
-    const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
-    const cleanPhone = contactPhone.replace(/[^0-9]/g, '');
-    if (!contactPhone || cleanPhone.length < 10) return;
+    // Eigen telefoonnummer is de sleutel - nooit het contactpersoon nummer
+    const contactPhone = settings.ownPhone;
+    const cleanPhone = (contactPhone || '').replace(/[^0-9]/g, '');
+    if (!contactPhone || cleanPhone.length < 8) return;
 
     const payload: any = {
       ...settings,
+      device_id: deviceId,
       app_key: APP_KEY,
       useCustomSchedule: true,
       activeDays: [0,1,2,3,4,5,6],
@@ -294,8 +304,9 @@ export default function App() {
       fetch(`${activeUrl}/ping`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          device_id: deviceId,
           name: settings.name,
-          own_phone: settings.contacts[0]?.phone || settings.ownPhone,
+          own_phone: settings.ownPhone,
           app_key: APP_KEY,
           active_window: { start: todayWindowStart, end: todayWindowEnd },
         }),
@@ -370,7 +381,7 @@ export default function App() {
           <div>
             <h1 className="text-lg font-black italic tracking-tighter text-slate-800 uppercase">Barkr</h1>
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase">
-              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? settings.vacationMode ? 'bg-blue-500' : todayHasWindow ? 'bg-emerald-500' : 'bg-amber-400' : 'bg-red-500'}`} />
+              <div className={`w-2 h-2 rounded-full ${status === 'connected' ? settings.vacationMode ? 'bg-blue-500' : todayHasWindow ? 'bg-emerald-500' : 'bg-amber-400' : 'bg-red-500'}`} title={`Device: ${deviceId.substring(0,8)}`} />
               <span className={status === 'connected' ? settings.vacationMode ? 'text-blue-600' : todayHasWindow ? 'text-emerald-600' : 'text-amber-600' : 'text-red-500'}>
                 {status === 'offline' ? t('offline', lang) : status === 'searching' ? '...' : settings.vacationMode ? t('idle', lang) : todayHasWindow ? t('vigilant', lang) : t('no_window', lang)}
               </span>
@@ -389,7 +400,7 @@ export default function App() {
           <div className="flex flex-col items-center pt-2">
             <button onClick={() => {
               const newVacation = !settings.vacationMode;
-              const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
+              const contactPhone = settings.ownPhone;
               setSettings({ ...settings, vacationMode: newVacation });
               // Direct opslaan zonder vertraging
               if (activeUrl && contactPhone && contactPhone.length >= 8) {
@@ -526,9 +537,10 @@ export default function App() {
                 <div>
                   <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Jouw naam</label>
                   <input value={settings.name}
-                    onChange={e => setSettings({ ...settings, name: e.target.value })}
-                    onBlur={() => saveToAndroid(settings.contacts[0]?.phone || settings.ownPhone, settings.name)}
-                    className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-bold text-slate-700 text-sm outline-none" />
+                    onChange={e => { setSettings({ ...settings, name: e.target.value }); setSaveErrors([]); }}
+                    onBlur={() => saveToAndroid(settings.ownPhone, settings.name)}
+                    placeholder="Jouw naam (verplicht)"
+                    className={`w-full bg-white border rounded-xl p-2.5 font-bold text-slate-700 text-sm outline-none ${!settings.name.trim() ? 'border-red-300 bg-red-50' : 'border-orange-100'}`} />
                 </div>
                 <div>
                   <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Taal</label>
@@ -542,8 +554,32 @@ export default function App() {
                     <ChevronDown className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" size={14} />
                   </div>
                 </div>
-                <div className="pt-1 border-t border-orange-200">
-                  <div className="flex items-center justify-between">
+                <div className="pt-1 border-t border-orange-200 space-y-2">
+                  {/* Eigen nummer — altijd verplicht zichtbaar */}
+                  <div className="flex gap-2 items-end">
+                    <div className="w-24 shrink-0">
+                      <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
+                      <div className="relative">
+                        <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
+                          className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
+                          {Object.keys(COUNTRIES).map(key => (
+                            <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="absolute right-1 top-2.5 text-slate-400 pointer-events-none" size={10} />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />Jouw WhatsApp nummer (verplicht)</label>
+                      <input value={settings.ownPhone}
+                        onChange={e => { setSettings({ ...settings, ownPhone: e.target.value }); setSaveErrors([]); }}
+                        onBlur={handlePhoneBlur}
+                        placeholder="612345678"
+                        className={`w-full bg-white border rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none ${!settings.ownPhone ? 'border-red-300 bg-red-50' : 'border-orange-100'}`} />
+                    </div>
+                  </div>
+                  {/* Schuifje voor meldingen aan gebruiker */}
+                  <div className="flex items-center justify-between pt-1 border-t border-orange-100">
                     <div className="flex-1 pr-3">
                       <p className="text-xs font-bold text-slate-700">{t('notify_self_label', lang)}</p>
                       <p className="text-[10px] text-slate-500">{t('notify_self_desc', lang)}</p>
@@ -553,30 +589,6 @@ export default function App() {
                       <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 ${settings.notifySelf ? 'left-5' : 'left-0.5'}`} />
                     </button>
                   </div>
-                  {settings.notifySelf && (
-                    <div className="mt-2 flex gap-2 items-end">
-                      <div className="w-24 shrink-0">
-                        <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
-                        <div className="relative">
-                          <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
-                            className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
-                            {Object.keys(COUNTRIES).map(key => (
-                              <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-1 top-2.5 text-slate-400 pointer-events-none" size={10} />
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />Nummer</label>
-                        <input value={settings.ownPhone}
-                          onChange={e => setSettings({ ...settings, ownPhone: e.target.value })}
-                          onBlur={handlePhoneBlur}
-                          placeholder="612345678"
-                          className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none" />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -633,10 +645,10 @@ export default function App() {
                               if (clean.startsWith('+')) return clean.slice(contactPrefix2.length);
                               return clean;
                             })()}
-                            onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); }}
+                            onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); setSaveErrors([]); }}
                             onBlur={() => handleContactPhoneBlur(i)}
                             placeholder="612345678"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-mono text-slate-600 outline-none" />
+                            className={`w-full border rounded-lg p-2 text-sm font-mono text-slate-600 outline-none ${(c.phone || '').replace(/[^0-9]/g, '').length < 10 && c.phone ? 'border-red-300 bg-red-50' : 'bg-slate-50 border-slate-200'}`} />
                         </div>
                       </div>
                       {phone && phone.length >= 8 && (
@@ -658,7 +670,26 @@ export default function App() {
               </div>
             </div>
 
-            <button onClick={() => { const contactPhone = settings.contacts[0]?.phone || settings.ownPhone; saveToAndroid(contactPhone, settings.name); setShowSettings(false); }}
+            {saveErrors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-3 space-y-1">
+                {saveErrors.map((e, i) => (
+                  <p key={i} className="text-xs font-bold text-red-600">⚠️ {e}</p>
+                ))}
+              </div>
+            )}
+            <button onClick={() => {
+              const errors: string[] = [];
+              if (!settings.name.trim()) errors.push('Vul jouw naam in');
+              settings.contacts.forEach((c: any, i: number) => {
+                const cleanPhone = (c.phone || '').replace(/[^0-9]/g, '');
+                if (!c.name?.trim()) errors.push(`Contact ${i + 1}: naam is verplicht`);
+                if (cleanPhone.length < 10) errors.push(`Contact ${i + 1}: telefoonnummer is te kort (minimaal 10 cijfers)`);
+              });
+              if (errors.length > 0) { setSaveErrors(errors); return; }
+              setSaveErrors([]);
+              saveToAndroid(settings.ownPhone, settings.name);
+              setShowSettings(false);
+            }}
               className="w-full py-4 bg-slate-900 text-white font-black uppercase rounded-[28px] tracking-[0.2em] text-sm">
               {t('save', lang)}
             </button>
