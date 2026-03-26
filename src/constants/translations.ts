@@ -350,7 +350,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     startup_pixel_title: 'Pixel', startup_pixel_desc: 'Apps → Barkr → Batterie → Sans restriction.',
     startup_motorola_title: 'Motorola', startup_motorola_desc: 'Batterie → Optimisation → Barkr → Ne pas optimiser. Désactiver "Gérer si inutilisée".',
     startup_note: 'Démarrage auto impossible? Ouvrir manuellement après redémarrage. Barkr vous enverra un WhatsApp dès que l\'app s\'arrête.',
-    volgende_bewakingsperiode: 'Prochaine période', bewakingsperiode_eind: 'Heure de fin', example_title: 'Comment fonctionne Barkr?', example_desc: 'Couchez-vous à 23h et réveillez-vous à 7h, définissez la fenêtre de 6h à 8h.', privacy_title: 'Confidentialité', privacy_desc: 'Aucune donnée personnelle.', privacy_optin: 'Consentement', privacy_optin_desc: 'En utilisant l'app vous consentez.',
+    volgende_bewakingsperiode: 'Prochaine période', bewakingsperiode_eind: 'Heure de fin', example_title: 'Comment fonctionne Barkr?', example_desc: 'Couchez-vous à 23h et réveillez-vous à 7h, définissez la fenêtre de 6h à 8h.', privacy_title: 'Confidentialité', privacy_desc: 'Aucune donnée personnelle.', privacy_optin: 'Consentement', privacy_optin_desc: "En utilisant l'app vous consentez.",
   },
 
   es: {
