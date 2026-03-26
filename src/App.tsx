@@ -64,8 +64,22 @@ export default function App() {
   const [optInStatus,  setOptInStatus]  = useState<Record<string, 'unknown' | 'pending' | 'opted_in'>>({});
   const [saveErrors,   setSaveErrors]   = useState<string[]>([]);
 
-  // Unieke device_id per installatie - nooit telefoonnummer als sleutel
+  // Unieke device_id per installatie - altijd vanuit Android bridge
+  // zodat webview en BarkrService dezelfde sleutel gebruiken
   const deviceId = React.useMemo(() => {
+    // Probeer device_id op te halen via Android bridge (SharedPreferences)
+    if (window.BarkrAndroid) {
+      try {
+        const creds = window.BarkrAndroid.getCredentials();
+        const parts = creds.split('|');
+        const androidDeviceId = parts[2] || '';
+        if (androidDeviceId && androidDeviceId.length > 8) {
+          localStorage.setItem('barkr_device_id', androidDeviceId);
+          return androidDeviceId;
+        }
+      } catch(e) {}
+    }
+    // Fallback voor browser/development
     let id = localStorage.getItem('barkr_device_id');
     if (!id) {
       id = 'web_' + Math.random().toString(36).substr(2, 16) + Date.now().toString(36);
