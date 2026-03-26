@@ -66,9 +66,16 @@ def is_valid_phone(phone: str) -> bool:
     return clean.isdigit() and 10 <= len(clean) <= 15
 
 
+def get_db():
+    """Open database met WAL mode en timeout om locking te voorkomen."""
+    conn = sqlite3.connect(DB_FILE, timeout=10)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    return conn
+
 def init_db():
     os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
 
     # Primaire sleutel is device_id (UUID per toestel) - telefoonnummer is optioneel
@@ -135,7 +142,7 @@ def send_whatsapp(phone: str, message: str, context: str = "") -> bool:
 
 def is_opted_in(phone: str) -> bool:
     clean = normalize_phone(phone)
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("SELECT phone FROM whatsapp_opted_in WHERE phone=?", (clean,))
     found = c.fetchone() is not None
@@ -145,7 +152,7 @@ def is_opted_in(phone: str) -> bool:
 
 def register_opt_in(phone: str, opted_in_by: str):
     clean = normalize_phone(phone)
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("INSERT OR IGNORE INTO whatsapp_opted_in (phone, opted_in_at, opted_in_by) VALUES (?,?,?)  ",
               (clean, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ""))
@@ -167,7 +174,7 @@ def get_todays_window(user: dict) -> tuple[str, str]:
 
 
 def alarm_already_fired(own_phone: str, alarm_date: str, window_start: str, window_end: str) -> bool:
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("SELECT id FROM alarm_log WHERE own_phone=? AND alarm_date=? AND window_start=? AND window_end=?",
               (own_phone, alarm_date, window_start, window_end))
@@ -177,7 +184,7 @@ def alarm_already_fired(own_phone: str, alarm_date: str, window_start: str, wind
 
 
 def mark_alarm_fired(own_phone: str, alarm_date: str, window_start: str, window_end: str):
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("INSERT OR IGNORE INTO alarm_log (own_phone, alarm_date, window_start, window_end, fired_at) VALUES (?,?,?,?,?)",
               (own_phone, alarm_date, window_start, window_end, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -188,7 +195,7 @@ def mark_alarm_fired(own_phone: str, alarm_date: str, window_start: str, window_
 def upsert_user(device_id: str, fields: dict):
     """Voegt gebruiker toe of werkt bij. Sleutel is device_id (UUID per toestel)."""
     clean = device_id.strip()
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("SELECT last_ping_time FROM users WHERE device_id=? OR own_phone=?", (clean, clean))
     existing  = c.fetchone()
@@ -215,7 +222,7 @@ def upsert_user(device_id: str, fields: dict):
 
 def update_ping(own_phone: str, timestamp: str):
     clean = normalize_phone(own_phone)
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("UPDATE users SET last_ping_time=? WHERE own_phone=?", (timestamp, clean))
     updated = c.rowcount
@@ -265,7 +272,7 @@ def send_inactivity_alert(user: dict):
     dev_id = user.get('device_id', own_phone) or own_phone
     if send_whatsapp(own_phone, msg, context=f"inactivity:{own_phone}"):
         log_status(f"📱 INACTIVITEITSMELDING → {user_name} [dev:{dev_id[:8]}]")
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db()
         c = conn.cursor()
         c.execute("UPDATE users SET last_inactivity_alert=? WHERE own_phone=?", (today_str, own_phone))
         conn.commit()
@@ -285,7 +292,7 @@ def monitoring_loop():
                     user_states[phone]["status"] = "offline"
                     log_status(f"📵 OFFLINE → {state.get('name','?')} [dev:{phone[:8]}] | {int(current_time - state['last_ping'])}s geen ping")
 
-            conn = sqlite3.connect(DB_FILE)
+            conn = get_db()
             conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT * FROM users")
@@ -409,7 +416,7 @@ def heartbeat():
         log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: {source}")
 
     # Haal tijdvenster op voor logging — zoek op device_id, dan own_phone, dan naam
-    conn_tmp = sqlite3.connect(DB_FILE)
+    conn_tmp = get_db()
     c_tmp = conn_tmp.cursor()
     # Eerst exact device_id
     c_tmp.execute("SELECT schedules, device_id FROM users WHERE device_id=?", (device_id,))
@@ -441,7 +448,7 @@ def heartbeat():
             pass
         # Als gevonden via andere sleutel: koppel device_id zodat volgende keer direct gevonden wordt
         if matched_by != "device_id" and row_tmp[1] != device_id:
-            conn_fix = sqlite3.connect(DB_FILE)
+            conn_fix = get_db()
             c_fix = conn_fix.cursor()
             c_fix.execute("UPDATE users SET device_id=? WHERE device_id=?", (device_id, row_tmp[1]))
             conn_fix.commit()
@@ -466,7 +473,7 @@ def heartbeat():
         log_status(f"👤 NIEUWE GEBRUIKER → {user_name} [dev:{device_id[:8]}]")
 
     # Update naam en last_unlocked_ping als toestel in gebruik is
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     if device_status == 'unlocked':
         c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE own_phone=?", (user_name, now_str, own_phone))
@@ -499,7 +506,7 @@ def ping():
         log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: webview")
 
     # Haal tijdvenster op voor logging — zoek op device_id, dan own_phone, dan naam
-    conn_tmp = sqlite3.connect(DB_FILE)
+    conn_tmp = get_db()
     c_tmp = conn_tmp.cursor()
     # Eerst exact device_id
     c_tmp.execute("SELECT schedules, device_id FROM users WHERE device_id=?", (device_id,))
@@ -531,7 +538,7 @@ def ping():
             pass
         # Als gevonden via andere sleutel: koppel device_id zodat volgende keer direct gevonden wordt
         if matched_by != "device_id" and row_tmp[1] != device_id:
-            conn_fix = sqlite3.connect(DB_FILE)
+            conn_fix = get_db()
             c_fix = conn_fix.cursor()
             c_fix.execute("UPDATE users SET device_id=? WHERE device_id=?", (device_id, row_tmp[1]))
             conn_fix.commit()
@@ -553,7 +560,7 @@ def ping():
         update_ping(own_phone, now_str)
 
     # WebView ping = gebruiker heeft toestel open = altijd IN GEBRUIK
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db()
     c = conn.cursor()
     c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE own_phone=?", (user_name, now_str, own_phone))
     conn.commit()
@@ -573,6 +580,11 @@ def save_settings():
     user_name = (data.get('name') or '').strip()
 
     log_status(f"📥 SAVE_SETTINGS ONTVANGEN → naam:{user_name} device:{device_id[:8] if device_id else 'GEEN'} phone:{own_phone or 'GEEN'}")
+
+    # Negeer lege web-browser sessies (geen naam, geen telefoon, geen contacten)
+    if device_id and device_id.startswith('web_') and not user_name and not own_phone:
+        log_status(f"   ⏭️ Genegeerd — lege web sessie [{device_id[:8]}]")
+        return jsonify({"status": "ignored", "reason": "lege web sessie"}), 200
 
     if not device_id:
         if own_phone and is_valid_phone(own_phone):
