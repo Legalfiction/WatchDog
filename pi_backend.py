@@ -190,7 +190,7 @@ def upsert_user(device_id: str, fields: dict):
     clean = device_id.strip()
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT last_ping_time FROM users WHERE own_phone=?", (clean,))
+    c.execute("SELECT last_ping_time FROM users WHERE device_id=? OR own_phone=?", (clean, clean))
     existing  = c.fetchone()
     last_ping = existing[0] if existing else ""
     c.execute('''INSERT INTO users (own_phone, user_name, contacts, schedules,
@@ -408,7 +408,7 @@ def heartbeat():
     # Haal tijdvenster op voor logging
     conn_tmp = sqlite3.connect(DB_FILE)
     c_tmp = conn_tmp.cursor()
-    c_tmp.execute("SELECT schedules FROM users WHERE own_phone=?", (own_phone,))
+    c_tmp.execute("SELECT schedules FROM users WHERE device_id=? OR own_phone=?", (device_id, own_phone,))
     row_tmp = c_tmp.fetchone()
     conn_tmp.close()
     window_info = "geen venster"
@@ -475,7 +475,7 @@ def ping():
     # Haal tijdvenster op voor logging
     conn_tmp = sqlite3.connect(DB_FILE)
     c_tmp = conn_tmp.cursor()
-    c_tmp.execute("SELECT schedules FROM users WHERE own_phone=?", (own_phone,))
+    c_tmp.execute("SELECT schedules FROM users WHERE device_id=? OR own_phone=?", (device_id, own_phone,))
     row_tmp = c_tmp.fetchone()
     conn_tmp.close()
     window_info = "geen venster"
@@ -519,15 +519,24 @@ def save_settings():
     if not data or not authenticate(data):
         return jsonify({"status": "error"}), 403
 
+    device_id = (data.get('device_id') or '').strip()
     own_phone = normalize_phone(data.get('ownPhone', ''))
     user_name = (data.get('name') or '').strip()
 
-    if not own_phone or not is_valid_phone(own_phone):
-        return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
+    log_status(f"📥 SAVE_SETTINGS ONTVANGEN → naam:{user_name} device:{device_id[:8] if device_id else 'GEEN'} phone:{own_phone or 'GEEN'}")
+
+    if not device_id:
+        if own_phone and is_valid_phone(own_phone):
+            device_id = own_phone
+            log_status(f"   ⚠️ Geen device_id — fallback naar own_phone: {own_phone}")
+        else:
+            log_status(f"   ❌ Geen device_id en geen geldig telefoonnummer — ignored")
+            return jsonify({"status": "ignored", "reason": "geen device_id"}), 200
 
     contacts = data.get('contacts', [])
 
-    upsert_user(own_phone, {
+    upsert_user(device_id, {
+        'own_phone':    own_phone,
         'user_name':    user_name,
         'contacts':     json.dumps(contacts),
         'schedules':    json.dumps(data.get('schedules', {})),
