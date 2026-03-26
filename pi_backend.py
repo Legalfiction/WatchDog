@@ -226,6 +226,7 @@ def update_ping(own_phone: str, timestamp: str):
 
 def escalate_user(user: dict, start_str: str, end_str: str):
     own_phone = user['own_phone']
+    device_id = user.get('device_id', own_phone) or own_phone
     user_name = user.get('user_name', own_phone)
     contacts  = json.loads(user['contacts']) if user['contacts'] else []
     message   = (
@@ -261,8 +262,9 @@ def send_inactivity_alert(user: dict):
         f"Open de app → tik op het vraagteken → kies 'Opstartgids'. 🐾\n\n"
         f"Wil je deze berichten niet? Open Barkr → Instellingen → schuifje UIT."
     )
+    dev_id = user.get('device_id', own_phone) or own_phone
     if send_whatsapp(own_phone, msg, context=f"inactivity:{own_phone}"):
-        log_status(f"📱 INACTIVITEITSMELDING → {user_name} [dev:{device_id[:8]}]")
+        log_status(f"📱 INACTIVITEITSMELDING → {user_name} [dev:{dev_id[:8]}]")
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute("UPDATE users SET last_inactivity_alert=? WHERE own_phone=?", (today_str, own_phone))
@@ -295,7 +297,8 @@ def monitoring_loop():
 
             for row in users:
                 user      = dict(row)
-                own_phone = user['own_phone']
+                own_phone = user.get('own_phone', '')
+                device_id = user.get('device_id', own_phone) or own_phone
                 user_name = user.get('user_name', own_phone)
 
                 if user.get('vacation_mode'):
@@ -405,12 +408,25 @@ def heartbeat():
     if state["status"] == "offline":
         log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: {source}")
 
-    # Haal tijdvenster op voor logging
+    # Haal tijdvenster op voor logging — zoek op device_id, dan own_phone, dan naam
     conn_tmp = sqlite3.connect(DB_FILE)
     c_tmp = conn_tmp.cursor()
-    c_tmp.execute("SELECT schedules FROM users WHERE device_id=? OR own_phone=?", (device_id, own_phone,))
+    # Eerst exact device_id
+    c_tmp.execute("SELECT schedules, device_id FROM users WHERE device_id=?", (device_id,))
     row_tmp = c_tmp.fetchone()
+    matched_by = "device_id"
+    # Fallback: own_phone
+    if not row_tmp and own_phone:
+        c_tmp.execute("SELECT schedules, device_id FROM users WHERE own_phone=? ORDER BY rowid DESC LIMIT 1", (own_phone,))
+        row_tmp = c_tmp.fetchone()
+        matched_by = "own_phone"
+    # Fallback: naam
+    if not row_tmp and user_name:
+        c_tmp.execute("SELECT schedules, device_id FROM users WHERE user_name=? ORDER BY rowid DESC LIMIT 1", (user_name,))
+        row_tmp = c_tmp.fetchone()
+        matched_by = "naam"
     conn_tmp.close()
+
     window_info = "geen venster"
     if row_tmp and row_tmp[0]:
         try:
@@ -423,6 +439,16 @@ def heartbeat():
                 window_info = f"{ws}–{we}"
         except Exception:
             pass
+        # Als gevonden via andere sleutel: koppel device_id zodat volgende keer direct gevonden wordt
+        if matched_by != "device_id" and row_tmp[1] != device_id:
+            conn_fix = sqlite3.connect(DB_FILE)
+            c_fix = conn_fix.cursor()
+            c_fix.execute("UPDATE users SET device_id=? WHERE device_id=?", (device_id, row_tmp[1]))
+            conn_fix.commit()
+            conn_fix.close()
+            log_status(f"   🔗 Device_id bijgewerkt: {row_tmp[1][:8]} → {device_id[:8]} (gevonden via {matched_by})")
+    else:
+        log_status(f"   ⚠️ Geen instellingen gevonden voor device:{device_id[:8]} phone:{own_phone} naam:{user_name}")
 
     source = data.get('source', 'webview')
     status_icon = "🔓" if device_status == "unlocked" else "🔒"
@@ -472,12 +498,25 @@ def ping():
     if state["status"] == "offline":
         log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: webview")
 
-    # Haal tijdvenster op voor logging
+    # Haal tijdvenster op voor logging — zoek op device_id, dan own_phone, dan naam
     conn_tmp = sqlite3.connect(DB_FILE)
     c_tmp = conn_tmp.cursor()
-    c_tmp.execute("SELECT schedules FROM users WHERE device_id=? OR own_phone=?", (device_id, own_phone,))
+    # Eerst exact device_id
+    c_tmp.execute("SELECT schedules, device_id FROM users WHERE device_id=?", (device_id,))
     row_tmp = c_tmp.fetchone()
+    matched_by = "device_id"
+    # Fallback: own_phone
+    if not row_tmp and own_phone:
+        c_tmp.execute("SELECT schedules, device_id FROM users WHERE own_phone=? ORDER BY rowid DESC LIMIT 1", (own_phone,))
+        row_tmp = c_tmp.fetchone()
+        matched_by = "own_phone"
+    # Fallback: naam
+    if not row_tmp and user_name:
+        c_tmp.execute("SELECT schedules, device_id FROM users WHERE user_name=? ORDER BY rowid DESC LIMIT 1", (user_name,))
+        row_tmp = c_tmp.fetchone()
+        matched_by = "naam"
     conn_tmp.close()
+
     window_info = "geen venster"
     if row_tmp and row_tmp[0]:
         try:
@@ -490,6 +529,16 @@ def ping():
                 window_info = f"{ws}–{we}"
         except Exception:
             pass
+        # Als gevonden via andere sleutel: koppel device_id zodat volgende keer direct gevonden wordt
+        if matched_by != "device_id" and row_tmp[1] != device_id:
+            conn_fix = sqlite3.connect(DB_FILE)
+            c_fix = conn_fix.cursor()
+            c_fix.execute("UPDATE users SET device_id=? WHERE device_id=?", (device_id, row_tmp[1]))
+            conn_fix.commit()
+            conn_fix.close()
+            log_status(f"   🔗 Device_id bijgewerkt: {row_tmp[1][:8]} → {device_id[:8]} (gevonden via {matched_by})")
+    else:
+        log_status(f"   ⚠️ Geen instellingen gevonden voor device:{device_id[:8]} phone:{own_phone} naam:{user_name}")
 
     source = data.get('source', 'webview')
     log_status(f"💓 PING → {user_name} [dev:{device_id[:8]}] | venster: {window_info} | bron: {source}")
