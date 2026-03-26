@@ -77,19 +77,28 @@ export default function App() {
       try {
         const p = JSON.parse(saved);
         const now2 = new Date();
+        const currentTime = now2.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const todayIdx2 = (now2.getDay() + 6) % 7;
         const tom = new Date(now2); tom.setDate(tom.getDate() + 1);
         const tomorrowIdx2 = (tom.getDay() + 6) % 7;
         const todayStr2 = `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}-${String(now2.getDate()).padStart(2,'0')}`;
         const tomorrowStr2 = `${tom.getFullYear()}-${String(tom.getMonth()+1).padStart(2,'0')}-${String(tom.getDate()).padStart(2,'0')}`;
-        // Override vandaag aanwezig
-        if (p.overrides?.[todayStr2]) return 'today';
-        // Weekplanning vandaag gevuld
         const sched = p.schedules || {};
-        if (sched[todayIdx2]?.startTime && sched[todayIdx2].startTime !== '00:00') return 'today';
-        // Weekplanning morgen gevuld maar vandaag niet
-        if (sched[tomorrowIdx2]?.startTime && sched[tomorrowIdx2].startTime !== '00:00') return 'tomorrow';
+
+        // Controleer of vandaag een override heeft die nog niet voorbij is
+        const todayOverride = p.overrides?.[todayStr2];
+        if (todayOverride && currentTime <= todayOverride.end) return 'today';
+
+        // Controleer of weekplanning vandaag gevuld en nog niet voorbij is
+        const todaySched = sched[todayIdx2];
+        if (todaySched?.startTime && todaySched.startTime !== '00:00'
+            && todaySched?.endTime && currentTime <= todaySched.endTime) return 'today';
+
+        // Weekplanning morgen gevuld
+        const tomorrowSched = sched[tomorrowIdx2];
+        if (tomorrowSched?.startTime && tomorrowSched.startTime !== '00:00') return 'tomorrow';
         if (p.overrides?.[tomorrowStr2]) return 'tomorrow';
+
       } catch(e) {}
     }
     return 'today';
@@ -219,7 +228,8 @@ export default function App() {
     // Telefoonnummer is altijd het noodcontact nummer
     // Dit is de enige constante sleutel in het systeem
     const contactPhone = settings.contacts[0]?.phone || settings.ownPhone;
-    if (!contactPhone || contactPhone.length < 8) return;
+    const cleanPhone = contactPhone.replace(/[^0-9]/g, '');
+    if (!contactPhone || cleanPhone.length < 10) return;
 
     const payload: any = {
       ...settings,
@@ -244,6 +254,20 @@ export default function App() {
     }, 800);
     return () => clearTimeout(timer);
   }, [settings, activeUrl, todayStr, todayIdx, tomorrowStr, tomorrowIdx]);
+
+  // Android back button
+  useEffect(() => {
+    const handleBack = (e: any) => {
+      if (showSettings || showManual || showWeekPlan) {
+        setShowSettings(false);
+        setShowManual(false);
+        setShowWeekPlan(false);
+        e.detail.register(10, () => {});
+      }
+    };
+    document.addEventListener('ionBackButton', handleBack);
+    return () => document.removeEventListener('ionBackButton', handleBack);
+  }, [showSettings, showManual, showWeekPlan]);
 
   // Endpoint detectie
   const findConnection = useCallback(async () => {
@@ -428,12 +452,12 @@ export default function App() {
               <div className={`border rounded-xl p-3 ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-black text-slate-400 uppercase ml-1">{t('start', lang)}</label>
+                    <label className="text-[11px] font-black text-slate-400 uppercase ml-1">{t('volgende_bewakingsperiode', lang)}</label>
                     <input type="time" value={displayStart} onChange={e => updateOverrideTime('start', e.target.value)}
                       className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-black text-red-400 uppercase ml-1">{t('deadline', lang)}</label>
+                    <label className="text-[11px] font-black text-red-400 uppercase ml-1">{t('bewakingsperiode_eind', lang)}</label>
                     <input type="time" value={displayEnd} onChange={e => updateOverrideTime('end', e.target.value)}
                       className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`} />
                   </div>
@@ -496,11 +520,11 @@ export default function App() {
             {/* SECTIE 1: GEBRUIKER */}
             <div className="rounded-2xl overflow-hidden border border-orange-200">
               <div className="bg-orange-400 px-4 py-2">
-                <p className="text-[11px] font-black text-white uppercase tracking-widest">Gebruiker</p>
+                <p className="text-[11px] font-black text-white uppercase tracking-widest">Jouw naam</p>
               </div>
               <div className="bg-orange-50 p-3 space-y-2">
                 <div>
-                  <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Naam</label>
+                  <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Jouw naam</label>
                   <input value={settings.name}
                     onChange={e => setSettings({ ...settings, name: e.target.value })}
                     onBlur={() => saveToAndroid(settings.contacts[0]?.phone || settings.ownPhone, settings.name)}
@@ -560,7 +584,7 @@ export default function App() {
             {/* SECTIE 2: BAASJE */}
             <div className="rounded-2xl overflow-hidden border border-orange-200">
               <div className="bg-orange-500 px-4 py-2 flex justify-between items-center">
-                <p className="text-[11px] font-black text-white uppercase tracking-widest">Baasje</p>
+                <p className="text-[11px] font-black text-white uppercase tracking-widest">Baasje <span className="font-normal text-orange-100 normal-case tracking-normal">(het contactpersoon)</span></p>
                 <button onClick={() => setSettings({ ...settings, contacts: [...settings.contacts, { name: '', phone: prefix }] })}
                   className="bg-white text-orange-500 rounded-full p-1"><Plus size={14} /></button>
               </div>
@@ -587,7 +611,7 @@ export default function App() {
                             className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-bold text-slate-700 outline-none" />
                         </div>
                         <div className="w-20 shrink-0">
-                          <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Land</label>
+                          <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
                           <div className="relative">
                             <select value={c.country || settings.country || 'NL'} onChange={e => { const n = [...settings.contacts]; n[i].country = e.target.value; setSettings({ ...settings, contacts: n }); }}
                               className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
@@ -600,7 +624,15 @@ export default function App() {
                         </div>
                         <div className="w-28 shrink-0">
                           <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Nummer</label>
-                          <input value={c.phone}
+                          <input
+                            value={(() => {
+                              const contactCountry2 = c.country || settings.country || 'NL';
+                              const contactPrefix2 = COUNTRIES[contactCountry2]?.prefix || prefix;
+                              const clean = (c.phone || '').replace(/\s/g, '');
+                              if (clean.startsWith(contactPrefix2)) return clean.slice(contactPrefix2.length);
+                              if (clean.startsWith('+')) return clean.slice(contactPrefix2.length);
+                              return clean;
+                            })()}
                             onChange={e => { const n = [...settings.contacts]; n[i].phone = e.target.value; setSettings({ ...settings, contacts: n }); }}
                             onBlur={() => handleContactPhoneBlur(i)}
                             placeholder="612345678"
