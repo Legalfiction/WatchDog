@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -30,6 +31,18 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         startBarkrService();
+    }
+
+    @Override
+    public void onBackPressed() {
+        // Als de WebView terug kan navigeren, doe dat dan
+        WebView webView = getBridge().getWebView();
+        if (webView != null && webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            // Anders: sluit de app (naar achtergrond, service blijft draaien)
+            moveTaskToBack(true);
+        }
     }
 
     private void startBarkrService() {
