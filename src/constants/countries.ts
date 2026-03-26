@@ -116,7 +116,6 @@ export const COUNTRIES: Record<string, { flag: string; prefix: string; name: str
 // Talen — voor de interface
 export const LANGUAGES: Record<string, { flag: string; name: string; lang: string; days: string[] }> = {
   nl: { flag: '🇳🇱', name: 'Nederlands',     lang: 'nl', days: ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'] },
-  be: { flag: '🇧🇪', name: 'Nederlands (BE)', lang: 'be', days: ['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'] },
   uk: { flag: '🇬🇧', name: 'English (UK)',    lang: 'uk', days: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] },
   us: { flag: '🇺🇸', name: 'English (US)',    lang: 'us', days: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] },
   de: { flag: '🇩🇪', name: 'Deutsch',         lang: 'de', days: ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'] },
