@@ -271,7 +271,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.36 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.36 GESTART | Sleutel: device_id")
 
     while True:
         try:
@@ -330,6 +330,9 @@ def monitoring_loop():
                     continue
 
                 log_status(f"🏁 Deadline {end_str} bereikt voor {user_name} [dev:{device_id[:8]}]")
+                # Controleer of er bewijs van leven is
+                had_unlocked = row[7] and row[7] >= window_start_str
+                log_status(f"   🔍 Bewijs van leven binnen venster: {'JA ✅' if had_unlocked else 'NEE ❌'}")
 
                 last_ping_dt = None
                 if last_ping_time:
@@ -347,16 +350,14 @@ def monitoring_loop():
                         last_unlocked_dt = datetime.strptime(last_unlocked, "%Y-%m-%d %H:%M:%S")
                         if start_dt <= last_unlocked_dt <= (end_dt + timedelta(minutes=2)):
                             was_actief = True
-                            log_status(f"✅ {user_name} was IN GEBRUIK binnen venster. Geen alarm.")
                     except ValueError:
                         pass
-                if not was_actief:
-                    log_status(f"❌ {user_name} geen IN GEBRUIK ping binnen venster. Alarm!")
 
                 if was_actief:
-                    log_status(f"✅ {user_name} was actief. Geen alarm.")
+                    log_status(f"✅ GEEN ALARM → {user_name} [dev:{device_id[:8]}] was actief binnen venster {start_str}–{end_str} (laatste actief: {last_unlocked})")
                 else:
-                    log_status(f"❌ {user_name} NIET actief. Laatste ping: {last_ping_time}")
+                    log_status(f"🚨 ALARM WORDT VERSTUURD → {user_name} [dev:{device_id[:8]}] | geen activiteit in venster {start_str}–{end_str}")
+                    log_status(f"   📱 Laatste ping: {last_ping_time} | Laatste actief: {last_unlocked or 'nooit'}")
                     escalate_user(user, start_str, end_str)
 
                 mark_alarm_fired(own_phone, today_str, start_str, end_str)
@@ -565,7 +566,25 @@ def save_settings():
             import threading
             threading.Thread(target=send_async, daemon=True).start()
 
-    log_status(f"💾 OPGESLAGEN → {user_name} | device: {device_id[:8]}...")
+    # Log alle opgeslagen instellingen
+    schedules = data.get('schedules', {})
+    dag_namen = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"]
+    venster_log = []
+    for idx in range(7):
+        sched = schedules.get(str(idx), {})
+        st = sched.get('startTime', '00:00')
+        et = sched.get('endTime', '00:00')
+        if st != '00:00' or et != '00:00':
+            venster_log.append(f"{dag_namen[idx]}:{st}-{et}")
+    venster_str = ", ".join(venster_log) if venster_log else "geen vensters"
+    notify = "aan" if data.get('notifySelf', True) else "uit"
+    vacation = "aan" if data.get('vacationMode', False) else "uit"
+    contact_str = ", ".join([c.get('name','?') + "(" + normalize_phone(c.get('phone','')) + ")" for c in contacts]) if contacts else "geen"
+
+    log_status(f"💾 INSTELLINGEN OPGESLAGEN → {user_name} [dev:{device_id[:8]}]")
+    log_status(f"   📅 Vensters: {venster_str}")
+    log_status(f"   👤 Contacten: {contact_str}")
+    log_status(f"   🔔 Eigen melding: {notify} | 🏖️ Vakantie: {vacation}")
     return jsonify({"status": "ok"}), 200
 
 
