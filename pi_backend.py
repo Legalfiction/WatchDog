@@ -71,9 +71,10 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
-    # Primaire sleutel is nu own_phone (telefoonnummer)
+    # Primaire sleutel is device_id (UUID per toestel) - telefoonnummer is optioneel
     c.execute('''CREATE TABLE IF NOT EXISTS users (
-        own_phone            TEXT PRIMARY KEY,
+        device_id            TEXT PRIMARY KEY,
+        own_phone            TEXT DEFAULT "",
         user_name            TEXT DEFAULT "",
         contacts             TEXT DEFAULT "[]",
         schedules            TEXT DEFAULT "{}",
@@ -84,14 +85,25 @@ def init_db():
         last_inactivity_alert TEXT DEFAULT ""
     )''')
 
+    # Migratie: voeg device_id kolom toe aan bestaande database
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN device_id TEXT DEFAULT ''")
+        conn.commit()
+        # Genereer device_id voor bestaande records
+        c.execute("UPDATE users SET device_id = own_phone WHERE device_id = '' OR device_id IS NULL")
+        conn.commit()
+    except Exception:
+        pass  # Kolom bestaat al
+
     c.execute('''CREATE TABLE IF NOT EXISTS alarm_log (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        own_phone    TEXT,
+        device_id    TEXT,
+        own_phone    TEXT DEFAULT "",
         alarm_date   TEXT,
         window_start TEXT,
         window_end   TEXT,
         fired_at     TEXT,
-        UNIQUE(own_phone, alarm_date, window_start, window_end)
+        UNIQUE(device_id, alarm_date, window_start, window_end)
     )''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS whatsapp_opted_in (
@@ -100,21 +112,7 @@ def init_db():
 
     conn.commit()
     conn.close()
-    # Verwijder automatisch ongeldige records bij elke opstart
-    conn_clean = sqlite3.connect(DB_FILE)
-    c_clean = conn_clean.cursor()
-    c_clean.execute("""
-        DELETE FROM users
-        WHERE length(replace(replace(replace(own_phone,' ',''),'-',''),'+','')) < 10
-           OR length(replace(replace(replace(own_phone,' ',''),'-',''),'+','')) > 15
-           OR own_phone GLOB '*[^0-9]*'
-    """)
-    deleted = c_clean.rowcount
-    conn_clean.commit()
-    conn_clean.close()
-    if deleted > 0:
-        log_status(f"🧹 {deleted} ongeldige records automatisch verwijderd")
-    log_status("✅ DATABASE GEREED (telefoonnummer als sleutel)")
+    log_status("✅ DATABASE GEREED (device_id als sleutel)")
 
 
 def authenticate(data: dict) -> bool:
@@ -187,9 +185,9 @@ def mark_alarm_fired(own_phone: str, alarm_date: str, window_start: str, window_
     conn.close()
 
 
-def upsert_user(own_phone: str, fields: dict):
-    """Voegt gebruiker toe of werkt bij. Sleutel is altijd own_phone."""
-    clean = normalize_phone(own_phone)
+def upsert_user(device_id: str, fields: dict):
+    """Voegt gebruiker toe of werkt bij. Sleutel is device_id (UUID per toestel)."""
+    clean = device_id.strip()
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT last_ping_time FROM users WHERE own_phone=?", (clean,))
@@ -273,7 +271,7 @@ def send_inactivity_alert(user: dict):
 
 
 def monitoring_loop():
-    log_status("🚀 BARKR ENGINE v10.35 GESTART | Sleutel: telefoonnummer")
+    log_status("🚀 BARKR ENGINE v10.36 GESTART | Sleutel: telefoonnummer")
 
     while True:
         try:
@@ -376,7 +374,7 @@ def monitoring_loop():
 
 @app.route('/status', methods=['GET'])
 def status():
-    return jsonify({"status": "online", "version": "10.35"}), 200
+    return jsonify({"status": "online", "version": "10.36"}), 200
 
 
 @app.route('/heartbeat', methods=['POST'])
@@ -386,13 +384,18 @@ def heartbeat():
     if not data or not authenticate(data):
         return jsonify({"status": "error"}), 403
 
-    own_phone = normalize_phone(data.get('own_phone', ''))
-    user_name = (data.get('name') or '').strip()
+    device_id     = (data.get('device_id') or '').strip()
+    own_phone     = normalize_phone(data.get('own_phone', ''))
+    user_name     = (data.get('name') or '').strip()
     source        = data.get('source', 'unknown')
     device_status = data.get('device_status', 'unknown')
 
-    if not own_phone or not is_valid_phone(own_phone):
-        return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
+    if not device_id:
+        # Fallback voor oude APK versies: gebruik own_phone als device_id
+        if own_phone and is_valid_phone(own_phone):
+            device_id = own_phone
+        else:
+            return jsonify({"status": "ignored", "reason": "geen device_id"}), 200
 
     now_str      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current_time = time.time()
@@ -562,7 +565,7 @@ def save_settings():
             import threading
             threading.Thread(target=send_async, daemon=True).start()
 
-    log_status(f"💾 OPGESLAGEN → {user_name} ({own_phone})")
+    log_status(f"💾 OPGESLAGEN → {user_name} | device: {device_id[:8]}...")
     return jsonify({"status": "ok"}), 200
 
 
