@@ -235,10 +235,9 @@ export default function App() {
     localStorage.setItem('barkr_v16_data', JSON.stringify(settings));
     if (!activeUrl) return;
 
-    // Eigen telefoonnummer is de sleutel - nooit het contactpersoon nummer
-    const contactPhone = settings.ownPhone;
-    const cleanPhone = (contactPhone || '').replace(/[^0-9]/g, '');
-    if (!contactPhone || cleanPhone.length < 8) return;
+    // device_id is de sleutel - telefoonnummer is optioneel
+    const contactPhone = settings.ownPhone || '';
+    if (!deviceId) return;
 
     const payload: any = {
       ...settings,
