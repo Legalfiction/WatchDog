@@ -101,13 +101,14 @@ public class BarkrService extends Service {
             public void run() {
                 try {
                     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-                    String ownPhone = prefs.getString("own_phone", "");
-                    String userName = prefs.getString("user_name", "");
-
-                    if (ownPhone.isEmpty()) {
-                        Log.d(TAG, "Ping overgeslagen: geen telefoonnummer");
-                        return;
+                    // Gebruik device_id als unieke sleutel - nooit telefoonnummer
+                    String deviceId = prefs.getString("device_id", "");
+                    if (deviceId.isEmpty()) {
+                        deviceId = java.util.UUID.randomUUID().toString().replace("-", "");
+                        prefs.edit().putString("device_id", deviceId).apply();
+                        Log.d(TAG, "Nieuwe device_id aangemaakt: " + deviceId);
                     }
+                    String userName = prefs.getString("user_name", "");
 
                     // Controleer of toestel vergrendeld is
                     KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
@@ -115,12 +116,15 @@ public class BarkrService extends Service {
                     String deviceStatus = isLocked ? "locked" : "unlocked";
 
                     JSONObject payload = new JSONObject();
-                    payload.put("own_phone",     ownPhone);
+                    payload.put("device_id",     deviceId);
                     payload.put("name",          userName);
                     payload.put("app_key",       APP_KEY);
                     payload.put("secret",        APP_KEY);
                     payload.put("source",        "background_service");
                     payload.put("device_status", deviceStatus);
+                    // own_phone optioneel - alleen voor meldingen aan gebruiker zelf
+                    String ownPhone = prefs.getString("own_phone", "");
+                    if (!ownPhone.isEmpty()) payload.put("own_phone", ownPhone);
 
                     URL url = new URL(SERVER_URL + "/heartbeat");
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -138,7 +142,7 @@ public class BarkrService extends Service {
                     int code = conn.getResponseCode();
                     conn.disconnect();
 
-                    Log.d(TAG, "Ping OK: " + deviceStatus + " | " + ownPhone + " | HTTP " + code);
+                    Log.d(TAG, "Ping OK: " + deviceStatus + " | " + deviceId.substring(0,8) + " | HTTP " + code);
 
                 } catch (Exception e) {
                     Log.w(TAG, "Ping mislukt: " + e.getMessage());
