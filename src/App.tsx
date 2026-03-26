@@ -461,14 +461,11 @@ export default function App() {
                 <button onClick={() => toggleOverride('tomorrow')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold border ${activeTab === 'tomorrow' ? 'bg-orange-600 border-orange-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>{t('tomorrow', lang)}</button>
               </div>
               <div className={`border rounded-xl p-3 ${!isBase ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-100'}`}>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black text-slate-400 uppercase ml-1">{t('volgende_bewakingsperiode', lang)}</label>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-black text-slate-400 uppercase ml-1">{t('volgende_bewakingsperiode', lang)}</label>
+                  <div className="grid grid-cols-2 gap-3">
                     <input type="time" value={displayStart} onChange={e => updateOverrideTime('start', e.target.value)}
                       className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-orange-900' : 'bg-white border-slate-200 text-slate-700'}`} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-black text-red-400 uppercase ml-1">{t('bewakingsperiode_eind', lang)}</label>
                     <input type="time" value={displayEnd} onChange={e => updateOverrideTime('end', e.target.value)}
                       className={`w-full border rounded-lg p-3 text-xl font-black text-center outline-none ${!isBase ? 'bg-white border-orange-200 text-red-600' : 'bg-white border-slate-200 text-red-600'}`} />
                   </div>
@@ -555,31 +552,8 @@ export default function App() {
                   </div>
                 </div>
                 <div className="pt-1 border-t border-orange-200 space-y-2">
-                  {/* Eigen nummer — altijd verplicht zichtbaar */}
-                  <div className="flex gap-2 items-end">
-                    <div className="w-24 shrink-0">
-                      <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
-                      <div className="relative">
-                        <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
-                          className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
-                          {Object.keys(COUNTRIES).map(key => (
-                            <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
-                          ))}
-                        </select>
-                        <ChevronDown className="absolute right-1 top-2.5 text-slate-400 pointer-events-none" size={10} />
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />Jouw WhatsApp nummer (verplicht)</label>
-                      <input value={settings.ownPhone}
-                        onChange={e => { setSettings({ ...settings, ownPhone: e.target.value }); setSaveErrors([]); }}
-                        onBlur={handlePhoneBlur}
-                        placeholder="612345678"
-                        className={`w-full bg-white border rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none ${!settings.ownPhone ? 'border-red-300 bg-red-50' : 'border-orange-100'}`} />
-                    </div>
-                  </div>
                   {/* Schuifje voor meldingen aan gebruiker */}
-                  <div className="flex items-center justify-between pt-1 border-t border-orange-100">
+                  <div className="flex items-center justify-between">
                     <div className="flex-1 pr-3">
                       <p className="text-xs font-bold text-slate-700">{t('notify_self_label', lang)}</p>
                       <p className="text-[10px] text-slate-500">{t('notify_self_desc', lang)}</p>
@@ -589,6 +563,31 @@ export default function App() {
                       <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-300 ${settings.notifySelf ? 'left-5' : 'left-0.5'}`} />
                     </button>
                   </div>
+                  {/* Eigen nummer — optioneel, alleen zichtbaar als schuifje aan */}
+                  {settings.notifySelf && (
+                    <div className="flex gap-2 items-end">
+                      <div className="w-24 shrink-0">
+                        <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1">Landcode</label>
+                        <div className="relative">
+                          <select value={settings.country} onChange={e => setSettings({ ...settings, country: e.target.value })}
+                            className="w-full bg-white border border-orange-100 rounded-xl p-2 font-bold text-slate-700 appearance-none outline-none text-xs">
+                            {Object.keys(COUNTRIES).map(key => (
+                              <option key={key} value={key}>{COUNTRIES[key].flag} {COUNTRIES[key].prefix}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-1 top-2.5 text-slate-400 pointer-events-none" size={10} />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />Jouw WhatsApp nummer</label>
+                        <input value={settings.ownPhone}
+                          onChange={e => { setSettings({ ...settings, ownPhone: e.target.value }); setSaveErrors([]); }}
+                          onBlur={handlePhoneBlur}
+                          placeholder="612345678"
+                          className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none" />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -680,6 +679,8 @@ export default function App() {
             <button onClick={() => {
               const errors: string[] = [];
               if (!settings.name.trim()) errors.push('Vul jouw naam in');
+              if (settings.notifySelf && settings.ownPhone && settings.ownPhone.replace(/[^0-9]/g, '').length < 10) errors.push('WhatsApp nummer is te kort (minimaal 10 cijfers)');
+              if (settings.notifySelf && settings.ownPhone && settings.ownPhone.replace(/[^0-9]/g, '').length < 8) errors.push('Vul een geldig WhatsApp nummer in');
               settings.contacts.forEach((c: any, i: number) => {
                 const cleanPhone = (c.phone || '').replace(/[^0-9]/g, '');
                 if (!c.name?.trim()) errors.push(`Contact ${i + 1}: naam is verplicht`);
