@@ -220,11 +220,15 @@ def upsert_user(device_id: str, fields: dict):
     conn.close()
 
 
-def update_ping(own_phone: str, timestamp: str):
-    clean = normalize_phone(own_phone)
+def update_ping(device_id_or_phone: str, timestamp: str):
+    clean = device_id_or_phone.strip()
     conn = get_db()
     c = conn.cursor()
-    c.execute("UPDATE users SET last_ping_time=? WHERE own_phone=?", (timestamp, clean))
+    # Zoek op device_id eerst, dan op own_phone als fallback
+    c.execute("UPDATE users SET last_ping_time=? WHERE device_id=?", (timestamp, clean))
+    if c.rowcount == 0:
+        clean_phone = normalize_phone(clean)
+        c.execute("UPDATE users SET last_ping_time=? WHERE own_phone=?", (timestamp, clean_phone))
     updated = c.rowcount
     conn.commit()
     conn.close()
@@ -463,22 +467,22 @@ def heartbeat():
     log_status(f"💓 {status_icon} PING -> {user_name} [dev:{device_id[:8]}] | {status_txt} | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
-    updated = update_ping(own_phone, now_str)
+    updated = update_ping(device_id, now_str)
     if not updated:
-        upsert_user(own_phone, {
+        upsert_user(device_id, {
             'user_name': user_name, 'contacts': '[]',
             'schedules': '{}', 'vacation_mode': False, 'notify_self': True,
         })
-        update_ping(own_phone, now_str)
+        update_ping(device_id, now_str)
         log_status(f"👤 NIEUWE GEBRUIKER → {user_name} [dev:{device_id[:8]}]")
 
     # Update naam en last_unlocked_ping als toestel in gebruik is
     conn = get_db()
     c = conn.cursor()
     if device_status == 'unlocked':
-        c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE own_phone=?", (user_name, now_str, own_phone))
+        c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE device_id=?", (user_name, now_str, device_id))
     else:
-        c.execute("UPDATE users SET user_name=? WHERE own_phone=?", (user_name, own_phone))
+        c.execute("UPDATE users SET user_name=? WHERE device_id=?", (user_name, device_id))
     conn.commit()
     conn.close()
 
@@ -551,9 +555,9 @@ def ping():
     log_status(f"💓 PING → {user_name} [dev:{device_id[:8]}] | venster: {window_info} | bron: {source}")
     user_states[own_phone] = {"status": "online", "last_ping": current_time, "name": user_name}
 
-    updated = update_ping(own_phone, now_str)
+    updated = update_ping(device_id, now_str)
     if not updated:
-        upsert_user(own_phone, {
+        upsert_user(device_id, {
             'user_name': user_name, 'contacts': '[]',
             'schedules': '{}', 'vacation_mode': False, 'notify_self': True,
         })
@@ -562,7 +566,7 @@ def ping():
     # WebView ping = gebruiker heeft toestel open = altijd IN GEBRUIK
     conn = get_db()
     c = conn.cursor()
-    c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE own_phone=?", (user_name, now_str, own_phone))
+    c.execute("UPDATE users SET user_name=?, last_unlocked_ping=? WHERE device_id=?", (user_name, now_str, device_id))
     conn.commit()
     conn.close()
 
