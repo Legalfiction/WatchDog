@@ -267,9 +267,8 @@ def send_inactivity_alert(user: dict):
     if not notify_self:
         return
 
-    # Geen telefoonnummer ingevuld — kan niet sturen
+    # Geen telefoonnummer ingevuld — stil overslaan, geen log spam
     if not own_phone or not is_valid_phone(own_phone):
-        log_status(f"⚠️ INACTIVITEITSMELDING OVERGESLAGEN → {user_name} [dev:{device_id[:8]}] — geen geldig telefoonnummer ingevuld")
         return
 
     # Al een keer gestuurd vandaag — maximaal 1x per dag
@@ -328,7 +327,7 @@ def monitoring_loop():
                 if user.get('vacation_mode'):
                     continue
 
-                # Inactiviteitsmelding
+                # Inactiviteitsmelding — gebaseerd op device_id, niet telefoonnummer
                 last_ping_time = user.get('last_ping_time', '')
                 if last_ping_time:
                     try:
