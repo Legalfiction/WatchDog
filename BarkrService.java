@@ -52,7 +52,6 @@ public class BarkrService extends Service {
     }
 
     @Override
-    @Override
     public void onTaskRemoved(Intent rootIntent) {
         // Herstart de service als Android hem stopt
         android.app.PendingIntent restartIntent = android.app.PendingIntent.getService(
@@ -69,6 +68,7 @@ public class BarkrService extends Service {
         super.onTaskRemoved(rootIntent);
     }
 
+    @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         try {
             startForeground(NOTIFICATION_ID, buildNotification());
