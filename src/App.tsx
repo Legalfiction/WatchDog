@@ -110,19 +110,28 @@ export default function App() {
         const tomorrowStr2 = `${tom.getFullYear()}-${String(tom.getMonth()+1).padStart(2,'0')}-${String(tom.getDate()).padStart(2,'0')}`;
         const sched = p.schedules || {};
 
-        // Controleer of vandaag een override heeft die nog niet voorbij is
         const todayOverride = p.overrides?.[todayStr2];
-        if (todayOverride && currentTime <= todayOverride.end) return 'today';
-
-        // Controleer of weekplanning vandaag gevuld en nog niet voorbij is
         const todaySched = sched[todayIdx2];
-        if (todaySched?.startTime && todaySched.startTime !== '00:00'
-            && todaySched?.endTime && currentTime <= todaySched.endTime) return 'today';
-
-        // Weekplanning morgen gevuld
         const tomorrowSched = sched[tomorrowIdx2];
-        if (tomorrowSched?.startTime && tomorrowSched.startTime !== '00:00') return 'tomorrow';
-        if (p.overrides?.[tomorrowStr2]) return 'tomorrow';
+
+        // Vandaag nog actief? (override of weekplanning, eindtijd nog niet voorbij)
+        const todayEndTime = todayOverride?.end || todaySched?.endTime || '00:00';
+        const todayStartTime = todayOverride?.start || todaySched?.startTime || '00:00';
+        const todayHasWindow = todayStartTime !== '00:00' && todayEndTime !== '00:00';
+        const todayStillActive = todayHasWindow && currentTime < todayEndTime;
+
+        if (todayStillActive) return 'today';
+
+        // Vandaag voorbij of geen venster — kijk of morgen een venster heeft
+        const tomorrowHasWindow = tomorrowSched?.startTime && tomorrowSched.startTime !== '00:00';
+        const tomorrowOverride = p.overrides?.[tomorrowStr2];
+        if (tomorrowHasWindow || tomorrowOverride) return 'tomorrow';
+
+        // Geen venster morgen — toon vandaag alleen als het venster nog niet begonnen is
+        if (todayHasWindow && currentTime < todayStartTime) return 'today';
+
+        // Alles voorbij of geen vensters ingesteld
+        return 'tomorrow';
 
       } catch(e) {}
     }
@@ -243,6 +252,38 @@ export default function App() {
     }, 5000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  // Automatisch tab bijwerken als venster verstrijkt
+  useEffect(() => {
+    const checkTab = () => {
+      const now3 = new Date();
+      const currentTime3 = now3.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const todayIdx3 = (now3.getDay() + 6) % 7;
+      const tom3 = new Date(now3); tom3.setDate(tom3.getDate() + 1);
+      const tomorrowIdx3 = (tom3.getDay() + 6) % 7;
+      const todayStr3 = getLocalYYYYMMDD(now3);
+      const tomorrowStr3 = getLocalYYYYMMDD(tom3);
+
+      const sched3 = settings.schedules || {};
+      const todaySched3 = sched3[todayIdx3];
+      const tomorrowSched3 = sched3[tomorrowIdx3];
+      const todayEnd3 = settings.overrides?.[todayStr3]?.end || todaySched3?.endTime || '00:00';
+      const todayStart3 = settings.overrides?.[todayStr3]?.start || todaySched3?.startTime || '00:00';
+      const todayHas3 = todayStart3 !== '00:00' && todayEnd3 !== '00:00';
+      const todayActive3 = todayHas3 && currentTime3 < todayEnd3;
+      const tomorrowHas3 = tomorrowSched3?.startTime && tomorrowSched3.startTime !== '00:00';
+      const tomorrowOverride3 = settings.overrides?.[tomorrowStr3];
+
+      if (todayActive3) {
+        if (activeTab !== 'today') setActiveTab('today');
+      } else if (tomorrowHas3 || tomorrowOverride3) {
+        if (activeTab === 'today') setActiveTab('tomorrow');
+      }
+    };
+    const interval = setInterval(checkTab, 60000); // check elke minuut
+    checkTab(); // direct uitvoeren bij settings wijziging
+    return () => clearInterval(interval);
+  }, [settings, activeTab]);
 
   // Instellingen opslaan naar Pi
   useEffect(() => {
