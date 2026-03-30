@@ -525,18 +525,19 @@ def ping():
     if not data or not authenticate(data):
         return jsonify({"status": "error"}), 403
 
+    device_id = (data.get('device_id') or '').strip()
     own_phone = normalize_phone(data.get('own_phone', ''))
     user_name = (data.get('name') or '').strip()
 
-    if not own_phone or not is_valid_phone(own_phone):
-        return jsonify({"status": "ignored", "reason": "nummer te kort"}), 200
+    if not device_id and (not own_phone or not is_valid_phone(own_phone)):
+        return jsonify({"status": "ignored", "reason": "geen device_id of geldig nummer"}), 200
 
     now_str      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     current_time = time.time()
 
-    state = user_states.get(own_phone, {"status": "offline", "last_ping": 0, "name": user_name})
+    state = user_states.get(device_id or own_phone, {"status": "offline", "last_ping": 0, "name": user_name})
     if state["status"] == "offline":
-        log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8]}] | bron: webview")
+        log_status(f"📱 ONLINE → {user_name} [dev:{device_id[:8] if device_id else own_phone[:8]}] | bron: webview")
 
     # Haal tijdvenster op voor logging — zoek op device_id, dan own_phone, dan naam
     conn_tmp = get_db()
