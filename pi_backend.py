@@ -257,30 +257,43 @@ def escalate_user(user: dict, start_str: str, end_str: str):
 
 
 def send_inactivity_alert(user: dict):
-    own_phone   = user['own_phone']
+    own_phone   = user.get('own_phone', '')
+    device_id   = user.get('device_id', own_phone) or own_phone
     notify_self = bool(user.get('notify_self', 1))
-    user_name   = user.get('user_name', own_phone)
+    user_name   = user.get('user_name', '') or own_phone
     today_str   = datetime.now().strftime("%Y-%m-%d")
+
+    # Schuifje uit — geen melding
     if not notify_self:
         return
+
+    # Geen telefoonnummer ingevuld — kan niet sturen
+    if not own_phone or not is_valid_phone(own_phone):
+        log_status(f"⚠️ INACTIVITEITSMELDING OVERGESLAGEN → {user_name} [dev:{device_id[:8]}] — geen geldig telefoonnummer ingevuld")
+        return
+
+    # Al een keer gestuurd vandaag — maximaal 1x per dag
     if user.get('last_inactivity_alert') == today_str:
         return
+
     msg = (
         f"⚠️ *Barkr — App niet actief*\n\n"
         f"Hallo {user_name},\n\n"
         f"Je Barkr app heeft de afgelopen {INACTIVITY_HOURS} uur geen signaal verstuurd.\n\n"
         f"Open de Barkr app om de bewaking te hervatten.\n\n"
-        f"Open de app → tik op het vraagteken → kies 'Opstartgids'. 🐾\n\n"
+        f"Open de app → tik op het vraagteken → kies Opstartgids. 🐾\n\n"
         f"Wil je deze berichten niet? Open Barkr → Instellingen → schuifje UIT."
     )
-    dev_id = user.get('device_id', own_phone) or own_phone
-    if send_whatsapp(own_phone, msg, context=f"inactivity:{own_phone}"):
-        log_status(f"📱 INACTIVITEITSMELDING → {user_name} [dev:{dev_id[:8]}]")
+    log_status(f"📱 INACTIVITEITSMELDING WORDT VERSTUURD → {user_name} [dev:{device_id[:8]}] → {own_phone}")
+    if send_whatsapp(own_phone, msg, context=f"inactivity:{device_id}"):
+        log_status(f"✅ INACTIVITEITSMELDING VERSTUURD → {user_name} [dev:{device_id[:8]}]")
         conn = get_db()
         c = conn.cursor()
-        c.execute("UPDATE users SET last_inactivity_alert=? WHERE own_phone=?", (today_str, own_phone))
+        c.execute("UPDATE users SET last_inactivity_alert=? WHERE device_id=?", (today_str, device_id))
         conn.commit()
         conn.close()
+    else:
+        log_status(f"❌ INACTIVITEITSMELDING MISLUKT → {user_name} [dev:{device_id[:8]}]")
 
 
 def monitoring_loop():
@@ -617,14 +630,11 @@ def save_settings():
         already = is_opted_in(contact_phone)
         log_status(f"🔍 OPT-IN CHECK → {contact_phone} | al bekend: {already}")
         if contact_phone and is_valid_phone(contact_phone) and not already:
-            wa_link = f"https://wa.me/34623789580?text=I%20allow%20callmebot%20to%20send%20me%20messages"
             msg = (
                 "\U0001f44b Hallo " + contact_name + "!\n\n"
                 "Je bent door *" + user_name + "* toegevoegd als noodcontact in *Barkr*.\n\n"
                 "Barkr bewaakt het welzijn van " + user_name + ". Als " + user_name + " binnen een ingesteld tijdvenster niet actief is, ontvang jij automatisch een bericht.\n\n"
-                "Tik op de link hieronder om je te activeren. WhatsApp opent met het juiste bericht klaar — tik alleen op verzenden:\n\n"
-                + wa_link + "\n\n"
-                "Na activatie ben je direct bereikbaar als noodcontact. \U0001f43e"
+                "Je hoeft niets te doen — je staat nu automatisch als noodcontact geregistreerd. \U0001f43e"
             )
             def send_async(p=contact_phone, m=msg, cn=contact_name, un=user_name, op=own_phone):
                 time.sleep(2)
@@ -684,8 +694,8 @@ def send_optin():
         return jsonify({"status": "error"}), 400
     msg = (
         f"👋 Hallo {contact_name}!\n\nJe bent door *{user_name}* toegevoegd als noodcontact in *Barkr*.\n\n"
-        f"Activeer WhatsApp via *+34 623 78 95 80*:\n\n"
-        f"`I allow callmebot to send me messages`\n\nJe hoeft verder niets te doen. 🐾"
+        f"Barkr bewaakt het welzijn van {user_name}. Als {user_name} binnen een ingesteld tijdvenster niet actief is, ontvang jij automatisch een bericht.\n\n"
+        f"Je hoeft niets te doen — je staat nu automatisch als noodcontact geregistreerd. 🐾"
     )
     ok = send_whatsapp(phone, msg, context=f"optin:{user_phone}")
     if ok:
