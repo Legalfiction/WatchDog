@@ -501,6 +501,27 @@ export default function App() {
             <button onClick={() => setShowWeekPlan(false)} className="p-2 bg-white rounded-full border border-slate-200"><X size={24} /></button>
           </header>
           <p className="text-xs font-medium text-slate-500 bg-orange-50 border border-orange-100 rounded-2xl p-4 leading-relaxed">{t('week_plan_desc', lang)}</p>
+
+          {/* Snel alle dagen instellen */}
+          <div className="bg-white border border-orange-200 rounded-2xl p-4 space-y-3">
+            <p className="text-[11px] font-black text-orange-500 uppercase tracking-wide">Alle dagen hetzelfde venster</p>
+            <div className="flex items-center gap-3">
+              <input type="time" defaultValue="00:00" id="bulk-start"
+                className="flex-1 border border-orange-200 rounded-lg py-2 text-sm font-black text-center outline-none bg-white text-orange-900" />
+              <input type="time" defaultValue="00:00" id="bulk-end"
+                className="flex-1 border border-orange-200 rounded-lg py-2 text-sm font-black text-center outline-none bg-white text-red-600" />
+              <button onClick={() => {
+                const s = (document.getElementById('bulk-start') as HTMLInputElement)?.value || '00:00';
+                const e = (document.getElementById('bulk-end') as HTMLInputElement)?.value || '00:00';
+                const newSchedules: any = {};
+                for (let i = 0; i < 7; i++) newSchedules[i] = { startTime: s, endTime: e };
+                setSettings({ ...settings, schedules: newSchedules });
+              }} className="px-4 py-2 bg-orange-500 text-white text-[11px] font-black rounded-xl uppercase">
+                Toepassen
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-3">
             {daysVoluit.map((dayName: string, d: number) => {
               const sched = settings.schedules[d] || { startTime: EMPTY_TIME, endTime: EMPTY_TIME };
@@ -593,11 +614,17 @@ export default function App() {
                       </div>
                       <div className="flex-1">
                         <label className="text-[9px] font-bold text-orange-400 uppercase block mb-1"><Phone size={9} className="inline mr-1" />Jouw WhatsApp nummer</label>
-                        <input value={settings.ownPhone}
+                        <input
+                          value={(() => {
+                            const p = settings.ownPhone || '';
+                            if (p.startsWith(prefix)) return p.slice(prefix.length);
+                            if (p.startsWith('+')) return p.slice(prefix.length);
+                            return p;
+                          })()}
                           onChange={e => { setSettings({ ...settings, ownPhone: e.target.value }); setSaveErrors([]); }}
                           onBlur={handlePhoneBlur}
                           placeholder="612345678"
-                          className="w-full bg-white border border-orange-100 rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none" />
+                          className={`w-full bg-white border rounded-xl p-2.5 font-mono text-slate-700 text-sm outline-none ${!settings.ownPhone ? 'border-red-300 bg-red-50' : 'border-orange-100'}`} />
                       </div>
                     </div>
                   )}
