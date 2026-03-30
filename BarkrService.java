@@ -52,6 +52,23 @@ public class BarkrService extends Service {
     }
 
     @Override
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // Herstart de service als Android hem stopt
+        android.app.PendingIntent restartIntent = android.app.PendingIntent.getService(
+            getApplicationContext(), 1,
+            new Intent(getApplicationContext(), BarkrService.class),
+            android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE
+        );
+        android.app.AlarmManager alarmManager = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+        if (alarmManager != null) {
+            alarmManager.set(android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                android.os.SystemClock.elapsedRealtime() + 5000, restartIntent);
+        }
+        Log.d(TAG, "onTaskRemoved — herstart over 5s gepland");
+        super.onTaskRemoved(rootIntent);
+    }
+
     public int onStartCommand(Intent intent, int flags, int startId) {
         try {
             startForeground(NOTIFICATION_ID, buildNotification());
