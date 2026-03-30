@@ -368,8 +368,24 @@ def monitoring_loop():
                     except ValueError:
                         pass
 
+                # Controleer of de backend het venster van begin tot einde heeft bewaakt
+                # Bewijs: er moet een ping zijn ontvangen NA de begintijd van het venster
+                # Zonder ping na begintijd heeft de backend nooit kunnen controleren → geen alarm
+                eerste_ping_in_venster = False
+                if last_ping_time:
+                    try:
+                        last_ping_dt2 = datetime.strptime(last_ping_time, "%Y-%m-%d %H:%M:%S")
+                        if last_ping_dt2 >= start_dt:
+                            eerste_ping_in_venster = True
+                    except ValueError:
+                        pass
+
+                if not eerste_ping_in_venster:
+                    log_status(f"⏭️ GEEN ALARM → {user_name} [dev:{device_id[:8]}] — geen ping ontvangen na begintijd {start_str}, bewaking niet volledig")
+                    mark_alarm_fired(own_phone, today_str, start_str, end_str)
+                    continue
+
                 # Bewijs van leven = unlocked ping binnen het venster
-                # Gebruik last_unlocked_ping uit database
                 was_actief = False
                 last_unlocked = user.get('last_unlocked_ping', '')
                 if last_unlocked:
