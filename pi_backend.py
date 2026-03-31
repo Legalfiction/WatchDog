@@ -96,8 +96,16 @@ def init_db():
     try:
         c.execute("ALTER TABLE users ADD COLUMN device_id TEXT DEFAULT ''")
         conn.commit()
-        # Genereer device_id voor bestaande records
         c.execute("UPDATE users SET device_id = own_phone WHERE device_id = '' OR device_id IS NULL")
+        conn.commit()
+    except Exception:
+        pass  # Kolom bestaat al
+
+    # Migratie: voeg device_id kolom toe aan alarm_log
+    try:
+        c.execute("ALTER TABLE alarm_log ADD COLUMN device_id TEXT DEFAULT ''")
+        conn.commit()
+        c.execute("UPDATE alarm_log SET device_id = own_phone WHERE device_id = '' OR device_id IS NULL")
         conn.commit()
     except Exception:
         pass  # Kolom bestaat al
@@ -121,7 +129,8 @@ def init_db():
     conn.close()
     # Automatische cleanup bij opstart
     try:
-        c_clean = conn.cursor()
+        conn_clean2 = get_db()
+        c_clean = conn_clean2.cursor()
         # Verwijder records waar device_id = own_phone (oude telefoonnummer records)
         c_clean.execute("DELETE FROM users WHERE device_id = own_phone AND length(device_id) < 20")
         # Verwijder web sessie records
