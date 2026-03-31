@@ -119,6 +119,28 @@ def init_db():
 
     conn.commit()
     conn.close()
+    # Automatische cleanup bij opstart
+    try:
+        c_clean = conn.cursor()
+        # Verwijder records waar device_id = own_phone (oude telefoonnummer records)
+        c_clean.execute("DELETE FROM users WHERE device_id = own_phone AND length(device_id) < 20")
+        # Verwijder web sessie records
+        c_clean.execute("DELETE FROM users WHERE device_id LIKE 'web_%' OR own_phone LIKE 'web_%'")
+        # Verwijder records zonder device_id
+        c_clean.execute("DELETE FROM users WHERE device_id IS NULL OR device_id = ''")
+        # Verwijder dubbele records — bewaar alleen het meest recente per naam
+        c_clean.execute("""
+            DELETE FROM users WHERE rowid NOT IN (
+                SELECT MAX(rowid) FROM users GROUP BY 
+                CASE WHEN length(device_id) >= 20 THEN device_id ELSE own_phone END
+            )
+        """)
+        deleted = conn.total_changes
+        conn.commit()
+        if deleted > 0:
+            log_status(f"🧹 {deleted} vervuilde records verwijderd bij opstart")
+    except Exception as e:
+        log_status(f"⚠️ Cleanup fout: {e}")
     log_status("✅ DATABASE GEREED (device_id als sleutel)")
 
 
@@ -193,29 +215,68 @@ def mark_alarm_fired(own_phone: str, alarm_date: str, window_start: str, window_
 
 
 def upsert_user(device_id: str, fields: dict):
-    """Voegt gebruiker toe of werkt bij. Sleutel is device_id (UUID per toestel)."""
+    """Voegt gebruiker toe of werkt bij. Sleutel is ALTIJD device_id."""
     clean = device_id.strip()
+    if not clean:
+        log_status("⚠️ upsert_user aangeroepen zonder device_id — genegeerd")
+        return
+    # Web sessies (browser) mogen nooit een nieuw record aanmaken
+    # Ze mogen alleen bestaande records bijwerken
+    if clean.startswith('web_'):
+        conn_check = get_db()
+        c_check = conn_check.cursor()
+        c_check.execute("SELECT device_id FROM users WHERE device_id=?", (clean,))
+        exists = c_check.fetchone()
+        conn_check.close()
+        if not exists:
+            log_status(f"⏭️ upsert_user: web sessie [{clean[:12]}] — geen nieuw record aangemaakt")
+            return
+    own_phone = fields.get('own_phone', '')
+    # Sla web_xxx nummers niet op als telefoonnummer
+    if own_phone and own_phone.startswith('web_'):
+        own_phone = ''
+    # Sla device_id niet op als telefoonnummer
+    if own_phone == clean:
+        own_phone = fields.get('own_phone', '') if not fields.get('own_phone', '').startswith('web_') else ''
+        own_phone = '' if own_phone == clean else own_phone
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT last_ping_time FROM users WHERE device_id=? OR own_phone=?", (clean, clean))
+    # Haal bestaand record op via device_id
+    c.execute("SELECT last_ping_time FROM users WHERE device_id=?", (clean,))
     existing  = c.fetchone()
+    # Als niet gevonden via device_id, zoek via own_phone en update device_id
+    if not existing and own_phone and is_valid_phone(own_phone):
+        c.execute("SELECT last_ping_time FROM users WHERE own_phone=? ORDER BY rowid DESC LIMIT 1", (own_phone,))
+        existing = c.fetchone()
+        if existing:
+            c.execute("UPDATE users SET device_id=? WHERE own_phone=? AND (device_id IS NULL OR device_id='')", (clean, own_phone))
+            conn.commit()
     last_ping = existing[0] if existing else ""
-    c.execute('''INSERT INTO users (own_phone, user_name, contacts, schedules,
-                vacation_mode, last_ping_time, notify_self)
-                VALUES (?,?,?,?,?,?,?)
-                ON CONFLICT(own_phone) DO UPDATE SET
-                    user_name=excluded.user_name,
-                    contacts=excluded.contacts,
-                    schedules=excluded.schedules,
-                    vacation_mode=excluded.vacation_mode,
-                    notify_self=excluded.notify_self''',
-              (clean,
-               fields.get('user_name', ''),
-               fields.get('contacts', '[]'),
-               fields.get('schedules', '{}'),
-               int(fields.get('vacation_mode', False)),
-               last_ping,
-               int(fields.get('notify_self', True))))
+    if existing:
+        # Update bestaand record
+        c.execute('''UPDATE users SET
+                    own_phone=?, user_name=?, contacts=?, schedules=?,
+                    vacation_mode=?, notify_self=?
+                    WHERE device_id=?''',
+                  (own_phone,
+                   fields.get('user_name', ''),
+                   fields.get('contacts', '[]'),
+                   fields.get('schedules', '{}'),
+                   int(fields.get('vacation_mode', False)),
+                   int(fields.get('notify_self', True)),
+                   clean))
+    else:
+        # Nieuw record aanmaken
+        c.execute('''INSERT INTO users (device_id, own_phone, user_name, contacts, schedules,
+                    vacation_mode, last_ping_time, notify_self)
+                    VALUES (?,?,?,?,?,?,?,?)''',
+                  (clean, own_phone,
+                   fields.get('user_name', ''),
+                   fields.get('contacts', '[]'),
+                   fields.get('schedules', '{}'),
+                   int(fields.get('vacation_mode', False)),
+                   last_ping,
+                   int(fields.get('notify_self', True))))
     conn.commit()
     conn.close()
 
