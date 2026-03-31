@@ -23,7 +23,7 @@ APP_SECRET      = "BARKR_SECURE_V1"
 TEXTMEBOT_KEY   = "ojtHErzSmwgW"
 TEXTMEBOT_URL   = "https://api.textmebot.com/send.php"
 PING_TIMEOUT    = 120
-INACTIVITY_HOURS = 4
+INACTIVITY_HOURS = 8  # 8 uur zodat nachtelijke stilte geen melding triggert
 DEVELOPER_PHONE = "31615964009"
 
 app = Flask(__name__)
@@ -638,33 +638,31 @@ def save_settings():
         'notify_self':  data.get('notifySelf', True),
     })
 
-    # Automatisch activatiebericht sturen naar nieuwe contacten
-    # die nog niet in de opted_in tabel staan
+    # Welkomstbericht sturen naar nieuwe contacten (eenmalig, geen opt-in nodig met TextMeBot)
     for contact in contacts:
         contact_phone = normalize_phone(contact.get('phone', ''))
         contact_name  = contact.get('name', 'Contact')
+        if not contact_phone or not is_valid_phone(contact_phone):
+            continue
         already = is_opted_in(contact_phone)
-        log_status(f"🔍 OPT-IN CHECK → {contact_phone} | al bekend: {already}")
-        if contact_phone and is_valid_phone(contact_phone) and not already:
+        log_status(f"🔍 CONTACT CHECK → {contact_name} ({contact_phone}) | al welkom gestuurd: {already}")
+        if not already:
             msg = (
                 "\U0001f44b Hallo " + contact_name + "!\n\n"
                 "Je bent door *" + user_name + "* toegevoegd als noodcontact in *Barkr*.\n\n"
                 "Barkr bewaakt het welzijn van " + user_name + ". Als " + user_name + " binnen een ingesteld tijdvenster niet actief is, ontvang jij automatisch een bericht.\n\n"
-                "Je hoeft niets te doen — je staat nu automatisch als noodcontact geregistreerd. \U0001f43e"
+                "Je hoeft niets te doen. \U0001f43e"
             )
-            def send_async(p=contact_phone, m=msg, cn=contact_name, un=user_name, op=own_phone):
+            def send_welcome(p=contact_phone, m=msg, cn=contact_name, un=user_name):
                 time.sleep(2)
-                ok = send_whatsapp(p, m, context=f"auto_optin:{op}")
+                ok = send_whatsapp(p, m, context=f"welcome:{p}")
                 if ok:
                     register_opt_in(p, un)
-                    log_status(f"✅ AUTO OPT-IN VERSTUURD → {cn} ({p})")
-                    # Bevestiging naar gebruiker
-                    time.sleep(6)
-                    send_whatsapp(op,
-                        "\u2705 *Barkr*\n\nActivatielink verstuurd naar *" + cn + "*.\n\nZodra " + cn + " op de link tikt is het contact actief. \U0001f43e",
-                        context="auto_optin_confirm:" + op)
+                    log_status(f"✅ WELKOMSTBERICHT VERSTUURD → {cn} ({p})")
+                else:
+                    log_status(f"❌ WELKOMSTBERICHT MISLUKT → {cn} ({p})")
             import threading
-            threading.Thread(target=send_async, daemon=True).start()
+            threading.Thread(target=send_welcome, daemon=True).start()
 
     # Log alle opgeslagen instellingen
     schedules = data.get('schedules', {})
