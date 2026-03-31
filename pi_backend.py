@@ -195,21 +195,21 @@ def get_todays_window(user: dict) -> tuple[str, str]:
     return day_sched.get('startTime', '00:00'), day_sched.get('endTime', '00:00')
 
 
-def alarm_already_fired(own_phone: str, alarm_date: str, window_start: str, window_end: str) -> bool:
+def alarm_already_fired(device_id_key: str, alarm_date: str, window_start: str, window_end: str) -> bool:
     conn = get_db()
     c = conn.cursor()
-    c.execute("SELECT id FROM alarm_log WHERE own_phone=? AND alarm_date=? AND window_start=? AND window_end=?",
-              (own_phone, alarm_date, window_start, window_end))
+    c.execute("SELECT id FROM alarm_log WHERE device_id=? AND alarm_date=? AND window_start=? AND window_end=?",
+              (device_id_key, alarm_date, window_start, window_end))
     found = c.fetchone() is not None
     conn.close()
     return found
 
 
-def mark_alarm_fired(own_phone: str, alarm_date: str, window_start: str, window_end: str):
+def mark_alarm_fired(device_id_key: str, alarm_date: str, window_start: str, window_end: str):
     conn = get_db()
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO alarm_log (own_phone, alarm_date, window_start, window_end, fired_at) VALUES (?,?,?,?,?)",
-              (own_phone, alarm_date, window_start, window_end, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    c.execute("INSERT OR IGNORE INTO alarm_log (device_id, alarm_date, window_start, window_end, fired_at) VALUES (?,?,?,?,?)",
+              (device_id_key, alarm_date, window_start, window_end, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     conn.commit()
     conn.close()
 
@@ -413,13 +413,10 @@ def monitoring_loop():
                 if start_dt >= end_dt or now <= end_dt:
                     continue
 
-                if alarm_already_fired(own_phone, today_str, start_str, end_str):
+                if alarm_already_fired(device_id, today_str, start_str, end_str):
                     continue
 
                 log_status(f"🏁 Deadline {end_str} bereikt voor {user_name} [dev:{device_id[:8]}]")
-                # Controleer of er bewijs van leven is
-                had_unlocked = row[7] and row[7] >= window_start_str
-                log_status(f"   🔍 Bewijs van leven binnen venster: {'JA ✅' if had_unlocked else 'NEE ❌'}")
 
                 last_ping_dt = None
                 if last_ping_time:
@@ -442,7 +439,7 @@ def monitoring_loop():
 
                 if not eerste_ping_in_venster:
                     log_status(f"⏭️ GEEN ALARM → {user_name} [dev:{device_id[:8]}] — geen ping ontvangen na begintijd {start_str}, bewaking niet volledig")
-                    mark_alarm_fired(own_phone, today_str, start_str, end_str)
+                    mark_alarm_fired(device_id, today_str, start_str, end_str)
                     continue
 
                 # Bewijs van leven = unlocked ping binnen het venster
@@ -463,7 +460,7 @@ def monitoring_loop():
                     log_status(f"   📱 Laatste ping: {last_ping_time} | Laatste actief: {last_unlocked or 'nooit'}")
                     escalate_user(user, start_str, end_str)
 
-                mark_alarm_fired(own_phone, today_str, start_str, end_str)
+                mark_alarm_fired(device_id, today_str, start_str, end_str)
 
         except Exception as e:
             log_status(f"⚠️ LOOP FOUT: {e}")
