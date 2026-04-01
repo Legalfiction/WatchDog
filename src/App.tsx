@@ -277,7 +277,9 @@ export default function App() {
       if (todayActive3) {
         if (activeTab !== 'today') setActiveTab('today');
       } else if (tomorrowHas3 || tomorrowOverride3) {
-        if (activeTab === 'today') setActiveTab('tomorrow');
+        // Alleen automatisch naar morgen als gebruiker niet bewust vandaag heeft geselecteerd
+        const todayOverrideExists = settings.overrides?.[todayStr3];
+        if (activeTab === 'today' && !todayOverrideExists) setActiveTab('tomorrow');
       }
     };
     const interval = setInterval(checkTab, 60000); // check elke minuut
@@ -377,6 +379,7 @@ export default function App() {
 
   const toggleOverride = (type: 'today' | 'tomorrow') => {
     if (activeTab === type) {
+      // Klik op actieve tab: verwijder override en ga terug naar weekplanning
       setActiveTab('base');
       const n = { ...settings.overrides };
       delete n[type === 'today' ? todayStr : tomorrowStr];
@@ -385,7 +388,14 @@ export default function App() {
       setActiveTab(type);
       const targetStr = type === 'today' ? todayStr : tomorrowStr;
       if (!settings.overrides[targetStr]) {
-        setSettings({ ...settings, overrides: { ...settings.overrides, [targetStr]: { start: EMPTY_TIME, end: EMPTY_TIME } } });
+        // Initialiseer met lege tijden — gebruiker vult zelf in
+        // Voor vandaag: altijd leeg zodat gebruiker een nieuw venster kan opgeven
+        // Voor morgen: gebruik weekplanning als startpunt
+        const dayIdx = type === 'today' ? todayIdx : tomorrowIdx;
+        const weekSched = settings.schedules[dayIdx] || { startTime: EMPTY_TIME, endTime: EMPTY_TIME };
+        const initStart = type === 'today' ? EMPTY_TIME : weekSched.startTime;
+        const initEnd   = type === 'today' ? EMPTY_TIME : weekSched.endTime;
+        setSettings({ ...settings, overrides: { ...settings.overrides, [targetStr]: { start: initStart, end: initEnd } } });
       }
     }
   };
