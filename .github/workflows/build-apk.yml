@@ -99,12 +99,33 @@ jobs:
             -keypass ${{ secrets.KEY_PASSWORD }} \
             -dname "CN=Barkr, OU=Barkr, O=Barkr, L=Netherlands, ST=Netherlands, C=NL"
 
+      - name: Verhoog minSdk naar 23
+        run: |
+          python3 << 'PYEOF'
+          import os, re
+          for root, dirs, files in os.walk('android'):
+              for f in files:
+                  if f.endswith('.gradle') or f.endswith('.kts'):
+                      path = os.path.join(root, f)
+                      txt = open(path).read()
+                      new = re.sub(r'minSdk[Vv]ersion\s*[=]?\s*22', lambda m: m.group().replace('22','23'), txt)
+                      new = re.sub(r'minSdk\s*=\s*22', 'minSdk = 23', new)
+                      if new != txt:
+                          open(path, 'w').write(new)
+                          print(f"Fixed: {path}")
+          PYEOF
+
       - name: Voeg Firebase toe aan project build.gradle
         run: |
           # Verhoog minSdk naar 23 (vereist door Firebase Messaging)
-          sed -i 's/minSdkVersion 22/minSdkVersion 23/' android/app/build.gradle || true
-          sed -i 's/minSdk = 22/minSdk = 23/' android/app/build.gradle || true
-          sed -i 's/minSdkVersion 22/minSdkVersion 23/' android/variables.gradle || true
+          sed -i 's/minSdkVersion 22/minSdkVersion 23/g' android/app/build.gradle || true
+          sed -i 's/minSdk = 22/minSdk = 23/g' android/app/build.gradle || true
+          sed -i 's/minSdkVersion = 22/minSdkVersion = 23/g' android/app/build.gradle || true
+          sed -i 's/minSdkVersion 22/minSdkVersion 23/g' android/variables.gradle || true
+          sed -i 's/minSdk = 22/minSdk = 23/g' android/variables.gradle || true
+          # Toon resultaat ter verificatie
+          echo "=== variables.gradle ===" && cat android/variables.gradle || true
+          echo "=== app/build.gradle minSdk ===" && grep -i minsdk android/app/build.gradle || true
           # Voeg google-services plugin toe aan app build.gradle
           sed -i '/id "com.android.application"/a\    id "com.google.gms.google-services"' android/app/build.gradle || true
           # Voeg google-services classpath toe aan project build.gradle
