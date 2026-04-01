@@ -101,11 +101,13 @@ jobs:
 
       - name: Voeg Firebase toe aan project build.gradle
         run: |
-          sed -i 's/id "com.android.application"/id "com.android.application"
-    id "com.google.gms.google-services"/' android/app/build.gradle || true
-          grep -q "google-services" android/build.gradle || echo 'buildscript { dependencies { classpath "com.google.gms:google-services:4.4.4" } }' >> android/build.gradle
-          grep -q "firebase-messaging" android/app/build.gradle || sed -i '/dependencies {/a\    implementation platform("com.google.firebase:firebase-bom:34.11.0")
-    implementation "com.google.firebase:firebase-messaging"' android/app/build.gradle
+          # Voeg google-services plugin toe aan app build.gradle
+          sed -i '/id "com.android.application"/a\    id "com.google.gms.google-services"' android/app/build.gradle || true
+          # Voeg google-services classpath toe aan project build.gradle
+          grep -q "google-services" android/build.gradle || sed -i '/dependencies {/a\        classpath "com.google.gms:google-services:4.4.4"' android/build.gradle || true
+          # Voeg Firebase messaging toe aan app dependencies
+          grep -q "firebase-messaging" android/app/build.gradle || sed -i '/dependencies {/a\    implementation platform("com.google.firebase:firebase-bom:34.11.0")\n    implementation "com.google.firebase:firebase-messaging"' android/app/build.gradle || true
+          echo "✅ Firebase configuratie toegepast"
 
       - name: Configureer signing in build.gradle
         run: |
