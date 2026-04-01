@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "44065634850",
+    "project_id": "infinite-unity-470121-u7",
+    "storage_bucket": "infinite-unity-470121-u7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44065634850:android:5159d628ec69134f39a87b",
+        "android_client_info": {
+          "package_name": "nl.barkr.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "44065634850-umouh5jd845ucqo1skom11oirg21ncmt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlcRnVDl7MzVxzpUkQSTCAymMGrrfHE9w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "44065634850-umouh5jd845ucqo1skom11oirg21ncmt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
