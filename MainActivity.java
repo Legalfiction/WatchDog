@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+import android.net.Uri;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -25,6 +26,27 @@ public class MainActivity extends BridgeActivity {
         );
 
         startBarkrService();
+        requestBatteryOptimizationExemption();
+    }
+
+    private void requestBatteryOptimizationExemption() {
+        // Vraag gebruiker om batterijoptimalisatie uit te zetten via officieel Android dialoog
+        // Dit werkt op ALLE Android telefoons inclusief Motorola, Samsung, Xiaomi
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                android.content.Intent intent = new android.content.Intent(
+                    android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+                );
+                intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+                Log.d(TAG, "✅ Batterijoptimalisatie dialoog getoond");
+            } else {
+                Log.d(TAG, "✅ Batterijoptimalisatie al uitgeschakeld");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Batterijoptimalisatie aanvraag mislukt: " + e.getMessage());
+        }
     }
 
     @Override
