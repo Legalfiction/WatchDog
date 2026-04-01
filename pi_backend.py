@@ -24,6 +24,13 @@ TEXTMEBOT_KEY   = "ojtHErzSmwgW"
 TEXTMEBOT_URL   = "https://api.textmebot.com/send.php"
 PING_TIMEOUT    = 120
 INACTIVITY_HOURS = 8  # 8 uur zodat nachtelijke stilte geen melding triggert
+
+# FCM V1 API voor wake-up pings naar Android telefoons
+FCM_PROJECT_ID = "infinite-unity-470121-u7"
+FCM_SERVICE_ACCOUNT_FILE = os.path.expanduser("~/barkr/firebase-service-account.json")
+FCM_URL_V1 = f"https://fcm.googleapis.com/v1/projects/{FCM_PROJECT_ID}/messages:send"
+FCM_WAKEUP_INTERVAL = 900  # 15 minuten
+_fcm_token_cache = {"token": "", "expires": 0}
 DEVELOPER_PHONE = "31615964009"
 
 app = Flask(__name__)
@@ -89,8 +96,18 @@ def init_db():
         last_ping_time       TEXT DEFAULT "",
         last_unlocked_ping   TEXT DEFAULT "",
         notify_self          INTEGER DEFAULT 1,
-        last_inactivity_alert TEXT DEFAULT ""
+        last_inactivity_alert TEXT DEFAULT "",
+        fcm_token            TEXT DEFAULT "",
+        last_fcm_wakeup      TEXT DEFAULT ""
     )''')
+
+    # Migratie: voeg nieuwe kolommen toe
+    for col in ["fcm_token TEXT DEFAULT ''", "last_fcm_wakeup TEXT DEFAULT ''"]:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col}")
+            conn.commit()
+        except Exception:
+            pass  # Kolom bestaat al
 
     # Migratie: voeg device_id kolom toe aan bestaande database
     try:
@@ -365,6 +382,92 @@ def send_inactivity_alert(user: dict):
         log_status(f"❌ INACTIVITEITSMELDING MISLUKT → {user_name} [dev:{device_id[:8]}]")
 
 
+def get_fcm_access_token() -> str:
+    """Haal een OAuth2 access token op via het service account."""
+    import time as time_mod
+    now = time_mod.time()
+    if _fcm_token_cache["token"] and _fcm_token_cache["expires"] > now + 60:
+        return _fcm_token_cache["token"]
+    try:
+        if not os.path.exists(FCM_SERVICE_ACCOUNT_FILE):
+            return ""
+        import json as json_mod, base64, hashlib
+        with open(FCM_SERVICE_ACCOUNT_FILE) as f:
+            sa = json_mod.load(f)
+
+        # Maak JWT aan
+        import urllib.request, urllib.parse
+        header = base64.urlsafe_b64encode(json_mod.dumps({"alg":"RS256","typ":"JWT"}).encode()).rstrip(b"=")
+        now_int = int(now)
+        claim = base64.urlsafe_b64encode(json_mod.dumps({
+            "iss": sa["client_email"],
+            "scope": "https://www.googleapis.com/auth/firebase.messaging",
+            "aud": "https://oauth2.googleapis.com/token",
+            "iat": now_int,
+            "exp": now_int + 3600
+        }).encode()).rstrip(b"=")
+        msg = header + b"." + claim
+
+        # Signeer met private key
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        private_key = serialization.load_pem_private_key(sa["private_key"].encode(), password=None)
+        signature = base64.urlsafe_b64encode(
+            private_key.sign(msg, padding.PKCS1v15(), hashes.SHA256())
+        ).rstrip(b"=")
+        jwt_token = (msg + b"." + signature).decode()
+
+        # Wissel JWT in voor access token
+        data = urllib.parse.urlencode({
+            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion": jwt_token
+        }).encode()
+        req = urllib.request.Request("https://oauth2.googleapis.com/token", data=data)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json_mod.loads(resp.read())
+            token = result.get("access_token", "")
+            _fcm_token_cache["token"] = token
+            _fcm_token_cache["expires"] = now + 3600
+            return token
+    except Exception as e:
+        log_status(f"❌ FCM TOKEN FOUT → {e}")
+        return ""
+
+
+def send_fcm_wakeup(fcm_token: str, device_id: str, user_name: str) -> bool:
+    """Stuurt een stille FCM wake-up push via V1 API."""
+    if not fcm_token or not os.path.exists(FCM_SERVICE_ACCOUNT_FILE):
+        return False
+    try:
+        access_token = get_fcm_access_token()
+        if not access_token:
+            return False
+        payload = {
+            "message": {
+                "token": fcm_token,
+                "data": {"type": "wakeup", "device_id": device_id},
+                "android": {"priority": "high"}
+            }
+        }
+        r = requests.post(FCM_URL_V1,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=10
+        )
+        if r.status_code == 200:
+            log_status(f"📡 FCM WAKE-UP → {user_name} [{device_id[:8]}]")
+            return True
+        else:
+            log_status(f"❌ FCM WAKE-UP MISLUKT → {user_name} | {r.status_code} | {r.text[:100]}")
+            return False
+    except Exception as e:
+        log_status(f"❌ FCM FOUT → {e}")
+        return False
+
+
 def monitoring_loop():
     log_status("🚀 BARKR ENGINE v10.36 GESTART | Sleutel: device_id")
 
@@ -397,8 +500,28 @@ def monitoring_loop():
                 if user.get('vacation_mode'):
                     continue
 
-                # Inactiviteitsmelding — gebaseerd op device_id, niet telefoonnummer
+                # FCM wake-up als laatste ping > 2 minuten geleden
+                # Dit wekt de telefoon op ongeacht batterij-instellingen
                 last_ping_time = user.get('last_ping_time', '')
+                fcm_token = user.get('fcm_token', '')
+                if last_ping_time and fcm_token and os.path.exists(FCM_SERVICE_ACCOUNT_FILE):
+                    try:
+                        last_ping_dt3 = datetime.strptime(last_ping_time, "%Y-%m-%d %H:%M:%S")
+                        minuten_stil = (now - last_ping_dt3).total_seconds() / 60
+                        last_fcm = user.get('last_fcm_wakeup', '')
+                        last_fcm_dt = datetime.strptime(last_fcm, "%Y-%m-%d %H:%M:%S") if last_fcm else None
+                        fcm_interval_ok = not last_fcm_dt or (now - last_fcm_dt).total_seconds() > FCM_WAKEUP_INTERVAL
+                        if minuten_stil > 2 and fcm_interval_ok:
+                            if send_fcm_wakeup(fcm_token, device_id, user_name):
+                                conn_fcm = get_db()
+                                conn_fcm.execute("UPDATE users SET last_fcm_wakeup=? WHERE device_id=?",
+                                    (now.strftime("%Y-%m-%d %H:%M:%S"), device_id))
+                                conn_fcm.commit()
+                                conn_fcm.close()
+                    except Exception:
+                        pass
+
+                # Inactiviteitsmelding — gebaseerd op device_id, niet telefoonnummer
                 if last_ping_time:
                     try:
                         last_ping_dt  = datetime.strptime(last_ping_time, "%Y-%m-%d %H:%M:%S")
