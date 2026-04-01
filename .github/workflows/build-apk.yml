@@ -42,20 +42,19 @@ jobs:
       - name: Inject native Android bestanden
         run: |
           mkdir -p android/app/src/main/java/nl/barkr/app
-          cp BarkrService.java    android/app/src/main/java/nl/barkr/app/BarkrService.java
-          cp BootReceiver.java    android/app/src/main/java/nl/barkr/app/BootReceiver.java
-          cp MainActivity.java    android/app/src/main/java/nl/barkr/app/MainActivity.java
-          cp AndroidManifest.xml  android/app/src/main/AndroidManifest.xml
+          cp BarkrService.java       android/app/src/main/java/nl/barkr/app/BarkrService.java
+          cp BootReceiver.java       android/app/src/main/java/nl/barkr/app/BootReceiver.java
+          cp MainActivity.java       android/app/src/main/java/nl/barkr/app/MainActivity.java
+          cp BarkrFcmService.java    android/app/src/main/java/nl/barkr/app/BarkrFcmService.java
+          cp AndroidManifest.xml     android/app/src/main/AndroidManifest.xml
+          cp google-services.json    android/app/google-services.json
           echo "✅ Native bestanden geïnjecteerd"
 
       - name: Installeer ImageMagick
         run: sudo apt-get install -y imagemagick
 
-      - name: Genereer iconen en overschrijf Capacitor iconen
+      - name: Genereer iconen
         run: |
-          echo "=== LOGO VERIFICATIE ==="
-          ls -la *.png 2>/dev/null || echo "Geen PNG in root"
-
           if [ -f "img/logo1.jpg" ]; then
             LOGO="img/logo1.jpg"
           elif [ -f "logoApp.png" ]; then
@@ -67,9 +66,6 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Logo: $LOGO ($(wc -c < $LOGO) bytes)"
-
-          # Genereer voor alle dichtheden
           for DENSITY in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
             case $DENSITY in
               mdpi)    SIZE=48  ;;
@@ -78,40 +74,18 @@ jobs:
               xxhdpi)  SIZE=144 ;;
               xxxhdpi) SIZE=192 ;;
             esac
-
             DIR="android/app/src/main/res/mipmap-${DENSITY}"
             mkdir -p "$DIR"
-
             convert "$LOGO" -resize ${SIZE}x${SIZE} "$DIR/ic_launcher.png"
             convert "$LOGO" -resize ${SIZE}x${SIZE} "$DIR/ic_launcher_round.png"
-
-            # Overschrijf ook foreground indien aanwezig
             if [ -f "$DIR/ic_launcher_foreground.png" ]; then
               convert "$LOGO" -resize ${SIZE}x${SIZE} "$DIR/ic_launcher_foreground.png"
             fi
-
-            echo "✅ $DENSITY (${SIZE}px): $(wc -c < $DIR/ic_launcher.png) bytes"
           done
 
-          # CRUCIAAL: verwijder adaptive icon XML bestanden
-          # Deze overschrijven anders onze PNG iconen op Android 8+
           rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           rm -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
-          echo "✅ Adaptive icon XML verwijderd"
-
-          # Preview voor verificatie
-          cp android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png /tmp/barkr_preview.png
-
-          echo "=== OVERZICHT GEGENEREERDE ICONEN ==="
-          find android/app/src/main/res -name "ic_launcher.png" | sort
-          echo "✅ Klaar"
-
-      - name: Upload icoon preview
-        uses: actions/upload-artifact@v4
-        with:
-          name: barkr-icon-preview
-          path: /tmp/barkr_preview.png
-          retention-days: 7
+          echo "✅ Iconen gegenereerd"
 
       - name: Genereer keystore voor signing
         run: |
@@ -124,7 +98,14 @@ jobs:
             -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
             -keypass ${{ secrets.KEY_PASSWORD }} \
             -dname "CN=Barkr, OU=Barkr, O=Barkr, L=Netherlands, ST=Netherlands, C=NL"
-          echo "✅ Keystore gegenereerd"
+
+      - name: Voeg Firebase toe aan project build.gradle
+        run: |
+          sed -i 's/id "com.android.application"/id "com.android.application"
+    id "com.google.gms.google-services"/' android/app/build.gradle || true
+          grep -q "google-services" android/build.gradle || echo 'buildscript { dependencies { classpath "com.google.gms:google-services:4.4.4" } }' >> android/build.gradle
+          grep -q "firebase-messaging" android/app/build.gradle || sed -i '/dependencies {/a\    implementation platform("com.google.firebase:firebase-bom:34.11.0")
+    implementation "com.google.firebase:firebase-messaging"' android/app/build.gradle
 
       - name: Configureer signing in build.gradle
         run: |
@@ -141,7 +122,6 @@ jobs:
           android.buildTypes.release.signingConfig = android.signingConfigs.release
           android.buildTypes.debug.signingConfig = android.signingConfigs.release
           EOF
-          echo "✅ Signing geconfigureerd"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -161,3 +141,12 @@ jobs:
           name: barkr-signed-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      - name: Distribueer naar testers via Firebase
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
+          groups: testers
+          file: android/app/build/outputs/apk/debug/app-debug.apk
+          releaseNotes: "Nieuwe versie — ${{ github.event.head_commit.message }}"
