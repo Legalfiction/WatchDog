@@ -142,6 +142,9 @@ public class BarkrService extends Service {
                     // own_phone optioneel - alleen voor meldingen aan gebruiker zelf
                     String ownPhone = prefs.getString("own_phone", "");
                     if (!ownPhone.isEmpty()) payload.put("own_phone", ownPhone);
+                    // FCM token meesturen zodat Pi de telefoon kan wekken
+                    String fcmToken = prefs.getString("fcm_token", "");
+                    if (!fcmToken.isEmpty()) payload.put("fcm_token", fcmToken);
 
                     URL url = new URL(SERVER_URL + "/heartbeat");
                     HttpURLConnection conn = (HttpURLConnection) url.openConnection();
