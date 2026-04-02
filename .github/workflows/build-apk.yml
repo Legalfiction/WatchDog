@@ -123,37 +123,7 @@ jobs:
           grep -r "minSdk" android/ --include="*.gradle" --include="*.kts" --include="*.properties" || true
 
       - name: Voeg Firebase toe aan project build.gradle
-        run: |
-          # Verhoog minSdk naar 23 (vereist door Firebase Messaging)
-          sed -i 's/minSdkVersion 22/minSdkVersion 23/g' android/app/build.gradle || true
-          sed -i 's/minSdk = 22/minSdk = 23/g' android/app/build.gradle || true
-          sed -i 's/minSdkVersion = 22/minSdkVersion = 23/g' android/app/build.gradle || true
-          sed -i 's/minSdkVersion 22/minSdkVersion 23/g' android/variables.gradle || true
-          sed -i 's/minSdk = 22/minSdk = 23/g' android/variables.gradle || true
-          # Toon resultaat ter verificatie
-          echo "=== variables.gradle ===" && cat android/variables.gradle || true
-          echo "=== app/build.gradle minSdk ===" && grep -i minsdk android/app/build.gradle || true
-          # Voeg google-services plugin toe aan app build.gradle
-          sed -i '/id "com.android.application"/a\    id "com.google.gms.google-services"' android/app/build.gradle || true
-          # Voeg google-services classpath toe aan project build.gradle
-          grep -q "google-services" android/build.gradle || sed -i '/dependencies {/a\        classpath "com.google.gms:google-services:4.4.4"' android/build.gradle || true
-          # Voeg Firebase messaging toe aan app dependencies
-          python3 - << 'INNER'
-import re
-with open('android/app/build.gradle', 'r') as f:
-    txt = f.read()
-if 'firebase-messaging' not in txt:
-    txt = txt.replace('dependencies {', 'dependencies {
-    implementation platform("com.google.firebase:firebase-bom:34.11.0")
-    implementation "com.google.firebase:firebase-messaging"', 1)
-    with open('android/app/build.gradle', 'w') as f:
-        f.write(txt)
-    print("Firebase dependencies toegevoegd")
-else:
-    print("Firebase al aanwezig")
-INNER
-          grep -i "firebase" android/app/build.gradle || echo "GEEN FIREBASE GEVONDEN"
-          echo "✅ Firebase configuratie toegepast"
+        run: python3 add_firebase.py
 
       - name: Configureer signing in build.gradle
         run: |
