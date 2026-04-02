@@ -39,6 +39,17 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Fix minSdk in variables.gradle
+        run: |
+          echo "=== variables.gradle voor fix ==="
+          cat android/variables.gradle || echo "niet gevonden"
+          # Vervang minSdkVersion in variables.gradle
+          sed -i "s/minSdkVersion = 22/minSdkVersion = 23/" android/variables.gradle
+          sed -i "s/minSdkVersion=22/minSdkVersion=23/" android/variables.gradle  
+          sed -i "s/'minSdkVersion', '22'/'minSdkVersion', '23'/" android/variables.gradle
+          echo "=== variables.gradle na fix ==="
+          cat android/variables.gradle
+
       - name: Inject native Android bestanden
         run: |
           mkdir -p android/app/src/main/java/nl/barkr/app
