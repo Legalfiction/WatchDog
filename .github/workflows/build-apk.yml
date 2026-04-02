@@ -59,7 +59,12 @@ jobs:
           cp BarkrFcmService.java    android/app/src/main/java/nl/barkr/app/BarkrFcmService.java
           cp AndroidManifest.xml     android/app/src/main/AndroidManifest.xml
           cp google-services.json    android/app/google-services.json
+          cp google-services.json    android/google-services.json
           echo "✅ Native bestanden geïnjecteerd"
+          echo "=== google-services.json locaties ==="
+          ls -la android/google-services.json android/app/google-services.json || true
+          echo "=== package_name in google-services.json ==="
+          grep "package_name" android/app/google-services.json || true
 
       - name: Installeer ImageMagick
         run: sudo apt-get install -y imagemagick
