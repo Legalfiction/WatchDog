@@ -27,6 +27,32 @@ public class MainActivity extends BridgeActivity {
 
         startBarkrService();
         requestBatteryOptimizationExemption();
+        scheduleBarkrWorker();
+    }
+
+    private void scheduleBarkrWorker() {
+        // Plan periodieke wake-up via WorkManager — werkt gegarandeerd op alle Android telefoons
+        // ook bij batterijbesparing, Doze mode en agressieve fabrikanten zoals Motorola
+        try {
+            androidx.work.PeriodicWorkRequest wakeupRequest =
+                new androidx.work.PeriodicWorkRequest.Builder(
+                    BarkrWorker.class,
+                    15, java.util.concurrent.TimeUnit.MINUTES
+                )
+                .setConstraints(new androidx.work.Constraints.Builder()
+                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                    .build())
+                .build();
+
+            androidx.work.WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "barkr_wakeup",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                wakeupRequest
+            );
+            Log.d(TAG, "✅ WorkManager wake-up gepland (elke 15 minuten)");
+        } catch (Exception e) {
+            Log.e(TAG, "WorkManager planning mislukt: " + e.getMessage());
+        }
     }
 
     private void requestBatteryOptimizationExemption() {
