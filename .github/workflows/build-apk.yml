@@ -101,19 +101,14 @@ jobs:
 
       - name: Verhoog minSdk naar 23
         run: |
-          python3 << 'PYEOF'
-          import os, re
-          for root, dirs, files in os.walk('android'):
-              for f in files:
-                  if f.endswith('.gradle') or f.endswith('.kts'):
-                      path = os.path.join(root, f)
-                      txt = open(path).read()
-                      new = re.sub(r'minSdk[Vv]ersion\s*[=]?\s*22', lambda m: m.group().replace('22','23'), txt)
-                      new = re.sub(r'minSdk\s*=\s*22', 'minSdk = 23', new)
-                      if new != txt:
-                          open(path, 'w').write(new)
-                          print(f"Fixed: {path}")
-          PYEOF
+          find android -name "*.gradle" -o -name "*.kts" | xargs grep -l "minSdk" | while read f; do
+            sed -i 's/minSdkVersion 22/minSdkVersion 23/g' "$f"
+            sed -i 's/minSdk = 22/minSdk = 23/g' "$f"
+            sed -i 's/minSdkVersion=22/minSdkVersion=23/g' "$f"
+            echo "Fixed: $f"
+          done
+          echo "minSdk check:"
+          grep -r "minSdk" android --include="*.gradle" --include="*.kts" || true
 
       - name: Voeg Firebase toe aan project build.gradle
         run: |
@@ -168,12 +163,3 @@ jobs:
           name: barkr-signed-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-
-      - name: Distribueer naar testers via Firebase
-        uses: wzieba/Firebase-Distribution-Github-Action@v1
-        with:
-          appId: ${{ secrets.FIREBASE_APP_ID }}
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
-          groups: testers
-          file: android/app/build/outputs/apk/debug/app-debug.apk
-          releaseNotes: "Nieuwe versie — ${{ github.event.head_commit.message }}"
