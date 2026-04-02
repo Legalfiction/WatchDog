@@ -12,23 +12,22 @@ if os.path.exists(vars_path):
 app = 'android/app/build.gradle'
 txt = open(app).read()
 
-# Verwijder de Capacitor google-services check zodat de plugin altijd wordt toegepast
-if "servicesJSON = file('google-services.json')" in txt:
-    # Vervang de conditionele apply door een directe apply
-    txt = re.sub(
-        r"def servicesJSON.*?logger\.info\([^)]+\)\s*\}",
-        "apply plugin: 'com.google.gms.google-services'",
-        txt,
-        flags=re.DOTALL
-    )
-    print('Capacitor google-services conditie verwijderd, plugin direct toegepast')
+# Verwijder de Capacitor google-services conditionele check
+# en vervang door directe apply
+old_block = "def servicesJSON = file('google-services.json')\n    if (servicesJSON.exists()) {\n        apply plugin: 'com.google.gms.google-services'\n    } else {\n        logger.info(\"google-services.json not found, google-services plugin not applied. Push Notifications won't work\")\n    }"
+new_block = "apply plugin: 'com.google.gms.google-services'"
 
-if 'com.google.gms.google-services' not in txt:
-    txt = txt.replace(
-        'id "com.android.application"',
-        'id "com.android.application"\n    id "com.google.gms.google-services"'
+if old_block in txt:
+    txt = txt.replace(old_block, new_block)
+    print('Capacitor conditie vervangen door directe plugin apply')
+elif "google-services plugin not applied" in txt:
+    # Alternatief patroon
+    txt = re.sub(
+        r"def servicesJSON[^\n]+\n\s+if \(servicesJSON\.exists\(\)\)[^}]+\}[^}]+\}",
+        "apply plugin: 'com.google.gms.google-services'",
+        txt
     )
-    print('google-services plugin toegevoegd')
+    print('Alternatief patroon vervangen')
 
 if 'firebase-messaging' not in txt:
     txt = txt.replace(
