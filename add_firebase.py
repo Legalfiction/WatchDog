@@ -12,6 +12,17 @@ if os.path.exists(vars_path):
 app = 'android/app/build.gradle'
 txt = open(app).read()
 
+# Verwijder de Capacitor google-services check zodat de plugin altijd wordt toegepast
+if "servicesJSON = file('google-services.json')" in txt:
+    # Vervang de conditionele apply door een directe apply
+    txt = re.sub(
+        r"def servicesJSON.*?logger\.info\([^)]+\)\s*\}",
+        "apply plugin: 'com.google.gms.google-services'",
+        txt,
+        flags=re.DOTALL
+    )
+    print('Capacitor google-services conditie verwijderd, plugin direct toegepast')
+
 if 'com.google.gms.google-services' not in txt:
     txt = txt.replace(
         'id "com.android.application"',
