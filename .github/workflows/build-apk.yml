@@ -138,7 +138,21 @@ jobs:
           # Voeg google-services classpath toe aan project build.gradle
           grep -q "google-services" android/build.gradle || sed -i '/dependencies {/a\        classpath "com.google.gms:google-services:4.4.4"' android/build.gradle || true
           # Voeg Firebase messaging toe aan app dependencies
-          grep -q "firebase-messaging" android/app/build.gradle || sed -i '/dependencies {/a\    implementation platform("com.google.firebase:firebase-bom:34.11.0")\n    implementation "com.google.firebase:firebase-messaging"' android/app/build.gradle || true
+          python3 - << 'INNER'
+import re
+with open('android/app/build.gradle', 'r') as f:
+    txt = f.read()
+if 'firebase-messaging' not in txt:
+    txt = txt.replace('dependencies {', 'dependencies {
+    implementation platform("com.google.firebase:firebase-bom:34.11.0")
+    implementation "com.google.firebase:firebase-messaging"', 1)
+    with open('android/app/build.gradle', 'w') as f:
+        f.write(txt)
+    print("Firebase dependencies toegevoegd")
+else:
+    print("Firebase al aanwezig")
+INNER
+          grep -i "firebase" android/app/build.gradle || echo "GEEN FIREBASE GEVONDEN"
           echo "✅ Firebase configuratie toegepast"
 
       - name: Configureer signing in build.gradle
