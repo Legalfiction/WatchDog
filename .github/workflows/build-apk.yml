@@ -62,7 +62,6 @@ jobs:
           cp BarkrService.java       android/app/src/main/java/nl/barkr/app/BarkrService.java
           cp BootReceiver.java       android/app/src/main/java/nl/barkr/app/BootReceiver.java
           cp MainActivity.java       android/app/src/main/java/nl/barkr/app/MainActivity.java
-          cp BarkrFcmService.java    android/app/src/main/java/nl/barkr/app/BarkrFcmService.java
           cp BarkrWorker.java        android/app/src/main/java/nl/barkr/app/BarkrWorker.java
           cp AndroidManifest.xml     android/app/src/main/AndroidManifest.xml
           cp google-services.json    android/app/google-services.json
