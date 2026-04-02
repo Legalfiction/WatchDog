@@ -101,14 +101,15 @@ jobs:
 
       - name: Verhoog minSdk naar 23
         run: |
-          find android -name "*.gradle" -o -name "*.kts" | xargs grep -l "minSdk" | while read f; do
-            sed -i 's/minSdkVersion 22/minSdkVersion 23/g' "$f"
-            sed -i 's/minSdk = 22/minSdk = 23/g' "$f"
-            sed -i 's/minSdkVersion=22/minSdkVersion=23/g' "$f"
-            echo "Fixed: $f"
-          done
-          echo "minSdk check:"
-          grep -r "minSdk" android --include="*.gradle" --include="*.kts" || true
+          echo "=== Voor fix ==="
+          grep -r "minSdk" android/ --include="*.gradle" --include="*.kts" --include="*.properties" || true
+          # Fix in alle gradle bestanden inclusief variables.gradle
+          find android/ -type f \( -name "*.gradle" -o -name "*.kts" -o -name "variables.gradle" \) -exec sed -i "s/minSdkVersion 22/minSdkVersion 23/g" {} \;
+          find android/ -type f \( -name "*.gradle" -o -name "*.kts" -o -name "variables.gradle" \) -exec sed -i "s/minSdk = 22/minSdk = 23/g" {} \;
+          find android/ -type f \( -name "*.gradle" -o -name "*.kts" -o -name "variables.gradle" \) -exec sed -i "s/minSdkVersion=22/minSdkVersion=23/g" {} \;
+          find android/ -type f \( -name "*.gradle" -o -name "*.kts" -o -name "variables.gradle" \) -exec sed -i 's/minSdk 22/minSdk 23/g' {} \;
+          echo "=== Na fix ==="
+          grep -r "minSdk" android/ --include="*.gradle" --include="*.kts" --include="*.properties" || true
 
       - name: Voeg Firebase toe aan project build.gradle
         run: |
