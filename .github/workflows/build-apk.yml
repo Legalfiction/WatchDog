@@ -36,6 +36,12 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Kopieer google-services.json voor Capacitor sync
+        run: |
+          cp google-services.json google-services.json.bak
+          mkdir -p android/app
+          cp google-services.json android/app/google-services.json
+
       - name: Sync Capacitor
         run: npx cap sync android
 
@@ -57,6 +63,7 @@ jobs:
           cp BootReceiver.java       android/app/src/main/java/nl/barkr/app/BootReceiver.java
           cp MainActivity.java       android/app/src/main/java/nl/barkr/app/MainActivity.java
           cp BarkrFcmService.java    android/app/src/main/java/nl/barkr/app/BarkrFcmService.java
+          cp BarkrWorker.java        android/app/src/main/java/nl/barkr/app/BarkrWorker.java
           cp AndroidManifest.xml     android/app/src/main/AndroidManifest.xml
           cp google-services.json    android/app/google-services.json
           cp google-services.json    android/google-services.json
@@ -128,7 +135,10 @@ jobs:
           grep -r "minSdk" android/ --include="*.gradle" --include="*.kts" --include="*.properties" || true
 
       - name: Voeg Firebase toe aan project build.gradle
-        run: python3 add_firebase.py
+        run: |
+          python3 add_firebase.py
+          echo "=== Verificeer google-services plugin ==="
+          grep -n "google-services" android/app/build.gradle | head -5
 
       - name: Configureer signing in build.gradle
         run: |
